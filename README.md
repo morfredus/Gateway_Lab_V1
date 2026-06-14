@@ -3,7 +3,7 @@ Gateway Lab V1
 Objectif :
 Découvrir et inventorier les équipements présents sur le réseau local.
 
-VERSIONS : 
+VERSION : 
 
 V0.0.1 -Initial release
 
