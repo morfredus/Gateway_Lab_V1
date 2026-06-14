@@ -4,16 +4,16 @@
 #include <ESPmDNS.h>
 #include <ArduinoOTA.h>
 #include <WebServer.h>
-#include <SPIFFS.h>
 #include <Update.h>
 #include <ArduinoJson.h>
 
 #include "secrets.h"
 #include "app_config.h"
 #include "board_config.h"
+#include "web_interface.h"   // INDEX_HTML généré par tools/minify_web.py
 
 // ---------------------------------------------------------------------------
-// OTA web page (embedded, served even if SPIFFS is empty)
+// Page OTA embarquée
 // ---------------------------------------------------------------------------
 static const char OTA_PAGE[] PROGMEM = R"HTML(
 <!DOCTYPE html><html lang="fr"><head>
@@ -21,62 +21,51 @@ static const char OTA_PAGE[] PROGMEM = R"HTML(
 <title>Gateway Lab V1 - OTA</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;
-     display:flex;flex-direction:column;align-items:center;padding:2rem 1rem}
-h1{color:#06b6d4;margin-bottom:.5rem}
-p.sub{color:#475569;font-size:.8rem;margin-bottom:2rem}
-.card{background:#1e293b;border-radius:12px;padding:1.5rem;width:100%;
-      max-width:420px;text-align:center}
+body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;padding:2rem 1rem}
+h1{color:#06b6d4;margin-bottom:.5rem}p.sub{color:#475569;font-size:.8rem;margin-bottom:2rem}
+.card{background:#1e293b;border-radius:12px;padding:1.5rem;width:100%;max-width:420px;text-align:center}
 label{display:block;color:#94a3b8;font-size:.875rem;margin-bottom:.75rem}
-input[type=file]{width:100%;padding:.5rem;background:#0f172a;border:1px solid #334155;
-                  border-radius:8px;color:#e2e8f0;margin-bottom:1rem}
-.btn{display:block;width:100%;padding:.875rem;background:#0891b2;color:#fff;
-     border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer}
+input[type=file]{width:100%;padding:.5rem;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#e2e8f0;margin-bottom:1rem}
+.btn{display:block;width:100%;padding:.875rem;background:#0891b2;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer}
 .btn:hover{background:#06b6d4}
-.progress{width:100%;background:#334155;border-radius:8px;height:12px;
-           display:none;margin-top:1rem;overflow:hidden}
+.progress{width:100%;background:#334155;border-radius:8px;height:12px;display:none;margin-top:1rem;overflow:hidden}
 .bar{height:100%;background:#06b6d4;width:0;transition:width .2s}
 #msg{margin-top:1rem;font-size:.875rem;color:#94a3b8}
 a{color:#06b6d4;font-size:.8rem;margin-top:1.5rem;display:block}
 </style></head><body>
-<h1>Gateway Lab V1</h1>
-<p class="sub">Mise à jour OTA</p>
+<h1>Gateway Lab V1</h1><p class="sub">Mise à jour OTA</p>
 <div class="card">
-  <form id="f">
-    <label>Sélectionnez le firmware (.bin)</label>
-    <input type="file" id="fw" accept=".bin">
-    <button type="submit" class="btn">Mettre à jour</button>
-  </form>
-  <div class="progress" id="pg"><div class="bar" id="bar"></div></div>
-  <p id="msg"></p>
-</div>
+<form id="f"><label>Sélectionnez le firmware (.bin)</label>
+<input type="file" id="fw" accept=".bin">
+<button type="submit" class="btn">Mettre à jour</button></form>
+<div class="progress" id="pg"><div class="bar" id="bar"></div></div>
+<p id="msg"></p></div>
 <a href="/">← Retour</a>
 <script>
 document.getElementById('f').addEventListener('submit',function(e){
-  e.preventDefault();
-  var file=document.getElementById('fw').files[0];
-  if(!file){document.getElementById('msg').textContent='Aucun fichier sélectionné.';return;}
-  var fd=new FormData();fd.append('firmware',file);
-  var xhr=new XMLHttpRequest();
-  xhr.upload.onprogress=function(e){
-    document.getElementById('pg').style.display='block';
-    document.getElementById('bar').style.width=(e.loaded/e.total*100)+'%';
-  };
-  xhr.onload=function(){
-    var m=document.getElementById('msg');
-    if(xhr.status===200){m.style.color='#10b981';m.textContent='Succès — redémarrage en cours…';}
-    else{m.style.color='#ef4444';m.textContent='Erreur : '+xhr.responseText;}
-  };
-  xhr.open('POST','/update');xhr.send(fd);
+e.preventDefault();
+var file=document.getElementById('fw').files[0];
+if(!file){document.getElementById('msg').textContent='Aucun fichier sélectionné.';return;}
+var fd=new FormData();fd.append('firmware',file);
+var xhr=new XMLHttpRequest();
+xhr.upload.onprogress=function(e){
+document.getElementById('pg').style.display='block';
+document.getElementById('bar').style.width=(e.loaded/e.total*100)+'%';
+};
+xhr.onload=function(){
+var m=document.getElementById('msg');
+if(xhr.status===200){m.style.color='#10b981';m.textContent='Succès — redémarrage en cours…';}
+else{m.style.color='#ef4444';m.textContent='Erreur : '+xhr.responseText;}
+};
+xhr.open('POST','/update');xhr.send(fd);
 });
-</script>
-</body></html>
+</script></body></html>
 )HTML";
 
 // ---------------------------------------------------------------------------
 // Globals
 // ---------------------------------------------------------------------------
-WiFiMulti  wifiMulti;
+WiFiMulti wifiMulti;
 WebServer  server(WEB_SERVER_PORT);
 
 // ---------------------------------------------------------------------------
@@ -108,42 +97,30 @@ static void setupWiFi() {
 }
 
 // ---------------------------------------------------------------------------
-// ArduinoOTA (firmware update via PlatformIO / IDE)
+// ArduinoOTA (mise à jour via PlatformIO / IDE réseau)
 // ---------------------------------------------------------------------------
 #ifdef ENABLE_OTA
 static void setupArduinoOTA() {
     ArduinoOTA.setHostname("gateway-lab-v1");
-
-    ArduinoOTA.onStart([]() {
-        Serial.println("OTA: début");
-    });
-    ArduinoOTA.onEnd([]() {
-        Serial.println("\nOTA: terminé");
-    });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        Serial.printf("OTA: %u%%\r", progress * 100 / total);
+    ArduinoOTA.onStart([]()  { Serial.println("OTA: début"); });
+    ArduinoOTA.onEnd([]()    { Serial.println("\nOTA: terminé"); });
+    ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
+        Serial.printf("OTA: %u%%\r", p * 100 / t);
     });
     ArduinoOTA.onError([](ota_error_t err) {
         Serial.printf("OTA: erreur [%u]\n", err);
     });
-
     ArduinoOTA.begin();
     Serial.println("OTA: ArduinoOTA actif");
 }
 #endif
 
 // ---------------------------------------------------------------------------
-// Web server routes
+// Routes web
 // ---------------------------------------------------------------------------
 static void handleRoot() {
-    if (SPIFFS.exists("/index.html")) {
-        File f = SPIFFS.open("/index.html", "r");
-        server.streamFile(f, "text/html");
-        f.close();
-    } else {
-        server.send(503, "text/plain",
-            "SPIFFS vide. Lancez 'Upload Filesystem Image' depuis PlatformIO.");
-    }
+    // Servir directement depuis PROGMEM — aucun SPIFFS requis
+    server.send_P(200, "text/html", INDEX_HTML);
 }
 
 static void handleApiStatus() {
@@ -193,10 +170,10 @@ static void handleOtaUpload() {
 }
 
 static void setupWebServer() {
-    server.on("/",        HTTP_GET,  handleRoot);
-    server.on("/api/status", HTTP_GET, handleApiStatus);
-    server.on("/update",  HTTP_GET,  handleOtaGet);
-    server.on("/update",  HTTP_POST, handleOtaUploadDone, handleOtaUpload);
+    server.on("/",           HTTP_GET,  handleRoot);
+    server.on("/api/status", HTTP_GET,  handleApiStatus);
+    server.on("/update",     HTTP_GET,  handleOtaGet);
+    server.on("/update",     HTTP_POST, handleOtaUploadDone, handleOtaUpload);
 
     server.begin();
     Serial.printf("Web: serveur démarré sur le port %d\n", WEB_SERVER_PORT);
@@ -208,10 +185,6 @@ static void setupWebServer() {
 void setup() {
     Serial.begin(115200);
     Serial.printf("\n=== %s v%s ===\n", PROJECT_NAME, PROJECT_VERSION);
-
-    if (!SPIFFS.begin(true)) {
-        Serial.println("SPIFFS: erreur de montage");
-    }
 
     setupWiFi();
 
@@ -237,7 +210,6 @@ void loop() {
     ArduinoOTA.handle();
 #endif
 
-    // Reconnexion automatique via WiFiMulti
     if (WiFi.status() != WL_CONNECTED) {
         wifiMulti.run();
     }
