@@ -112,6 +112,10 @@
       <span class="info-value" id="rssi">—</span>
     </div>
     <div class="info-row">
+      <span class="info-label">mDNS</span>
+      <span class="info-value" id="hostname">—</span>
+    </div>
+    <div class="info-row">
       <span class="info-label">Uptime</span>
       <span class="info-value" id="uptime">—</span>
     </div>
@@ -146,6 +150,8 @@
           document.getElementById('ip').textContent = d.ip || '—';
           document.getElementById('rssi').textContent =
             d.rssi + ' dBm (' + rssiQuality(d.rssi) + ')';
+          document.getElementById('hostname').textContent =
+            d.hostname ? d.hostname + '.local' : '—';
           document.getElementById('uptime').textContent = fmtUptime(d.uptime || 0);
           if (d.version) {
             document.getElementById('version-label').textContent = 'v' + d.version;
