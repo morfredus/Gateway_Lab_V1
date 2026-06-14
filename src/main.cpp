@@ -101,7 +101,7 @@ static void setupWiFi() {
 // ---------------------------------------------------------------------------
 #ifdef ENABLE_OTA
 static void setupArduinoOTA() {
-    ArduinoOTA.setHostname("gateway-lab-v1");
+    ArduinoOTA.setHostname(MDNS_HOSTNAME);
     ArduinoOTA.onStart([]()  { Serial.println("OTA: début"); });
     ArduinoOTA.onEnd([]()    { Serial.println("\nOTA: terminé"); });
     ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
@@ -130,7 +130,7 @@ static void handleApiStatus() {
     doc["rssi"]     = WiFi.RSSI();
     doc["uptime"]   = millis();
     doc["version"]  = PROJECT_VERSION;
-    doc["hostname"] = "gateway-lab-v1";
+    doc["hostname"] = MDNS_HOSTNAME;
 
     String json;
     serializeJson(doc, json);
@@ -194,8 +194,8 @@ void setup() {
 
 #ifdef ENABLE_MDNS
     if (WiFi.isConnected()) {
-        if (MDNS.begin("gateway-lab-v1")) {
-            Serial.println("mDNS: gateway-lab-v1.local actif");
+        if (MDNS.begin(MDNS_HOSTNAME)) {
+            Serial.printf("mDNS: %s.local actif\n", MDNS_HOSTNAME);
         }
     }
 #endif
