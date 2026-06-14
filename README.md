@@ -5,27 +5,39 @@ Découvrir et inventorier les équipements présents sur le réseau local.
 
 VERSION : 
 
-V0.0.1 -Initial release
+V0.0.1 - Initial release
 
 
 ROADMAP :
 
 V0.0.1
-- Connexion Wi-Fi
+- Structure du projet
+- Wi-Fi
+- OTA
+
+V0.0.2
+- Serveur Web
+- Page d'accueil
+- Gestion HTML
+- Minification
+
+V0.1.0
 - Scan réseau
 - Liste des équipements détectés
 
-V0.1.0
-- Identification du type d'équipement
+V0.1.1
 - API REST locale
 
 V0.2.0
-- Découverte automatique (mDNS, SSDP)
+- Identification des équipements
 
 V0.3.0
-- Support Hue
+- Découverte automatique (mDNS, SSDP)
 
 V0.4.0
+- Support Hue
+
+V0.5.0
 - Support MQTT
 
 V1.0.0
