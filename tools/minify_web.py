@@ -1,211 +1,170 @@
 #!/usr/bin/env python3
 """
-Web Assets Minifier
+Web Assets Minifier — Gateway Lab V1
 
-This script minifies CSS and JavaScript files and generates the web_interface.h header file.
+Minifie les sources HTML et génère les headers C++ PROGMEM :
+  - web_src/index.html  →  include/web_interface.h     (INDEX_HTML)
+  - web_src/ota.html    →  include/web_interface_ota.h (OTA_PAGE)
+  - data/index.html         (copie minifiée, optionnelle)
 
-Usage:
+Peut être exécuté en standalone ou comme pre-script PlatformIO.
+
+Usage standalone :
     python tools/minify_web.py
 
-The script will:
-1. Read source files from web_src/
-2. Minify CSS and JavaScript
-3. Update include/web_interface.h with minified content
-4. Preserve the structure and comments of the header file
+PlatformIO (extra_scripts = pre:tools/minify_web.py) :
+    Exécuté automatiquement avant chaque compilation.
 
-Requirements:
-    pip install csscompressor rjsmin
+Requirements (optionnels — fallback intégré) :
+    pip install rcssmin rjsmin
 """
 
-import os
-import sys
 import re
+import sys
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+SCRIPT_DIR   = Path(__file__).parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+WEB_SRC_DIR  = PROJECT_ROOT / "web_src"
+DATA_DIR     = PROJECT_ROOT / "data"
+INCLUDE_DIR  = PROJECT_ROOT / "include"
+
+# ---------------------------------------------------------------------------
+# Pages à traiter : (source, header_dest, const_name)
+# ---------------------------------------------------------------------------
+PAGES = [
+    (
+        WEB_SRC_DIR / "index.html",
+        INCLUDE_DIR / "web_interface.h",
+        "INDEX_HTML",
+        DATA_DIR   / "index.html",   # copie data/ (None pour désactiver)
+    ),
+    (
+        WEB_SRC_DIR / "ota.html",
+        INCLUDE_DIR / "web_interface_ota.h",
+        "OTA_PAGE",
+        None,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Optional minifiers (graceful fallback)
+# ---------------------------------------------------------------------------
 try:
     import rcssmin
-    import rjsmin
+    HAS_RCSSMIN = True
 except ImportError:
-    print("ERROR: Required modules not installed.")
-    print("Please install: pip install rcssmin rjsmin")
-    sys.exit(1)
+    HAS_RCSSMIN = False
 
-# Paths
-SCRIPT_DIR = Path(__file__).parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-WEB_SRC_DIR = PROJECT_ROOT / "web_src"
-INCLUDE_DIR = PROJECT_ROOT / "include"
-WEB_INTERFACE_H = INCLUDE_DIR / "web_interface.h"
+try:
+    import rjsmin
+    HAS_RJSMIN = True
+except ImportError:
+    HAS_RJSMIN = False
 
-# Source files
-CSS_FILE = WEB_SRC_DIR / "styles.css"
-JS_FILE_FULL = WEB_SRC_DIR / "app.js"
-JS_FILE_LITE = WEB_SRC_DIR / "app-lite.js"
+# ---------------------------------------------------------------------------
+# Minification helpers
+# ---------------------------------------------------------------------------
+def _minify_css_block(css: str) -> str:
+    if HAS_RCSSMIN:
+        return rcssmin.cssmin(css)
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
+    css = re.sub(r'\s*([{}:;,>~+])\s*', r'\1', css)
+    css = re.sub(r'\s+', ' ', css).strip()
+    return css
 
-def read_file(filepath):
-    """Read file content"""
-    with open(filepath, 'r', encoding='utf-8') as f:
-        return f.read()
 
-def write_file(filepath, content):
-    """Write content to file"""
-    with open(filepath, 'w', encoding='utf-8', newline='\n') as f:
-        f.write(content)
+def _minify_js_block(js: str) -> str:
+    if HAS_RJSMIN:
+        return rjsmin.jsmin(js)
+    js = re.sub(r'//[^\n]*', '', js)
+    js = re.sub(r'\s+', ' ', js).strip()
+    return js
 
-def minify_css(css_content):
-    """Minify CSS content"""
-    print("  Minifying CSS...")
-    minified = rcssmin.cssmin(css_content)
-    print(f"    Original: {len(css_content)} bytes")
-    print(f"    Minified: {len(minified)} bytes")
-    print(f"    Saved: {len(css_content) - len(minified)} bytes ({100 * (1 - len(minified)/len(css_content)):.1f}%)")
-    return minified
 
-def minify_js(js_content):
-    """Minify JavaScript content"""
-    print("  Minifying JavaScript...")
-    minified = rjsmin.jsmin(js_content)
-    print(f"    Original: {len(js_content)} bytes")
-    print(f"    Minified: {len(minified)} bytes")
-    print(f"    Saved: {len(js_content) - len(minified)} bytes ({100 * (1 - len(minified)/len(js_content)):.1f}%)")
-    return minified
+def minify_html(html: str) -> str:
+    html = re.sub(r'<!--(?!\[if).*?-->', '', html, flags=re.DOTALL)
+    def _repl_style(m):
+        return '<style>' + _minify_css_block(m.group(1)) + '</style>'
+    html = re.sub(r'<style>(.*?)</style>', _repl_style, html, flags=re.DOTALL)
+    def _repl_script(m):
+        return '<script>' + _minify_js_block(m.group(1)) + '</script>'
+    html = re.sub(r'<script>(.*?)</script>', _repl_script, html, flags=re.DOTALL)
+    html = re.sub(r'>\s+<', '><', html)
+    html = re.sub(r'[ \t]{2,}', ' ', html)
+    html = re.sub(r'\n\s*\n', '\n', html)
+    return html.strip()
 
-def escape_for_cpp_string(text):
-    """Escape text for C++ string literal"""
-    # Replace backslash first
-    text = text.replace('\\', '\\\\')
-    # Replace quotes
-    text = text.replace('"', '\\"')
-    # Replace newlines
-    text = text.replace('\n', '\\n')
-    text = text.replace('\r', '')
-    return text
 
-def extract_css_from_header(header_content):
-    """Extract CSS section from web_interface.h"""
-    # Find the CSS section in generateHTML()
-    pattern = r'(html \+= "<style>";)(.*?)(html \+= "</style>";)'
-    match = re.search(pattern, header_content, re.DOTALL)
-    if match:
-        return match.group(2)
-    return None
+# ---------------------------------------------------------------------------
+# Header generation
+# ---------------------------------------------------------------------------
+HEADER_TEMPLATE = """\
+// Auto-generated by tools/minify_web.py — NE PAS MODIFIER MANUELLEMENT
+// Source : {src}
+#pragma once
 
-def extract_js_from_header(header_content, is_lite=False):
-    """Extract JavaScript constant from web_interface.h"""
-    if is_lite:
-        pattern = r'(static const char PROGMEM DIAGNOSTIC_JS_STATIC_LITE\[\] = R"JS\()(.*?)(\)JS";)'
-    else:
-        pattern = r'(static const char PROGMEM DIAGNOSTIC_JS_STATIC\[\] = R"JS\()(.*?)(\)JS";)'
+static const char {const_name}[] PROGMEM = R"HTML(
+{html}
+)HTML";
+"""
 
-    match = re.search(pattern, header_content, re.DOTALL)
-    if match:
-        return match.group(2)
-    return None
 
-def inject_css_into_header(header_content, minified_css):
-    """Inject minified CSS into web_interface.h"""
-    # Escape for C++ string
-    escaped_css = escape_for_cpp_string(minified_css)
+def generate_header(src_path: Path, const_name: str, minified_html: str) -> str:
+    return HEADER_TEMPLATE.format(
+        src=src_path.relative_to(PROJECT_ROOT),
+        const_name=const_name,
+        html=minified_html,
+    )
 
-    # Split into manageable chunks (to avoid too long lines)
-    max_line_length = 200
-    css_lines = []
-    current_line = ""
 
-    for char in escaped_css:
-        current_line += char
-        if len(current_line) >= max_line_length and char in [';', '}']:
-            css_lines.append('  html += "' + current_line + '";')
-            current_line = ""
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+def run():
+    print("=" * 55)
+    print("Gateway Lab V1 — Minification HTML")
+    print("=" * 55)
 
-    if current_line:
-        css_lines.append('  html += "' + current_line + '";')
+    INCLUDE_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    css_block = '\n'.join(css_lines)
+    ok = True
+    for src, header_dst, const_name, data_dst in PAGES:
+        if not src.exists():
+            print(f"  ERREUR : {src.relative_to(PROJECT_ROOT)} introuvable — ignoré")
+            ok = False
+            continue
 
-    # Replace CSS section - ensure </style> tag is preserved
-    pattern = r'(html \+= "<style>";)(.*?)(html \+= "</style>";)'
+        raw = src.read_text(encoding='utf-8')
+        minified = minify_html(raw)
+        ratio = 100 * (1 - len(minified) / len(raw))
 
-    # Build replacement with explicit </style> tag
-    replacement = r'\1' + '\n' + css_block + '\n  html += "</style>";'
+        header = generate_header(src, const_name, minified)
+        header_dst.write_text(header, encoding='utf-8')
 
-    new_content = re.sub(pattern, replacement, header_content, flags=re.DOTALL)
-    return new_content
+        print(f"\n  [{src.name}]")
+        print(f"    Source  : {len(raw):,} octets")
+        print(f"    Minifié : {len(minified):,} octets  (gain {ratio:.1f}%)")
+        print(f"    Header  : {header_dst.relative_to(PROJECT_ROOT)}")
 
-def inject_js_into_header(header_content, minified_js, is_lite=False):
-    """Inject minified JavaScript into web_interface.h"""
-    if is_lite:
-        pattern = r'(static const char PROGMEM DIAGNOSTIC_JS_STATIC_LITE\[\] = R"JS\()(.*?)(\)JS";)'
-    else:
-        pattern = r'(static const char PROGMEM DIAGNOSTIC_JS_STATIC\[\] = R"JS\()(.*?)(\)JS";)'
+        if data_dst is not None:
+            data_dst.write_text(minified, encoding='utf-8')
+            print(f"    Data    : {data_dst.relative_to(PROJECT_ROOT)}")
 
-    replacement = r'\1' + '\n' + minified_js + '\n' + r'\3'
-    new_content = re.sub(pattern, replacement, header_content, flags=re.DOTALL)
-    return new_content
+    print("\nOK\n" if ok else "\nTerminé avec des erreurs\n")
+    return ok
 
-def update_web_interface_header():
-    """Main function to update web_interface.h"""
-    print("=" * 60)
-    print("Web Assets Minifier")
-    print("=" * 60)
 
-    # Check if source files exist
-    if not CSS_FILE.exists():
-        print(f"ERROR: {CSS_FILE} not found!")
-        print("Please create readable CSS source in web_src/styles.css")
-        return False
-
-    if not WEB_INTERFACE_H.exists():
-        print(f"ERROR: {WEB_INTERFACE_H} not found!")
-        return False
-
-    print(f"\n1. Reading source files...")
-    print(f"   - CSS: {CSS_FILE}")
-    if JS_FILE_FULL.exists():
-        print(f"   - JS (Full): {JS_FILE_FULL}")
-    if JS_FILE_LITE.exists():
-        print(f"   - JS (Lite): {JS_FILE_LITE}")
-
-    # Read source files
-    css_content = read_file(CSS_FILE)
-    header_content = read_file(WEB_INTERFACE_H)
-
-    # Minify CSS
-    print("\n2. Minifying CSS...")
-    minified_css = minify_css(css_content)
-
-    # Update header with minified CSS
-    print("\n3. Injecting CSS into web_interface.h...")
-    header_content = inject_css_into_header(header_content, minified_css)
-
-    # Process JavaScript if available
-    if JS_FILE_FULL.exists():
-        print("\n4. Processing JavaScript (Full)...")
-        js_content = read_file(JS_FILE_FULL)
-        minified_js = minify_js(js_content)
-        header_content = inject_js_into_header(header_content, minified_js, is_lite=False)
-
-    if JS_FILE_LITE.exists():
-        print("\n5. Processing JavaScript (Lite)...")
-        js_lite_content = read_file(JS_FILE_LITE)
-        minified_js_lite = minify_js(js_lite_content)
-        header_content = inject_js_into_header(header_content, minified_js_lite, is_lite=True)
-
-    # Write updated header
-    print("\n6. Writing updated web_interface.h...")
-    write_file(WEB_INTERFACE_H, header_content)
-
-    print("\n" + "=" * 60)
-    print("✅ Web interface header updated successfully!")
-    print("=" * 60)
-    print("\nNext steps:")
-    print("  1. Compile your project with PlatformIO")
-    print("  2. Upload to ESP32")
-    print("  3. Verify web interface works correctly")
-    print("\n")
-
-    return True
-
-if __name__ == "__main__":
-    success = update_web_interface_header()
-    sys.exit(0 if success else 1)
+# ---------------------------------------------------------------------------
+# Entry points
+# ---------------------------------------------------------------------------
+try:
+    Import("env")   # type: ignore  # noqa: F821
+    run()
+except NameError:
+    if __name__ == "__main__":
+        sys.exit(0 if run() else 1)

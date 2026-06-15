@@ -6,7 +6,8 @@
 #define NETWORK_SCAN_TIMEOUT 5000
 
 // Network
-#define WEB_SERVER_PORT 80
+#define WEB_SERVER_PORT  80
+#define MDNS_HOSTNAME    "gateway-lab-v1"
 
 // Features
 #define ENABLE_OTA
