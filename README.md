@@ -38,21 +38,25 @@ Le projet privilégie :
 
 ## Fonctionnalités actuelles
 
-| Fonctionnalité        | Détail                                                            |
-| --------------------- | ----------------------------------------------------------------- |
-| WiFi multi-réseaux    | Connexion automatique au meilleur réseau disponible (`secrets.h`) |
-| mDNS                  | Accessible via `gateway-lab-v1.local`                             |
-| Interface web         | Pages Accueil / Équipements / OTA                                 |
-| Scan réseau LAN       | Sweep ARP du sous-réseau local                                    |
-| Tâche FreeRTOS dédiée | Scan asynchrone sur Core 0                                        |
-| Résolution hostnames  | mDNS passif + DNS inverse PTR                                     |
-| Détection box FAI     | Orange, Free, SFR, Bouygues                                       |
-| Inventaire réseau     | IP, nom, fabricant, modèle, catégorie, MAC                        |
-| Auto-détection ESP32  | Le Gateway apparaît dans sa propre liste                          |
-| Identification OUI    | Base externalisée générée automatiquement                         |
-| OTA Web               | Upload firmware depuis le navigateur                              |
-| ArduinoOTA            | Mise à jour réseau depuis PlatformIO                              |
-| API REST              | `/api/status`, `/api/devices`, `/api/scan`                        |
+| Fonctionnalité           | Détail                                                            |
+| ------------------------ | ----------------------------------------------------------------- |
+| WiFi multi-réseaux       | Connexion automatique au meilleur réseau disponible (`secrets.h`) |
+| mDNS                     | Accessible via `gateway-lab-v1.local`                             |
+| Interface web            | Pages Accueil / Équipements / OTA                                 |
+| Scan réseau LAN          | Sweep ARP du sous-réseau local                                    |
+| Tâche FreeRTOS dédiée    | Scan asynchrone sur Core 0                                        |
+| Résolution hostnames     | mDNS passif + DNS inverse PTR                                     |
+| Détection box FAI        | Orange, Free, SFR, Bouygues                                       |
+| Découverte SSDP/UPnP     | M-SEARCH multicast, parsing XML, catégorisation automatique       |
+| API Philips Hue Bridge   | Modèle, firmware, sans authentification (`/api/config`)           |
+| API Synology DSM         | Confirmation NAS, modèle depuis XML UPnP                          |
+| API Freebox              | Modèle exact (Ultra/Pop/Révolution), version FreeboxOS            |
+| Inventaire réseau        | IP, nom, fabricant, modèle, catégorie, OS, MAC, source            |
+| Auto-détection ESP32     | Le Gateway apparaît dans sa propre liste                          |
+| Identification OUI       | Base externalisée générée automatiquement                         |
+| OTA Web                  | Upload firmware depuis le navigateur                              |
+| ArduinoOTA               | Mise à jour réseau depuis PlatformIO                              |
+| API REST                 | `/api/status`, `/api/devices`, `/api/scan`                        |
 
 ---
 
@@ -149,7 +153,8 @@ Gateway-Lab-V1/
 │   │   ├── web_server.*
 │   │   ├── network_scanner.*
 │   │   ├── hostname_resolver.*
-│   │   └── isp_detector.h
+│   │   ├── isp_detector.h
+│   │   └── ssdp_scanner.*
 │   │
 │   └── utils/
 │       └── logger.h
@@ -308,22 +313,29 @@ Upload d'un firmware `.bin`.
 
 Les informations affichées peuvent provenir de plusieurs mécanismes :
 
-| Source | Description                             |
-| ------ | --------------------------------------- |
-| OUI    | Fabricant déduit de l'adresse MAC       |
-| PTR    | DNS inverse fourni par la box DHCP      |
-| mDNS   | Annonces `.local` détectées passivement |
-| Self   | Informations de l'ESP32 lui-même        |
+| Source       | Badge UI  | Description                                                     |
+| ------------ | --------- | --------------------------------------------------------------- |
+| OUI          | —         | Fabricant déduit de l'adresse MAC (base locale `data/oui.json`) |
+| PTR          | `DNS↩`   | DNS inverse fourni par la box DHCP                              |
+| mDNS         | `mDNS`    | Annonce `.local` captée passivement                             |
+| SSDP         | `UPnP`    | Descripteur XML UPnP (M-SEARCH multicast)                       |
+| HueAPI       | `Hue`     | API Philips Hue Bridge `/api/config`                            |
+| SynologyAPI  | `DSM`     | API Synology DSM `/webapi/query.cgi`                            |
+| FreeboxAPI   | `Freebox` | API Freebox `/api_version`                                      |
+| Self         | `ESP32`   | Informations de l'ESP32 lui-même                                |
 
 ---
 
 ## Documentation
 
-| Fichier          | Description                                |
-| ---------------- | ------------------------------------------ |
-| CHANGELOG.md     | Historique détaillé des versions           |
-| ROADMAP.md       | Fonctionnalités planifiées                 |
-| docs/WARNINGS.md | Limitations connues et points de vigilance |
+| Fichier                    | Description                                                   |
+| -------------------------- | ------------------------------------------------------------- |
+| CHANGELOG.md               | Historique détaillé des versions                              |
+| ROADMAP.md                 | Fonctionnalités planifiées                                    |
+| docs/GETTING_STARTED.md    | Guide de démarrage complet pour débutants                     |
+| docs/ARCHITECTURE.md       | Explique comment le projet est construit et les choix faits   |
+| docs/PROTOCOLS.md          | ARP, mDNS, SSDP/UPnP, PTR DNS — expliqués simplement         |
+| docs/WARNINGS.md           | Limitations connues et points de vigilance                    |
 
 ---
 

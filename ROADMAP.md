@@ -4,13 +4,12 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ---
 
-## En cours / Prochaine version (v0.0.8)
+## En cours / Prochaine version (v0.0.9)
 
-* Scan de ports TCP (HTTP, HTTPS, SSH, MQTT, SMB...)
-* Détection des nouveaux équipements
-* Endpoint `/api/export` (JSON)
-* Historique local des équipements
-* Amélioration de la classification automatique des équipements
+* Scan de ports TCP (HTTP, HTTPS, SSH, MQTT, SMB…)
+* Détection des nouveaux équipements depuis le dernier scan
+* Endpoint `/api/export` (JSON complet)
+* Historique local des équipements (NVS)
 
 ---
 
@@ -28,20 +27,17 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ### v0.2.x — Découverte avancée
 
-* SSDP / UPnP
-* DNS-SD
-* Identification automatique des services
-* Détection du système d'exploitation (heuristiques)
-* Détection automatique du modèle des équipements
-* Corrélation des informations issues de plusieurs sources (OUI, mDNS, PTR, SSDP)
+* DNS-SD (découverte de services via mDNS)
+* Identification automatique des services exposés (port scan + bannières)
+* Détection du système d'exploitation (heuristiques TTL, TCP/IP stack)
+* Corrélation multi-sources pour les champs encore vides
 
 ### v0.3.x — Intégrations domotiques
 
-* Philips Hue
-* Tado
-* X-Sense
+* Tado (thermostats)
+* X-Sense (capteurs)
 * Détection des caméras Xiaomi
-* Intégrations d'objets connectés locaux
+* Intégrations d'objets connectés locaux supplémentaires
 
 ### v0.4.x — Topologie réseau
 
@@ -89,3 +85,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.0.5  | Base OUI externalisée, catégories d'équipements, pipeline unifié, documentation des limitations                                                                    |
 | v0.0.6  | Corrections de robustesse, reconnexion WiFi, mDNS, OTA, JSON sécurisé, modules idempotents                                                                         |
 | v0.0.7  | Résolution des noms d'hôtes (mDNS + PTR), détection des box FAI, modèle/source/catégorie, ESP32 visible dans sa propre liste, amélioration complète de l'interface |
+| v0.0.8  | Scanner SSDP/UPnP complet, parsing XML robuste, catégorisation automatique, APIs Hue Bridge / Synology DSM / Freebox, nouveaux badges source UI |
