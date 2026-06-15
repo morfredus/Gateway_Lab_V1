@@ -12,8 +12,7 @@
 #include <WiFi.h>
 #include "lwip/etharp.h"   // etharp_get_entry(), etharp_request() — table et requêtes ARP
 #include "lwip/netif.h"    // netif_default — interface réseau active
-#include "lwip/netdb.h"    // gethostbyaddr() — résolution DNS inverse (PTR)
-#include "lwip/inet.h"     // inet_pton()     — conversion IP texte → binaire
+#include "lwip/inet.h"     // inet_pton() — conversion IP texte → binaire
 #include "../utils/logger.h"
 
 static const char* TAG = "Scanner";
@@ -214,54 +213,21 @@ void NetworkScanner::_run() {
     _readArpTable();
     xSemaphoreGive(_mutex);
 
-    Log::i(TAG, "%u équipement(s) ARP — résolution des noms...", (unsigned)_results.size());
-    _resolveHostnames();
-
     Log::i(TAG, "Scan terminé — %u équipement(s) détecté(s)", (unsigned)_results.size());
     _scanning   = false;
     _taskHandle = nullptr;
 }
 
 // ---------------------------------------------------------------------------
-// Résolution DNS inverse (PTR) pour chaque équipement découvert
+// Résolution DNS inverse (PTR) — non disponible sur lwIP ESP32
 //
-// Principe : le routeur DHCP enregistre souvent les noms des équipements
-// dans son DNS interne. gethostbyaddr() interroge ce DNS avec l'IP en entrée
-// et retourne le nom si disponible (ex: "samsung-tv.lan", "iphone-de-alice").
-//
-// Cette résolution est séquentielle et bloquante par appel, mais les réponses
-// DNS sur un réseau local arrivent très rapidement (< 50 ms en général).
-// Les équipements sans entrée DNS (IoT sans nom déclaré) retournent null.
-//
-// Note : gethostbyaddr() n'est pas réentrant, mais nous sommes dans une
-// seule tâche FreeRTOS dédiée, donc pas de problème de concurrence ici.
+// gethostbyaddr() n'est pas compilé dans le lwIP fourni par le framework
+// Arduino ESP32. La colonne "Nom" affiche "—" pour les équipements sans
+// entrée mDNS visible. Une alternative (requête PTR manuelle via netdb ou
+// mDNS) est documentée dans ROADMAP.md.
 // ---------------------------------------------------------------------------
 void NetworkScanner::_resolveHostnames() {
-    // Snapshot des IPs à résoudre — sans tenir le mutex pendant la résolution DNS
-    // (les appels DNS peuvent durer > 100 ms et bloqueraient le serveur web)
-    std::vector<String> ips;
-    xSemaphoreTake(_mutex, portMAX_DELAY);
-    for (const auto& d : _results) ips.push_back(d.ip);
-    xSemaphoreGive(_mutex);
-
-    for (const auto& ip : ips) {
-        // Conversion de l'adresse IP texte ("192.168.1.5") en format binaire
-        struct in_addr addr;
-        if (inet_pton(AF_INET, ip.c_str(), &addr) != 1) continue;
-
-        // Requête DNS inverse : qui possède cette IP ?
-        struct hostent* h = gethostbyaddr(&addr, sizeof(addr), AF_INET);
-        if (!h || !h->h_name) continue;
-
-        String name(h->h_name);
-        // Mise à jour thread-safe de l'équipement correspondant
-        xSemaphoreTake(_mutex, portMAX_DELAY);
-        for (auto& d : _results) {
-            if (d.ip == ip) { d.hostname = name; break; }
-        }
-        xSemaphoreGive(_mutex);
-        Log::d(TAG, "%s → %s", ip.c_str(), name.c_str());
-    }
+    // no-op : gethostbyaddr non disponible sur cette plateforme
 }
 
 // ---------------------------------------------------------------------------
