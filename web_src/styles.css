@@ -312,6 +312,7 @@ tr:hover td      { background: #ffffff06; }
 .mac-cell  { font-family: monospace; font-size: 0.78rem; color: #94a3b8; white-space: nowrap; }
 .name-cell { color: #7dd3fc; }
 .mfr-model { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
+.mfr-os    { font-size: 0.7rem;  color: #64748b; margin-top: 0.1rem; font-style: italic; }
 .seen-cell { color: #94a3b8; white-space: nowrap; }
 
 .empty-msg { color: #94a3b8; font-size: 0.875rem; text-align: center; padding: 1.5rem 0; }
@@ -343,9 +344,13 @@ tr:hover td      { background: #ffffff06; }
   font-weight: 600;
   cursor: default;
 }
-.source-mdns { background: #064e3b; color: #34d399; }
-.source-ptr  { background: #1e1a36; color: #a78bfa; }
-.source-self { background: #0c2a3a; color: #38bdf8; }
+.source-mdns    { background: #064e3b; color: #34d399; }
+.source-ptr     { background: #1e1a36; color: #a78bfa; }
+.source-self    { background: #0c2a3a; color: #38bdf8; }
+.source-ssdp    { background: #1c2a1a; color: #86efac; }
+.source-hue     { background: #2a1a10; color: #fb923c; }
+.source-synology{ background: #10182a; color: #60a5fa; }
+.source-freebox { background: #1a102a; color: #c084fc; }
 
 /* Catégorie (IoT, Mobile, Router…) */
 .type-badge {
@@ -373,6 +378,8 @@ tr:hover td      { background: #ffffff06; }
 .type-security  { background: #2a1e1e; color: #f87171; }
 .type-printer   { background: #1e2a1e; color: #86efac; }
 .type-robot     { background: #1c3a2a; color: #4ade80; }
+.type-smarthub  { background: #2a1c2a; color: #e879f9; }
+.type-speaker   { background: #1e2a1e; color: #4ade80; }
 
 
 /* ════════════════════════════════════════════════════

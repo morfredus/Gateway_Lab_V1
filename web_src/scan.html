@@ -88,15 +88,20 @@
       return 'type-' + cat.toLowerCase()
         .replace(/[^a-z]/g, '')
         .replace('homeautomation', 'homeauto')
-        .replace('robotvacuum',    'robot');
+        .replace('robotvacuum',    'robot')
+        .replace('smarthub',       'smarthub');
     }
 
     function sourceBadge(source) {
       if (!source || source === 'MAC') return '';
       var cfg = {
-        'mDNS': { cls: 'source-mdns', label: 'mDNS',  title: 'Nom résolu via mDNS — annonce .local de l\'appareil' },
-        'PTR':  { cls: 'source-ptr',  label: 'DNS↩', title: 'DNS inverse (PTR) — nom fourni par le routeur / box' },
-        'Self': { cls: 'source-self', label: 'ESP32',  title: 'Cet appareil — Gateway Lab V1' }
+        'mDNS':         { cls: 'source-mdns',     label: 'mDNS',      title: 'Nom résolu via mDNS — annonce .local de l\'appareil' },
+        'PTR':          { cls: 'source-ptr',       label: 'DNS↩',     title: 'DNS inverse (PTR) — nom fourni par le routeur / box' },
+        'Self':         { cls: 'source-self',      label: 'ESP32',     title: 'Cet appareil — Gateway Lab V1' },
+        'SSDP':         { cls: 'source-ssdp',      label: 'UPnP',      title: 'Découverte UPnP/SSDP — descripteur XML du device' },
+        'HueAPI':       { cls: 'source-hue',       label: 'Hue',       title: 'API Philips Hue Bridge (/api/config)' },
+        'SynologyAPI':  { cls: 'source-synology',  label: 'DSM',       title: 'API Synology DSM (non authentifiée)' },
+        'FreeboxAPI':   { cls: 'source-freebox',   label: 'Freebox',   title: 'API Freebox (/api_version — non authentifiée)' }
       };
       var c = cfg[source];
       if (!c) return '';
@@ -130,7 +135,8 @@
           : '<span class="none">—</span>';
         var mfrHtml = d.manufacturer
           ? '<span class="vendor-badge">' + esc(d.manufacturer) + '</span>' +
-            (d.model ? '<div class="mfr-model">' + esc(d.model) + '</div>' : '')
+            (d.model ? '<div class="mfr-model">' + esc(d.model) + '</div>' : '') +
+            (d.os    ? '<div class="mfr-os">'    + esc(d.os)    + '</div>' : '')
           : '<span class="none">—</span>';
         var catHtml = d.category
           ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>'

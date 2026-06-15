@@ -14,6 +14,7 @@
 #include "network_scanner.h"
 #include "hostname_resolver.h"   // mDNS passif + PTR DNS batch
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
+#include "ssdp_scanner.h"        // Découverte UPnP/SSDP
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
@@ -248,8 +249,59 @@ void NetworkScanner::_addSelfEntry() {
 }
 
 // ---------------------------------------------------------------------------
+// Fusion des résultats SSDP dans _results
+//
+// Pour chaque équipement UPnP découvert :
+//   - S'il est déjà connu (même IP), on enrichit ses champs vides :
+//       manufacturer, model, category, os, source, hostname
+//   - S'il n'est pas encore dans la liste, on l'ajoute (équipement UPnP
+//     sans réponse ARP — cas rare mais possible sur certains réseaux)
+// ---------------------------------------------------------------------------
+void NetworkScanner::_mergeSsdp() {
+    auto ssdpResults = ssdpScanner.scan(3000);
+    if (ssdpResults.empty()) return;
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (const auto& sdev : ssdpResults) {
+        bool found = false;
+        for (auto& d : _results) {
+            if (d.ip != sdev.ip) continue;
+            found = true;
+            // Enrichissement des champs vides uniquement (ne pas écraser
+            // les données déjà résolues par ARP/mDNS/PTR/ISP)
+            if (d.manufacturer.isEmpty() && !sdev.manufacturer.isEmpty())
+                d.manufacturer = sdev.manufacturer;
+            if (d.model.isEmpty() && !sdev.model.isEmpty())
+                d.model = sdev.model;
+            if (d.category.isEmpty() || d.category == "IoT")
+                if (!sdev.category.isEmpty()) d.category = sdev.category;
+            if (d.os.isEmpty() && !sdev.os.isEmpty())
+                d.os = sdev.os;
+            if (d.hostname.isEmpty() && !sdev.hostname.isEmpty())
+                d.hostname = sdev.hostname;
+            // La source SSDP est ajoutée en suffixe si une autre source existe déjà
+            if (d.source.isEmpty()) {
+                d.source = sdev.source;
+            } else if (d.source.indexOf("SSDP") < 0 &&
+                       d.source.indexOf("API")  < 0) {
+                d.source = sdev.source;   // Remplace MAC/PTR par source enrichie
+            }
+            break;
+        }
+        if (!found && !sdev.ip.isEmpty()) {
+            // Équipement UPnP inconnu de l'ARP — on l'ajoute directement
+            _results.push_back(sdev);
+            Log::i(TAG, "Nouvel équipement SSDP : %s (%s)",
+                   sdev.ip.c_str(), sdev.manufacturer.c_str());
+        }
+    }
+    xSemaphoreGive(_mutex);
+    Log::i(TAG, "SSDP fusionné — %u équipement(s) total", (unsigned)_results.size());
+}
+
+// ---------------------------------------------------------------------------
 // Tâche FreeRTOS — exécutée sur Core 0 (même core que lwIP / TCP stack)
-// Stack 16 Ko : nécessaire pour les appels lwIP + résolution DNS + std::map
+// Stack 20 Ko : lwIP + DNS + std::map + HTTP client SSDP + XML parsing
 // ---------------------------------------------------------------------------
 void NetworkScanner::_task(void* self) {
     static_cast<NetworkScanner*>(self)->_run();
@@ -282,6 +334,11 @@ void NetworkScanner::_run() {
     // Ajouter l'ESP32 lui-même (non détectable par ARP)
     _addSelfEntry();
 
+    // Scan SSDP/UPnP — enrichit les équipements existants et ajoute les
+    // équipements UPnP non détectés par ARP (ex: périphériques qui ne répondent
+    // pas aux ARP request mais annoncent leur présence via multicast SSDP).
+    _mergeSsdp();
+
     Log::i(TAG, "Scan complet — %u équipement(s) enrichi(s)", (unsigned)_results.size());
     _scanning   = false;
     _taskHandle = nullptr;
@@ -302,8 +359,8 @@ void NetworkScanner::startScan() {
         return;
     }
     _scanning = true;
-    // Stack 16 Ko : lwIP + résolution DNS + std::map + buffers de paquets
-    xTaskCreatePinnedToCore(_task, "net_scan", 16384, this, 1, &_taskHandle, 0);
+    // Stack 20 Ko : lwIP + résolution DNS + std::map + HTTP client SSDP + XML
+    xTaskCreatePinnedToCore(_task, "net_scan", 20480, this, 1, &_taskHandle, 0);
     Log::i(TAG, "Scan réseau lancé");
 }
 
