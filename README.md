@@ -92,10 +92,9 @@ Gateway-Lab-V1/
 │   ├── index.html                # Page d'accueil (source)
 │   ├── scan.html                 # Page équipements (source)
 │   ├── ota.html                  # Page OTA (source)
-│   ├── template.html             # Gabarit commun (navigation, style)
-│   ├── app.js                    # JavaScript principal
-│   ├── app-lite.js               # JavaScript réduit (page OTA)
-│   └── styles.css                # Feuille de style commune
+│   ├── styles.css                # Feuille de style unique (injectée inline par minify_web.py)
+│   ├── template.html             # Gabarit de référence (documentation)
+│   └── README.md                 # Guide développeur web_src/
 ├── data/
 │   └── oui.json                  # Base OUI — 152 entrées, 16 catégories
 ├── tools/
@@ -113,11 +112,24 @@ Gateway-Lab-V1/
 ## Workflow de développement web
 
 ```
-web_src/*.html  ──┐
-data/oui.json   ──┴─ python tools/minify_web.py ──► include/*.h ──► pio run
+web_src/styles.css  ──┐
+web_src/*.html      ──┼─ python tools/minify_web.py ──► include/*.h ──► pio run
+data/oui.json       ──┘
 ```
 
+`styles.css` contient **tout le CSS** des trois pages (organisé par sections).
+`minify_web.py` l'injecte inline dans chaque page — l'ESP32 sert du HTML auto-contenu.
+
 Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO requis.
+
+### Outils disponibles
+
+| Outil | Usage |
+|---|---|
+| `python tools/minify_web.py` | Génère les headers PROGMEM depuis `web_src/` et `data/oui.json` |
+| `python tools/validate_html.py` | Valide la structure HTML des 3 pages + gabarit |
+| `python tools/extract_web_sources.py` | Prévisualise l'extraction des headers → `web_src/` (dry-run) |
+| `python tools/extract_web_sources.py --force` | Récupération d'urgence : écrase `web_src/*.html` depuis les headers |
 
 ---
 
@@ -174,6 +186,7 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 
 - `include/board_config.h` — ne pas modifier
 - `include/secrets.h` — ne jamais committer
-- HTML modifiable uniquement dans `web_src/`
+- CSS modifiable uniquement dans `web_src/styles.css`
+- HTML modifiable uniquement dans `web_src/*.html`
 - Versioning uniquement dans `platformio.ini` via `PROJECT_VERSION`
-- Après toute modification HTML ou `data/oui.json` → relancer `python tools/minify_web.py`
+- Après toute modification de `web_src/` ou `data/oui.json` → relancer `python tools/minify_web.py`
