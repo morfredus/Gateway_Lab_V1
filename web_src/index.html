@@ -14,91 +14,87 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 2rem 1rem;
+      padding: 0 1rem 2rem;
     }
-    h1 {
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: #06b6d4;
-      margin-bottom: 0.25rem;
-      letter-spacing: 0.05em;
+    /* Navigation */
+    nav {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      gap: 0.25rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #ffffff0a;
+      margin-bottom: 1.5rem;
     }
-    .subtitle {
+    nav a {
       font-size: 0.8rem;
-      color: #475569;
-      margin-bottom: 2rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #94a3b8;
+      transition: background 0.15s, color 0.15s;
     }
+    nav a:hover  { background: #1e293b; color: #e2e8f0; }
+    nav a.active { background: #0c4a6e; color: #38bdf8; font-weight: 600; }
+    /* Header */
+    h1 { font-size: 1.8rem; font-weight: 700; color: #06b6d4; margin-bottom: 0.25rem; letter-spacing: 0.05em; }
+    .subtitle { font-size: 0.8rem; color: #94a3b8; margin-bottom: 2rem; }
+    /* Cards */
     .card {
       background: #1e293b;
       border-radius: 12px;
       padding: 1.5rem;
       width: 100%;
-      max-width: 420px;
+      max-width: 480px;
       box-shadow: 0 4px 24px rgba(0,0,0,0.3);
       margin-bottom: 1.5rem;
     }
-    .card-title {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #64748b;
-      margin-bottom: 1rem;
-      font-weight: 600;
-    }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.6rem 0;
-      border-bottom: 1px solid #1e3a5f22;
-    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .card-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: #64748b; font-weight: 600; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid #ffffff0a; }
     .info-row:last-child { border-bottom: none; }
     .info-label { color: #94a3b8; font-size: 0.875rem; }
-    .info-value {
-      color: #e2e8f0;
-      font-size: 0.875rem;
-      font-weight: 600;
-      text-align: right;
-    }
-    .badge {
-      padding: 0.2rem 0.7rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-    }
-    .badge-ok  { background: #064e3b; color: #10b981; }
-    .badge-warn{ background: #451a03; color: #f59e0b; }
-    .btn {
-      display: block;
-      width: 100%;
-      max-width: 420px;
-      padding: 0.875rem;
-      background: #0891b2;
-      color: #fff;
-      border: none;
+    .info-value { color: #e2e8f0; font-size: 0.875rem; font-weight: 600; text-align: right; }
+    .badge { padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; }
+    .badge-ok   { background: #064e3b; color: #10b981; }
+    .badge-warn { background: #451a03; color: #f59e0b; }
+    /* Shortcut buttons */
+    .shortcuts { display: flex; gap: 0.75rem; width: 100%; max-width: 480px; margin-bottom: 1.5rem; }
+    .shortcut {
+      flex: 1;
+      padding: 0.875rem 0.5rem;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #ffffff0a;
       border-radius: 10px;
-      font-size: 1rem;
+      font-size: 0.8rem;
       font-weight: 600;
       cursor: pointer;
       text-align: center;
       text-decoration: none;
-      transition: background 0.2s;
+      transition: background 0.2s, color 0.2s;
     }
-    .btn:hover { background: #06b6d4; }
-    .last-update {
-      font-size: 0.72rem;
-      color: #334155;
-      margin-top: 1.2rem;
-    }
+    .shortcut:hover { background: #0c4a6e; color: #38bdf8; border-color: #0891b200; }
+    .shortcut .icon { display: block; font-size: 1.3rem; margin-bottom: 0.25rem; }
+    .last-update { font-size: 0.72rem; color: #64748b; margin-top: 0.5rem; }
   </style>
 </head>
 <body>
+  <nav>
+    <a href="/" class="active">Accueil</a>
+    <a href="/scan">Équipements</a>
+    <a href="/update">OTA</a>
+  </nav>
+
   <h1>Gateway Lab V1</h1>
   <p class="subtitle" id="version-label">v—</p>
 
+  <!-- Cartouche réseau -->
   <div class="card">
-    <p class="card-title">Informations réseau</p>
+    <div class="card-header">
+      <p class="card-title">Informations réseau</p>
+      <span class="badge badge-ok" id="status-badge">Connecté</span>
+    </div>
     <div class="info-row">
       <span class="info-label">SSID</span>
       <span class="info-value" id="ssid">—</span>
@@ -119,13 +115,18 @@
       <span class="info-label">Uptime</span>
       <span class="info-value" id="uptime">—</span>
     </div>
-    <div class="info-row">
-      <span class="info-label">Statut</span>
-      <span class="badge badge-ok" id="status-badge">Connecté</span>
-    </div>
   </div>
 
-  <a class="btn" href="/update">Mise à jour OTA</a>
+  <!-- Raccourcis -->
+  <div class="shortcuts">
+    <a class="shortcut" href="/scan">
+      <span class="icon">📡</span>Équipements
+    </a>
+    <a class="shortcut" href="/update">
+      <span class="icon">🔄</span>Mise à jour
+    </a>
+  </div>
+
   <p class="last-update" id="last-update"></p>
 
   <script>
@@ -148,18 +149,14 @@
         .then(function(d) {
           document.getElementById('ssid').textContent = d.ssid || '—';
           document.getElementById('ip').textContent = d.ip || '—';
-          document.getElementById('rssi').textContent =
-            d.rssi + ' dBm (' + rssiQuality(d.rssi) + ')';
-          document.getElementById('hostname').textContent =
-            d.hostname ? d.hostname + '.local' : '—';
+          document.getElementById('rssi').textContent = d.rssi + ' dBm (' + rssiQuality(d.rssi) + ')';
+          document.getElementById('hostname').textContent = d.hostname ? d.hostname + '.local' : '—';
           document.getElementById('uptime').textContent = fmtUptime(d.uptime || 0);
-          if (d.version) {
-            document.getElementById('version-label').textContent = 'v' + d.version;
-          }
+          if (d.version) document.getElementById('version-label').textContent = 'v' + d.version;
           document.getElementById('status-badge').className = 'badge badge-ok';
           document.getElementById('status-badge').textContent = 'Connecté';
           document.getElementById('last-update').textContent =
-            'Dernière mise à jour : ' + new Date().toLocaleTimeString('fr-FR');
+            'Actualisé : ' + new Date().toLocaleTimeString('fr-FR');
         })
         .catch(function() {
           document.getElementById('status-badge').className = 'badge badge-warn';
