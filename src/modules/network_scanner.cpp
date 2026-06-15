@@ -10,9 +10,8 @@
 
 #include "network_scanner.h"
 #include <WiFi.h>
-#include <WiFiUdp.h>
-#include "lwip/etharp.h"   // etharp_get_entry() — lecture de la table ARP
-#include "lwip/netif.h"    // netif_default       — interface réseau active
+#include "lwip/etharp.h"   // etharp_get_entry(), etharp_request() — table et requêtes ARP
+#include "lwip/netif.h"    // netif_default — interface réseau active
 #include "../utils/logger.h"
 
 static const char* TAG = "Scanner";
@@ -124,54 +123,75 @@ void NetworkScanner::_readArpTable() {
 }
 
 // ---------------------------------------------------------------------------
-// Sweep UDP du sous-réseau
+// Sweep ARP du sous-réseau
 //
-// Principe : envoyer un paquet UDP à chaque IP du sous-réseau déclenche
-// une résolution ARP par lwIP (l'ESP32 doit connaître le MAC avant d'envoyer).
-// Le port 9 (discard) est utilisé — les paquets sont ignorés par les destinataires,
-// mais la résolution ARP a bien lieu côté lwIP.
+// Pourquoi etharp_request() plutôt que UDP ?
+//   - Le sweep UDP envoyait des paquets sans attendre la réponse ARP.
+//     lwIP résout l'ARP de façon asynchrone : la réponse arrivait souvent
+//     APRÈS qu'on ait déjà avancé dans la boucle et réécrasé la table.
+//   - etharp_request() envoie directement un ARP Request (broadcast),
+//     qui est la bonne primitive pour découvrir des équipements.
 //
-// Calcul de la plage : octet par octet pour éviter les problèmes de byte-order
-// entre IPAddress Arduino et les structures lwIP.
+// Stratégie par lots :
+//   - On envoie BATCH_SIZE requêtes ARP, puis on attend BATCH_DELAY_MS
+//     pour laisser le temps aux équipements de répondre.
+//   - On lit la table ARP après chaque lot et on accumule dans _results.
+//   - La table lwIP ne fait que ARP_TABLE_SIZE entrées (10) :
+//     lire fréquemment évite de perdre des réponses entre deux lectures.
+//
+// Durée typique sur /24 : ~5 s (254 hôtes / 5 par lot × 100 ms)
 // ---------------------------------------------------------------------------
 void NetworkScanner::_sweepSubnet() {
-    IPAddress local = WiFi.localIP();    // ex: 192.168.1.42
-    IPAddress mask  = WiFi.subnetMask(); // ex: 255.255.255.0
+    IPAddress local = WiFi.localIP();
+    IPAddress mask  = WiFi.subnetMask();
 
-    // Calcul de l'adresse de réseau et de diffusion (broadcast)
     uint8_t net[4], bcast[4];
     for (int i = 0; i < 4; i++) {
-        net[i]   = local[i] & mask[i];           // ex: 192.168.1.0
-        bcast[i] = net[i] | (~mask[i] & 0xFF);   // ex: 192.168.1.255
+        net[i]   = local[i] & mask[i];
+        bcast[i] = net[i] | (~mask[i] & 0xFF);
     }
 
-    // Plage du dernier octet à sonder (limité au /24 pour les sous-réseaux larges)
-    int last_start = (net[3] == 0)     ? 1   : net[3];
-    int last_end   = (bcast[3] == 255) ? 254 : bcast[3];
+    int h_start = (net[3]   == 0)   ? 1   : (int)net[3]   + 1;
+    int h_end   = (bcast[3] == 255) ? 254 : (int)bcast[3] - 1;
 
-    Log::i(TAG, "Sweep %d.%d.%d.%d – %d.%d.%d.%d",
-           net[0], net[1], net[2], last_start,
-           net[0], net[1], net[2], last_end);
+    // Nombre de requêtes ARP envoyées avant de lire la table et d'attendre
+    // Valeur faible = plus de précision, scan plus lent
+    // Valeur élevée = scan plus rapide, risque de manquer des équipements lents
+    constexpr int BATCH_SIZE     = 5;
+    constexpr int BATCH_DELAY_MS = 100;
 
-    WiFiUDP udp;
-    for (int h = last_start; h <= last_end; h++) {
+    Log::i(TAG, "Scan ARP %d.%d.%d.%d – .%d (lots de %d, %d ms)",
+           net[0], net[1], net[2], h_start, h_end, BATCH_SIZE, BATCH_DELAY_MS);
+
+    int inBatch = 0;
+    for (int h = h_start; h <= h_end; h++) {
         IPAddress target(net[0], net[1], net[2], h);
-        if (target == local) continue;   // Ignorer sa propre IP
+        if (target == local) continue;
 
-        // Envoi d'un paquet UDP vide → lwIP va résoudre l'ARP avant d'envoyer
-        udp.beginPacket(target, 9);
-        udp.write((uint8_t)0);
-        udp.endPacket();
+        // Envoi d'un ARP Request broadcast via lwIP
+        // L'équipement cible répondra avec son adresse MAC → peuplera la table ARP
+        ip4_addr_t ip4target;
+        IP4_ADDR(&ip4target, net[0], net[1], net[2], (uint8_t)h);
+        etharp_request(netif_default, &ip4target);
+        inBatch++;
 
-        // Lecture de la table ARP tous les 16 hôtes.
-        // La table lwIP ne fait que 10 entrées : sans lecture régulière,
-        // les premières réponses ARP seraient écrasées par les suivantes.
-        if ((h - last_start) % 16 == 15) {
+        if (inBatch >= BATCH_SIZE) {
+            // Attente des réponses ARP (la plupart arrivent en < 20 ms sur LAN)
+            vTaskDelay(pdMS_TO_TICKS(BATCH_DELAY_MS));
+            // Capture des entrées ARP avant qu'elles soient écrasées par le lot suivant
             xSemaphoreTake(_mutex, portMAX_DELAY);
             _readArpTable();
             xSemaphoreGive(_mutex);
-            vTaskDelay(pdMS_TO_TICKS(15));  // Laisser lwIP traiter les réponses
+            inBatch = 0;
         }
+    }
+
+    // Traiter le dernier lot incomplet
+    if (inBatch > 0) {
+        vTaskDelay(pdMS_TO_TICKS(BATCH_DELAY_MS));
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        _readArpTable();
+        xSemaphoreGive(_mutex);
     }
 }
 
@@ -186,9 +206,8 @@ void NetworkScanner::_task(void* self) {
 void NetworkScanner::_run() {
     _sweepSubnet();
 
-    // Attente finale pour capturer les dernières réponses ARP
-    // (certains équipements répondent lentement)
-    vTaskDelay(pdMS_TO_TICKS(600));
+    // Attente finale pour capturer les réponses des équipements les plus lents
+    vTaskDelay(pdMS_TO_TICKS(200));
 
     xSemaphoreTake(_mutex, portMAX_DELAY);
     _readArpTable();   // Dernière lecture pour ne rien manquer
