@@ -7,13 +7,14 @@ Minifie les sources HTML et génère les headers C++ PROGMEM :
   - web_src/ota.html    →  include/web_interface_ota.h (OTA_PAGE)
   - data/index.html         (copie minifiée, optionnelle)
 
-Peut être exécuté en standalone ou comme pre-script PlatformIO.
+Workflow de développement web :
+  1. Modifier web_src/index.html ou web_src/ota.html
+  2. Exécuter : python tools/minify_web.py
+  3. Les headers générés (include/web_interface*.h) sont versionnés dans Git
+  4. Compiler normalement : pio run
 
-Usage standalone :
-    python tools/minify_web.py
-
-PlatformIO (extra_scripts = pre:tools/minify_web.py) :
-    Exécuté automatiquement avant chaque compilation.
+Les headers générés étant committés dans le dépôt, aucun pre-script
+PlatformIO n'est nécessaire — la compilation fonctionne directement.
 
 Requirements (optionnels — fallback intégré) :
     pip install rcssmin rjsmin
@@ -24,23 +25,12 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Résolution du chemin racine du projet
-#
-# En mode PlatformIO (SCons), __file__ n'est pas défini.
-# On utilise env.GetProjectDir() fourni par SCons.
-# En mode standalone (python tools/minify_web.py), on utilise __file__.
+# Chemins
 # ---------------------------------------------------------------------------
-try:
-    Import("env")                           # type: ignore  # noqa: F821
-    _IS_PLATFORMIO = True
-    PROJECT_ROOT = Path(env.GetProjectDir())  # type: ignore  # noqa: F821
-except NameError:
-    _IS_PLATFORMIO = False
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-WEB_SRC_DIR = PROJECT_ROOT / "web_src"
-DATA_DIR    = PROJECT_ROOT / "data"
-INCLUDE_DIR = PROJECT_ROOT / "include"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+WEB_SRC_DIR  = PROJECT_ROOT / "web_src"
+DATA_DIR     = PROJECT_ROOT / "data"
+INCLUDE_DIR  = PROJECT_ROOT / "include"
 
 # ---------------------------------------------------------------------------
 # Pages à traiter : (source, header_dest, const_name)
@@ -170,9 +160,7 @@ def run():
 
 
 # ---------------------------------------------------------------------------
-# Entry points
+# Entry point
 # ---------------------------------------------------------------------------
-if _IS_PLATFORMIO:
-    run()
-elif __name__ == "__main__":
+if __name__ == "__main__":
     sys.exit(0 if run() else 1)
