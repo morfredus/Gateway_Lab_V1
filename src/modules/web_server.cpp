@@ -13,7 +13,8 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include "app_config.h"          // MDNS_HOSTNAME, PROJECT_VERSION
-#include "../../include/web_interface.h"   // INDEX_HTML (page d'accueil en PROGMEM)
+#include "../../include/web_interface.h"      // INDEX_HTML (page d'accueil en PROGMEM)
+#include "../../include/web_interface_scan.h" // SCAN_PAGE (page équipements en PROGMEM)
 #include "../utils/logger.h"
 
 static const char* TAG = "WebSrv";
@@ -34,6 +35,7 @@ void WebServerModule::begin(uint16_t port) {
     // HTTP_GET = le navigateur demande une ressource
     // HTTP_POST = le navigateur envoie des données (formulaire, upload...)
     _server.on("/",           HTTP_GET,  [this]() { _handleRoot(); });
+    _server.on("/scan",       HTTP_GET,  [this]() { _server.send_P(200, "text/html", SCAN_PAGE); });
     _server.on("/api/status", HTTP_GET,  [this]() { _handleApiStatus(); });
     _server.on("/api/devices",HTTP_GET,  [this]() { _handleApiDevices(); });
     _server.on("/api/scan",   HTTP_POST, [this]() { _handleApiScanTrigger(); });

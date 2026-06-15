@@ -5,6 +5,30 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.4] — 2026-06-15
+
+### Ajouté
+- **Résolution des noms d'hôtes** : après le sweep ARP, `gethostbyaddr()` interroge le DNS interne du routeur pour chaque IP découverte — les noms DHCP (ex: `iphone-de-alice`, `samsung-tv.lan`) s'affichent dans l'interface
+- **Page dédiée équipements** (`web_src/scan.html`) : tableau IP / Nom / Fabricant / MAC / Vu il y a, barre de progression animée, polling 2 s pendant le scan, rafraîchissement auto 60 s
+- **Navigation** : menu persistant Accueil / Équipements / OTA sur toutes les pages
+- **Route `GET /scan`** : sert `SCAN_PAGE` depuis la flash (PROGMEM)
+- **`include/web_interface_scan.h`** : header PROGMEM généré depuis `web_src/scan.html`
+- **`ROADMAP.md`** : renommé depuis `BACKLOG.md`
+
+### Modifié
+- `src/modules/network_scanner.h` : ajout du champ `hostname` dans `HostInfo`, déclaration `_resolveHostnames()`
+- `src/modules/network_scanner.cpp` : implémentation de `_resolveHostnames()` (appels `gethostbyaddr` séquentiels, mutex relâché pendant chaque résolution), `resultsToJson()` inclut le champ `hostname`
+- `web_src/index.html` : simplifié (tableau équipements retiré), accès `/scan` via menu et raccourcis
+- `tools/minify_web.py` : ajout de `scan.html` dans `PAGES[]`
+- `platformio.ini` : `PROJECT_VERSION` → `0.0.4`
+
+### Technique
+- `_resolveHostnames()` prend un snapshot thread-safe des IPs avant de relâcher le mutex, évitant de bloquer le serveur web (appels DNS pouvant dépasser 100 ms)
+- `gethostbyaddr()` non-réentrant : appelé séquentiellement depuis une unique tâche FreeRTOS dédiée, pas de risque de concurrence
+- `send_P()` pour `/scan` : lecture directe depuis la flash sans copie en RAM
+
+---
+
 ## [0.0.2] — 2026-06-14
 
 ### Ajouté

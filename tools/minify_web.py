@@ -48,6 +48,12 @@ PAGES = [
         "OTA_PAGE",
         None,
     ),
+    (
+        WEB_SRC_DIR / "scan.html",
+        INCLUDE_DIR / "web_interface_scan.h",
+        "SCAN_PAGE",
+        None,
+    ),
 ]
 
 # ---------------------------------------------------------------------------
