@@ -89,6 +89,10 @@ private:
     // L'ARP ne peut pas découvrir sa propre adresse — on l'ajoute manuellement
     void _addSelfEntry();
 
+    // Fusionne les résultats du scan SSDP/UPnP dans _results
+    // Enrichit les équipements existants et ajoute les nouveaux
+    void _mergeSsdp();
+
     SemaphoreHandle_t           _mutex      = nullptr;
     TaskHandle_t                _taskHandle = nullptr;
     std::vector<NetworkDevice>  _results;
