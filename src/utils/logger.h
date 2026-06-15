@@ -1,28 +1,37 @@
+/**
+ * Logger — Journalisation série avec niveaux de criticité
+ *
+ * Utilisation :
+ *   Log::i("MonModule", "Valeur = %d", x);   // Information
+ *   Log::w("MonModule", "Attention !");        // Avertissement
+ *   Log::e("MonModule", "Erreur critique");    // Erreur
+ *   Log::d("MonModule", "x=%d y=%d", x, y);   // Debug (verbose)
+ *
+ * Désactivation complète (build de production) :
+ *   Ajouter dans platformio.ini build_flags : -D LOG_LEVEL=0
+ *
+ * Niveaux : 0=off  1=error  2=warn  3=info (défaut)  4=debug
+ */
+
 #pragma once
 #include <Arduino.h>
 
-// ---------------------------------------------------------------------------
-// Logger — wrapper Serial minimaliste, header-only, portable
-// Désactiver avec : -D LOG_LEVEL=0 dans platformio.ini
-// ---------------------------------------------------------------------------
-
 #ifndef LOG_LEVEL
-#define LOG_LEVEL 3   // 0=off 1=error 2=warn 3=info 4=debug
+#define LOG_LEVEL 3
 #endif
 
 namespace Log {
 
 namespace detail {
-    inline void _print(const char* level, const char* tag, const char* msg) {
-        Serial.printf("[%s][%s] %s\n", level, tag, msg);
-    }
+    // Formatage et impression d'un message horodaté sur le port série
     inline void _printf(const char* level, const char* tag, const char* fmt, va_list args) {
         char buf[256];
         vsnprintf(buf, sizeof(buf), fmt, args);
-        _print(level, tag, buf);
+        Serial.printf("[%s][%s] %s\n", level, tag, buf);
     }
 }
 
+// Niveau DEBUG — informations très détaillées pour le développement
 __attribute__((format(printf, 2, 3)))
 inline void d(const char* tag, const char* fmt, ...) {
 #if LOG_LEVEL >= 4
@@ -30,6 +39,7 @@ inline void d(const char* tag, const char* fmt, ...) {
 #endif
 }
 
+// Niveau INFO — déroulement normal de l'application
 __attribute__((format(printf, 2, 3)))
 inline void i(const char* tag, const char* fmt, ...) {
 #if LOG_LEVEL >= 3
@@ -37,6 +47,7 @@ inline void i(const char* tag, const char* fmt, ...) {
 #endif
 }
 
+// Niveau WARN — situation anormale mais non bloquante
 __attribute__((format(printf, 2, 3)))
 inline void w(const char* tag, const char* fmt, ...) {
 #if LOG_LEVEL >= 2
@@ -44,6 +55,7 @@ inline void w(const char* tag, const char* fmt, ...) {
 #endif
 }
 
+// Niveau ERROR — erreur critique, fonctionnalité impactée
 __attribute__((format(printf, 2, 3)))
 inline void e(const char* tag, const char* fmt, ...) {
 #if LOG_LEVEL >= 1
