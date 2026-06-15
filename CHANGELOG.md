@@ -5,6 +5,47 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.5] — 2026-06-15
+
+### Ajouté
+- **`data/oui.json`** : source unique pour 151 entrées OUI avec champs `manufacturer` et `category`
+  (SBC, IoT, Mobile, Network, Router, NAS, Camera, Printer, Audio, TV, Streaming, Smart Home,
+  Home Automation, Robot Vacuum, Security, Computer) — seul fichier à modifier pour enrichir la base
+- **`include/oui_table.h`** : header C++ généré automatiquement depuis `data/oui.json` par
+  `tools/minify_web.py`, contient `struct OuiEntry{oui, manufacturer, category}` et `OUI_TABLE[]`
+- **`doc/warnings.md`** : catalogue des limitations connues, comportements non évidents et points
+  de vigilance pour la maintenance et l'évolution du projet
+
+### Modifié
+- **`struct NetworkDevice`** (renommé depuis `HostInfo`) : champs refactorisés
+  `vendor` → `manufacturer`, `lastSeenMs` → `lastSeen`, ajout `type` (alimenté depuis `category` OUI)
+  et `online` — structure extensible pour les futures colonnes de l'interface
+- **`tools/minify_web.py`** : traite désormais `data/oui.json` en plus des pages HTML ;
+  génère `include/oui_table.h` avec déduplications des OUI et échappement des caractères spéciaux
+- **`network_scanner.cpp`** : retire la table OUI inline (100+ lignes), inclut `oui_table.h`,
+  `lookupOui()` retourne `const OuiEntry*` et alimente `manufacturer` + `type` en une seule passe
+- **`resultsToJson()`** : envoie `elapsedMs = millis() - d.lastSeen` (durée écoulée en ms)
+  au lieu du timestamp brut `millis()` — corrige l'affichage **"56 ans"** dans "Vu il y a"
+- **`web_src/scan.html`** : `fmtSeen()` reçoit `elapsedMs` directement (plus de `Date.now()`),
+  champ `d.vendor` → `d.manufacturer`, couleurs de texte éclaircies pour meilleur contraste
+- **`platformio.ini`** : `PROJECT_VERSION` → `0.0.5`
+
+### Technique
+- La durée "Vu il y a" était erronée car `millis()` (ms depuis boot ESP32, ex: 5 000)
+  était comparé à `Date.now()` (epoch Unix, ex: 1 750 000 000 000) côté navigateur — différence ≈ 56 ans.
+  Correction : `resultsToJson()` calcule l'écart côté ESP32 avant serialisation.
+- `lookupOui()` retourne `const OuiEntry*` (nullptr si inconnu) plutôt qu'une `String` copiée —
+  un seul accès à la table pour remplir deux champs de `NetworkDevice`
+- `OUI_TABLE[]` est en flash (`static const`) depuis `oui_table.h` inclus dans le `.cpp` uniquement —
+  pas d'exposition dans l'interface publique du module
+
+### Infrastructure
+- Workflow de génération unifié : `data/oui.json` + `web_src/*.html` → `python tools/minify_web.py`
+  → headers C++ versionnés — aucun autre outil requis
+- `minify_web.py` déduplique les OUI au passage (protection contre les doublons dans le JSON)
+
+---
+
 ## [0.0.4] — 2026-06-15
 
 ### Ajouté
