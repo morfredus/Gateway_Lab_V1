@@ -95,7 +95,9 @@
         var m = document.getElementById('msg');
         if (xhr.status === 200) {
           m.style.color = '#10b981';
-          m.textContent = 'Succès — redémarrage en cours…';
+          m.textContent = 'Firmware transféré — redémarrage en cours…';
+          document.getElementById('f').style.display = 'none';
+          waitForReboot();
         } else {
           m.style.color = '#ef4444';
           m.textContent = 'Erreur : ' + xhr.responseText;
@@ -104,6 +106,28 @@
       xhr.open('POST', '/update');
       xhr.send(fd);
     });
+
+    // Attend que l'ESP32 réponde à nouveau après le reboot, puis redirige vers /
+    function waitForReboot() {
+      var m   = document.getElementById('msg');
+      var dot = 0;
+      var dots = ['', '.', '..', '...'];
+      // Attente initiale : laisser le temps à l'ESP32 de couper la connexion (~2 s)
+      setTimeout(function poll() {
+        dot = (dot + 1) % 4;
+        m.textContent = 'Redémarrage en cours' + dots[dot];
+        fetch('/api/status', { method: 'GET', cache: 'no-store' })
+          .then(function(r) {
+            if (r.ok) {
+              m.textContent = 'Redémarrage terminé — redirection…';
+              setTimeout(function() { window.location.href = '/'; }, 800);
+            } else {
+              setTimeout(poll, 1000);
+            }
+          })
+          .catch(function() { setTimeout(poll, 1000); });
+      }, 3000);
+    }
   </script>
 </body>
 </html>
