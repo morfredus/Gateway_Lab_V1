@@ -5,63 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gateway Lab V1 — Mise à jour OTA</title>
   <link rel="stylesheet" href="styles.css">
-  <style>
-    /* ── Mise en page (largeur 520px) ────────────────────────── */
-    .site-hdr {
-      width: 100%; max-width: 520px;
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 1.1rem 0 0.9rem;
-    }
-    nav {
-      width: 100%; max-width: 520px;
-      display: flex; gap: 0.25rem;
-      padding: 0.6rem 0;
-      border-top: 1px solid #ffffff0a;
-      border-bottom: 1px solid #ffffff0a;
-      margin-bottom: 1.5rem;
-    }
-    footer {
-      width: 100%; max-width: 520px;
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 1rem 0 1.5rem;
-      border-top: 1px solid #ffffff0a;
-      margin-top: auto;
-      font-size: 0.78rem; color: #94a3b8;
-    }
-    /* ── Formulaire OTA ──────────────────────────────────────── */
-    .card {
-      background: #1e293b; border-radius: 12px; padding: 1.75rem;
-      width: 100%; max-width: 520px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-      text-align: center;
-    }
-    .card-title {
-      font-size: 0.7rem; text-transform: uppercase;
-      letter-spacing: 0.12em; color: #94a3b8; font-weight: 600;
-      margin-bottom: 1.25rem;
-    }
-    label { display: block; color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.75rem; }
-    input[type=file] {
-      width: 100%; padding: 0.55rem;
-      background: #0f172a; border: 1px solid #334155;
-      border-radius: 8px; color: #e2e8f0; margin-bottom: 1.25rem;
-    }
-    .btn {
-      display: block; width: 100%; padding: 0.875rem;
-      background: #0891b2; color: #fff;
-      border: none; border-radius: 10px;
-      font-size: 1rem; font-weight: 600; cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn:hover { background: #06b6d4; }
-    .progress {
-      width: 100%; background: #334155;
-      border-radius: 8px; height: 10px;
-      display: none; margin-top: 1.25rem; overflow: hidden;
-    }
-    .bar { height: 100%; background: #06b6d4; width: 0; transition: width 0.2s; }
-    #msg { margin-top: 1rem; font-size: 0.875rem; color: #94a3b8; min-height: 1.25rem; }
-  </style>
 </head>
 <body>
 
@@ -82,7 +25,7 @@
   </nav>
 
   <!-- ── Contenu ───────────────────────────────────────────── -->
-  <div class="card">
+  <div class="card card-center">
     <p class="card-title">Mise à jour du firmware</p>
     <form id="f">
       <label>Sélectionnez le fichier firmware (.bin)</label>
