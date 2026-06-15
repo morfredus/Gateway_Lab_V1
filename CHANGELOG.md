@@ -7,6 +7,16 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ## [0.0.7] — 2026-06-15
 
+### Corrigé
+
+- **Catégorie (badges Type) absente sur la page Équipements** : le header PROGMEM
+  `include/web_interface_scan.h` n'avait pas été régénéré après le renommage
+  `d.type` → `d.category` dans `web_src/scan.html`. L'ESP32 servait encore
+  l'ancienne version minifiée qui référençait `d.type` (toujours `undefined`
+  dans la réponse JSON v0.0.7). Correction : regénération via
+  `python tools/minify_web.py` — le header intègre maintenant `d.category`,
+  `d.model` et `d.source`.
+
 ### Ajouté
 
 - **`src/modules/hostname_resolver.h/.cpp`** : nouveau module de résolution des noms d'hôtes
