@@ -119,6 +119,12 @@ Aucune étape « Upload Filesystem Image » requise — le HTML voyage avec le f
   compilés automatiquement sans modifier `platformio.ini`
 - **`main.cpp` comme orchestrateur** : aucune logique métier, uniquement
   `module.begin()` + `module.loop()` — extension future = ajouter un module, pas modifier main
+- **`extra_scripts` corrigé** : déplacé de la section `[platformio]` vers `[env:esp32s3_n16r8]`
+  (seul emplacement valide selon la doc PlatformIO)
+- **`PROJECT_VERSION`** mis à jour → `0.0.3`
+- **Commentaires pédagogiques** ajoutés dans tous les fichiers `.h` et `.cpp` :
+  description du rôle de chaque fichier, explication des bibliothèques,
+  justification des choix techniques (byte-order, ARP, FreeRTOS, PROGMEM...)
 
 ---
 
