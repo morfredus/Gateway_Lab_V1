@@ -24,13 +24,23 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Paths
+# Résolution du chemin racine du projet
+#
+# En mode PlatformIO (SCons), __file__ n'est pas défini.
+# On utilise env.GetProjectDir() fourni par SCons.
+# En mode standalone (python tools/minify_web.py), on utilise __file__.
 # ---------------------------------------------------------------------------
-SCRIPT_DIR   = Path(__file__).parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-WEB_SRC_DIR  = PROJECT_ROOT / "web_src"
-DATA_DIR     = PROJECT_ROOT / "data"
-INCLUDE_DIR  = PROJECT_ROOT / "include"
+try:
+    Import("env")                           # type: ignore  # noqa: F821
+    _IS_PLATFORMIO = True
+    PROJECT_ROOT = Path(env.GetProjectDir())  # type: ignore  # noqa: F821
+except NameError:
+    _IS_PLATFORMIO = False
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+WEB_SRC_DIR = PROJECT_ROOT / "web_src"
+DATA_DIR    = PROJECT_ROOT / "data"
+INCLUDE_DIR = PROJECT_ROOT / "include"
 
 # ---------------------------------------------------------------------------
 # Pages à traiter : (source, header_dest, const_name)
@@ -162,9 +172,7 @@ def run():
 # ---------------------------------------------------------------------------
 # Entry points
 # ---------------------------------------------------------------------------
-try:
-    Import("env")   # type: ignore  # noqa: F821
+if _IS_PLATFORMIO:
     run()
-except NameError:
-    if __name__ == "__main__":
-        sys.exit(0 if run() else 1)
+elif __name__ == "__main__":
+    sys.exit(0 if run() else 1)
