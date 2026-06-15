@@ -10,6 +10,7 @@
 
 #include "network_scanner.h"
 #include <WiFi.h>
+#include <ArduinoJson.h>
 #include "lwip/etharp.h"   // etharp_get_entry(), etharp_request()
 #include "lwip/netif.h"    // netif_default
 #include "lwip/inet.h"     // inet_pton()
@@ -199,7 +200,8 @@ void NetworkScanner::_resolveHostnames() {
 // API publique
 // ---------------------------------------------------------------------------
 void NetworkScanner::begin() {
-    // Création du mutex de protection (obligatoire avant tout accès à _results)
+    // Guard : évite une fuite de mutex si begin() est rappelé (ex : reconnexion WiFi)
+    if (_mutex) return;
     _mutex = xSemaphoreCreateMutex();
     Log::i(TAG, "Module initialisé");
 }
@@ -229,19 +231,20 @@ String NetworkScanner::resultsToJson() const {
     // à connaître l'epoch ESP32, il peut afficher directement "il y a Xs"
     uint32_t now = millis();
     xSemaphoreTake(_mutex, portMAX_DELAY);
-    String json = "[";
-    for (size_t i = 0; i < _results.size(); i++) {
-        const auto& d = _results[i];
-        if (i > 0) json += ',';
-        json += "{\"ip\":\"" + d.ip + "\","
-                "\"mac\":\"" + d.mac + "\","
-                "\"manufacturer\":\"" + d.manufacturer + "\","
-                "\"hostname\":\"" + d.hostname + "\","
-                "\"type\":\"" + d.type + "\","
-                "\"elapsedMs\":" + String(now - d.lastSeen) + ","
-                "\"online\":" + (d.online ? "true" : "false") + "}";
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+    for (const auto& d : _results) {
+        JsonObject obj = arr.add<JsonObject>();
+        obj["ip"]           = d.ip;
+        obj["mac"]          = d.mac;
+        obj["manufacturer"] = d.manufacturer;
+        obj["hostname"]     = d.hostname;
+        obj["type"]         = d.type;
+        obj["elapsedMs"]    = now - d.lastSeen;
+        obj["online"]       = d.online;
     }
-    json += "]";
     xSemaphoreGive(_mutex);
+    String json;
+    serializeJson(doc, json);
     return json;
 }
