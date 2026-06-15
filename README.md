@@ -136,7 +136,8 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 
 | Version | État | Contenu |
 |---------|------|---------|
-| v0.0.5 | ✅ Actuelle | OUI externalisé (`data/oui.json`, 152 entrées), badges Type, pipeline unifié |
+| v0.0.6 | ✅ Actuelle | Corrections de bugs : reconnexion WiFi relance les services, mDNS republié, mutex guard, callbacks OTA idempotents, `resultsToJson()` sécurisé (ArduinoJson) |
+| v0.0.5 | ✅ | OUI externalisé (`data/oui.json`, 152 entrées), badges Type, pipeline unifié |
 | v0.0.4 | ✅ | Page `/scan` dédiée, `struct NetworkDevice`, fix "Vu il y a 56 ans", OTA redirect, champ `hostname` (stub) |
 | v0.0.3 | ✅ | Architecture modulaire `src/modules/`, scanner ARP FreeRTOS, lookup OUI ~40 entrées |
 | v0.0.2 | ✅ | WebServer, mDNS, OTA web, HTML PROGMEM, pipeline minification |
@@ -148,7 +149,7 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 
 | Version | Objectif |
 |---------|----------|
-| v0.0.6 | Résolution des noms d'hôtes (requête PTR DNS manuelle via `lwip/dns.h`) |
+| v0.0.7 | Résolution des noms d'hôtes (requête PTR DNS manuelle via `lwip/dns.h`) |
 | v0.1.x | Scan de ports, historique NVS, détection nouveaux équipements, `/api/export` |
 | v0.2.x | mDNS/Bonjour passif, SSDP/UPnP, DNS-SD |
 | v0.3.x | Intégrations domotiques (Philips Hue, Tado, X-Sense) |

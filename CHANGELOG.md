@@ -5,6 +5,61 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.6] — 2026-06-15
+
+### Corrigé
+
+- **Services réseau non relancés après reconnexion WiFi** (`wifi_manager.cpp`) :
+  `WiFiManager::loop()` détectait la perte du WiFi et déclenchait `_multi.run()`, mais ne
+  rappelait jamais le callback une fois le WiFi rétabli. OTA, scanner et serveur web
+  restaient donc inactifs après une reconnexion automatique.
+  Correction : `_storedCb` conserve le callback de `begin()` ; la transition
+  déconnecté → connecté est détectée via `_wasConnected` et rappelle les services.
+
+- **mDNS non republié après reconnexion** (`wifi_manager.cpp`) :
+  `MDNS.begin()` n'était appelé qu'une seule fois dans `begin()`. Après perte et
+  reprise du WiFi, `gateway-lab-v1.local` devenait injoignable.
+  Correction : `_startMdns()` est extrait en fonction interne et rappelé lors de
+  chaque reconnexion détectée dans `loop()`.
+
+- **Fuite de mutex sur double initialisation** (`network_scanner.cpp`) :
+  Rappeler `NetworkScanner::begin()` (via le callback de reconnexion) créait un
+  second mutex FreeRTOS sans libérer le premier.
+  Correction : guard `if (_mutex) return;` en tête de `begin()`.
+
+- **Callbacks ArduinoOTA empilés à chaque reconnexion** (`ota_manager.h/.cpp`) :
+  `ArduinoOTA.onStart/onEnd/onError` s'enregistrent en liste — les rappeler à
+  chaque reconnexion faisait croître la chaîne indéfiniment.
+  Correction : flag `_callbacksRegistered` ; les lambdas ne s'enregistrent qu'une
+  fois. `ArduinoOTA.begin()` est toujours rappelé (nécessaire pour ré-ouvrir le
+  port UDP et republier le service mDNS après reconnexion).
+
+- **Routes HTTP re-enregistrées inutilement** (`web_server.h/.cpp`) :
+  `WebServerModule::begin()` pouvait être rappelé par le callback de reconnexion,
+  dupliquant les handlers et rappelant `_server.begin()` sur un socket déjà actif.
+  Le socket TCP du WebServer persiste à travers les reconnexions WiFi côté lwIP.
+  Correction : flag `_started` ; `begin()` est idempotent.
+
+- **Injection JSON dans `resultsToJson()`** (`network_scanner.cpp`) :
+  Les champs `hostname` et `type` étaient concaténés directement dans la chaîne JSON
+  sans échappement. Toute valeur contenant `"` ou `\` (ex. nom d'hôte mDNS avec
+  guillemet) produisait un JSON invalide ou une injection.
+  Correction : remplacement de la concaténation manuelle par `JsonDocument` /
+  `serializeJson()` (ArduinoJson déjà présent dans `lib_deps`).
+
+### Technique
+
+- Modèle de robustesse adopté : chaque `begin()` exposé publiquement est désormais
+  **idempotent** — appelable plusieurs fois sans effet de bord (guard mutex,
+  flag `_started`, flag `_callbacksRegistered`).
+- `WiFiManager` est le seul point de déclenchement post-reconnexion : il stocke le
+  callback applicatif et le rappelle lors de toute transition déconnecté → connecté,
+  sans modifier `main.cpp`.
+- ArduinoJson étendu à `resultsToJson()` : cohérence avec `/api/status` qui utilisait
+  déjà `JsonDocument` dans `web_server.cpp`.
+
+---
+
 ## [0.0.5] — 2026-06-15
 
 ### Ajouté
