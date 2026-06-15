@@ -103,6 +103,30 @@
       padding: 0.15rem 0.45rem;
       white-space: nowrap;
     }
+    .type-badge {
+      font-size: 0.6rem;
+      border-radius: 4px;
+      padding: 0.15rem 0.45rem;
+      white-space: nowrap;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .type-iot        { background:#1c3a2a; color:#4ade80; }
+    .type-mobile     { background:#1e2e4a; color:#818cf8; }
+    .type-network    { background:#1e3a3a; color:#22d3ee; }
+    .type-router     { background:#1e3a3a; color:#22d3ee; }
+    .type-computer   { background:#2a2a1e; color:#facc15; }
+    .type-sbc        { background:#2a1e3a; color:#c084fc; }
+    .type-smarthome  { background:#2a1e2a; color:#f472b6; }
+    .type-homeauto   { background:#2a1e2a; color:#f472b6; }
+    .type-audio      { background:#1e2a2a; color:#34d399; }
+    .type-tv         { background:#2a1e1e; color:#fb923c; }
+    .type-streaming  { background:#2a1e1e; color:#fb923c; }
+    .type-nas        { background:#2a2a1e; color:#fbbf24; }
+    .type-camera     { background:#2a1e1e; color:#f87171; }
+    .type-security   { background:#2a1e1e; color:#f87171; }
+    .type-printer    { background:#1e2a1e; color:#86efac; }
+    .type-robot      { background:#1c3a2a; color:#4ade80; }
     .seen-cell { color: #94a3b8; white-space: nowrap; }
     .empty-msg { color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 1.5rem 0; }
     .scan-info { font-size: 0.75rem; color: #38bdf8; margin-bottom: 0.75rem; }
@@ -140,12 +164,13 @@
             <th>IP</th>
             <th>Nom</th>
             <th>Fabricant</th>
+            <th>Type</th>
             <th>MAC</th>
             <th>Vu il y a</th>
           </tr>
         </thead>
         <tbody id="devices-body">
-          <tr><td colspan="5" class="empty-msg">Cliquez sur "Scanner" pour détecter les équipements</td></tr>
+          <tr><td colspan="6" class="empty-msg">Cliquez sur "Scanner" pour détecter les équipements</td></tr>
         </tbody>
       </table>
     </div>
@@ -168,7 +193,7 @@
       var tbody = document.getElementById('devices-body');
       var meta  = document.getElementById('scan-meta');
       if (!devices || devices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">Aucun équipement détecté</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Aucun équipement détecté</td></tr>';
         meta.textContent = '0 équipement';
         return;
       }
@@ -185,10 +210,17 @@
         var mfr    = d.manufacturer
           ? '<span class="vendor-badge">' + d.manufacturer + '</span>'
           : '<span style="color:#475569">—</span>';
+        var typeCls = d.type
+          ? 'type-' + d.type.toLowerCase().replace(/[^a-z]/g, '').replace('smarthome','smarthome').replace('homeautomation','homeauto').replace('robotvacuum','robot')
+          : '';
+        var typeCell = d.type
+          ? '<span class="type-badge ' + typeCls + '">' + d.type + '</span>'
+          : '<span style="color:#475569">—</span>';
         return '<tr>' +
           '<td class="ip-cell">' + d.ip + '</td>' +
           '<td class="name-cell">' + name + '</td>' +
           '<td>' + mfr + '</td>' +
+          '<td>' + typeCell + '</td>' +
           '<td class="mac-cell">' + d.mac + '</td>' +
           '<td class="seen-cell">' + fmtSeen(d.elapsedMs) + '</td>' +
           '</tr>';
