@@ -98,7 +98,7 @@
     .name-cell { color: #7dd3fc; }
     .name-sub  { font-size: 0.68rem; color: #475569; margin-top: 0.1rem; }
     .mfr-cell  { }
-    .mfr-model { font-size: 0.68rem; color: #64748b; margin-top: 0.1rem; }
+    .mfr-model { font-size: 0.7rem; color: #94a3b8; margin-top: 0.2rem; }
     /* Badges fabricant */
     .vendor-badge {
       font-size: 0.65rem;
@@ -121,6 +121,7 @@
     .source-mdns { background: #064e3b; color: #34d399; }
     .source-ptr  { background: #1e1a36; color: #a78bfa; }
     .source-mac  { background: #1e293b; color: #64748b; }
+    .source-self { background: #0c2a3a; color: #38bdf8; }
     /* Badges type/catégorie */
     .type-badge {
       font-size: 0.6rem;
@@ -146,6 +147,7 @@
     .type-security   { background:#2a1e1e; color:#f87171; }
     .type-printer    { background:#1e2a1e; color:#86efac; }
     .type-robot      { background:#1c3a2a; color:#4ade80; }
+    .type-gateway    { background:#0c2a3a; color:#38bdf8; }
     .seen-cell { color: #94a3b8; white-space: nowrap; }
     .empty-msg { color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 1.5rem 0; }
     .scan-info { font-size: 0.75rem; color: #38bdf8; margin-bottom: 0.75rem; }
@@ -220,11 +222,17 @@
         .replace('robotvacuum',   'robot');
     }
 
-    // Génère le badge de source de résolution (mDNS / PTR / MAC)
+    // Génère le badge de source de résolution avec tooltip explicatif
     function sourceBadge(source) {
       if (!source || source === 'MAC') return '';
-      var cls = source === 'mDNS' ? 'source-mdns' : 'source-ptr';
-      return '<span class="source-badge ' + cls + '">' + source + '</span>';
+      var cfg = {
+        'mDNS': { cls: 'source-mdns', label: 'mDNS',  title: 'Nom résolu via mDNS — annonce .local de l\'appareil' },
+        'PTR':  { cls: 'source-ptr',  label: 'DNS↩',  title: 'DNS inverse (PTR) — nom fourni par le routeur / box' },
+        'Self': { cls: 'source-self', label: 'ESP32',  title: 'Cet appareil — Gateway Lab V1' }
+      };
+      var c = cfg[source];
+      if (!c) return '';
+      return '<span class="source-badge ' + c.cls + '" title="' + c.title + '">' + c.label + '</span>';
     }
 
     function renderDevices(devices) {

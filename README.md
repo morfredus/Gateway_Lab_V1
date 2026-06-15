@@ -22,6 +22,7 @@ connectés au réseau local domestique.
 | Résolution hostnames | mDNS passif (annonces `.local`) + PTR DNS batch (≤ 500 ms) |
 | Détection boxes FAI | Free / Orange / SFR / Bouygues — modèle identifié via hostname + OUI |
 | Inventaire équipements | IP · Nom d'hôte · Fabricant · Modèle · Catégorie · MAC · Source · Vu il y a |
+| Auto-découverte ESP32 | L'ESP32 lui-même apparaît dans la liste (badge `ESP32`, catégorie `Gateway`) |
 | Identification OUI | 152 entrées (`data/oui.json`), 16 catégories (IoT, Mobile, NAS, Camera, TV…) |
 | OTA web | Upload firmware `.bin` via navigateur + redirection automatique |
 | OTA réseau | Mise à jour via PlatformIO / IDE (ArduinoOTA) |
@@ -132,7 +133,12 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 | POST | `/api/scan` | Déclenche un scan asynchrone |
 | POST | `/update` | Upload firmware `.bin` |
 
-> Le champ `source` indique la méthode de résolution du nom : `"mDNS"` (annonce .local), `"PTR"` (reverse DNS), `"MAC"` (OUI uniquement), ou `""` si inconnu.
+> **Champ `source`** — méthode de résolution du nom d'hôte :
+> - `"mDNS"` : annonce multicast `.local` reçue passivement pendant le scan
+> - `"PTR"` : DNS inverse — requête `x.x.x.x.in-addr.arpa` au routeur (nom DHCP)
+> - `"MAC"` : fabricant identifié par OUI uniquement, pas de nom d'hôte
+> - `"Self"` : l'ESP32 lui-même (non détectable par ARP)
+> - `""` : aucune information disponible
 
 ---
 
@@ -140,7 +146,7 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 
 | Version | État | Contenu |
 |---------|------|---------|
-| v0.0.7 | ✅ Actuelle | Résolution hostnames (mDNS passif + PTR DNS batch), détection boxes FAI FR, nouvelle `struct NetworkDevice`, badges source + modèle dans l'UI |
+| v0.0.7 | ✅ Actuelle | Résolution hostnames (mDNS passif + PTR DNS batch), détection boxes FAI FR, nouvelle `struct NetworkDevice`, badges source + modèle, ESP32 visible dans sa propre liste |
 | v0.0.6 | ✅ | Corrections de bugs : reconnexion WiFi relance les services, mDNS republié, mutex guard, callbacks OTA idempotents, `resultsToJson()` sécurisé (ArduinoJson) |
 | v0.0.5 | ✅ | OUI externalisé (`data/oui.json`, 152 entrées), badges Type, pipeline unifié |
 | v0.0.4 | ✅ | Page `/scan` dédiée, `struct NetworkDevice`, fix "Vu il y a 56 ans", OTA redirect, champ `hostname` (stub) |
