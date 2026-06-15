@@ -16,6 +16,7 @@
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
 #include "lwip/etharp.h"   // etharp_get_entry(), etharp_request()
 #include "lwip/netif.h"    // netif_default
 #include "lwip/inet.h"     // ip4addr_ntoa_r()
@@ -202,6 +203,51 @@ void NetworkScanner::_resolveHostnames() {
 }
 
 // ---------------------------------------------------------------------------
+// Entrée propre de l'ESP32 dans la liste des équipements
+//
+// Le protocole ARP ne peut pas découvrir sa propre adresse IP : on ne
+// reçoit jamais de réponse ARP pour soi-même. On injecte donc manuellement
+// une entrée représentant cet appareil, identifiable par son hostname mDNS
+// et son adresse MAC. La source "Self" distingue cette entrée dans l'UI.
+// ---------------------------------------------------------------------------
+void NetworkScanner::_addSelfEntry() {
+    String ip  = WiFi.localIP().toString();
+    String mac = WiFi.macAddress();
+    mac.toUpperCase();   // WiFi.macAddress() peut retourner des minuscules
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+
+    // Déduplication : si l'ESP32 est déjà dans la liste (scan précédent), mise à jour
+    for (auto& d : _results) {
+        if (d.mac == mac) {
+            d.ip       = ip;
+            d.lastSeen = millis();
+            d.online   = true;
+            xSemaphoreGive(_mutex);
+            return;
+        }
+    }
+
+    NetworkDevice self;
+    self.ip       = ip;
+    self.mac      = mac;
+    self.hostname = MDNS_HOSTNAME;       // ex: "gateway-lab-v1"
+    self.model    = PROJECT_NAME;        // ex: "GatewayLabV1"
+    self.source   = "Self";
+    self.category = "Gateway";
+    self.lastSeen = millis();
+    self.online   = true;
+
+    // Fabricant depuis l'OUI (Espressif Systems pour les ESP32)
+    const OuiEntry* oui = lookupOui(mac);
+    if (oui) self.manufacturer = oui->manufacturer;
+
+    _results.push_back(self);
+    xSemaphoreGive(_mutex);
+    Log::i(TAG, "Auto-entrée : %s (%s) → %s", ip.c_str(), mac.c_str(), MDNS_HOSTNAME);
+}
+
+// ---------------------------------------------------------------------------
 // Tâche FreeRTOS — exécutée sur Core 0 (même core que lwIP / TCP stack)
 // Stack 16 Ko : nécessaire pour les appels lwIP + résolution DNS + std::map
 // ---------------------------------------------------------------------------
@@ -232,6 +278,9 @@ void NetworkScanner::_run() {
 
     // Arrêter l'écoute mDNS (libère le socket UDP multicast)
     hostnameResolver.end();
+
+    // Ajouter l'ESP32 lui-même (non détectable par ARP)
+    _addSelfEntry();
 
     Log::i(TAG, "Scan complet — %u équipement(s) enrichi(s)", (unsigned)_results.size());
     _scanning   = false;
