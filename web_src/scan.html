@@ -156,8 +156,8 @@
     var progressVal = 0;
     var progTimer   = null;
 
-    function fmtSeen(ms) {
-      var s = Math.floor((Date.now() - ms) / 1000);
+    function fmtSeen(elapsedMs) {
+      var s = Math.floor(elapsedMs / 1000);
       if (s < 5)    return 'maintenant';
       if (s < 60)   return s + 's';
       if (s < 3600) return Math.floor(s / 60) + ' min';
@@ -181,16 +181,16 @@
         return 0;
       });
       tbody.innerHTML = devices.map(function(d) {
-        var name   = d.hostname || '<span style="color:#334155">—</span>';
-        var vendor = d.vendor
-          ? '<span class="vendor-badge">' + d.vendor + '</span>'
-          : '<span style="color:#334155">—</span>';
+        var name   = d.hostname || '<span style="color:#475569">—</span>';
+        var mfr    = d.manufacturer
+          ? '<span class="vendor-badge">' + d.manufacturer + '</span>'
+          : '<span style="color:#475569">—</span>';
         return '<tr>' +
           '<td class="ip-cell">' + d.ip + '</td>' +
           '<td class="name-cell">' + name + '</td>' +
-          '<td>' + vendor + '</td>' +
+          '<td>' + mfr + '</td>' +
           '<td class="mac-cell">' + d.mac + '</td>' +
-          '<td class="seen-cell">' + fmtSeen(d.lastSeen) + '</td>' +
+          '<td class="seen-cell">' + fmtSeen(d.elapsedMs) + '</td>' +
           '</tr>';
       }).join('');
     }
