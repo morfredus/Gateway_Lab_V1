@@ -16,10 +16,12 @@ connectés au réseau local domestique.
 | Fonctionnalité | Détail |
 |---|---|
 | WiFi multi-réseaux | Connexion automatique au meilleur réseau disponible (`secrets.h`) |
-| mDNS | Accessible via `gateway-lab-v1.local` |
+| mDNS | Accessible via `gateway-lab-v1.local` ; résolution passive des `.local` pendant le scan |
 | Interface web | Pages Accueil / Équipements / OTA — HTML embarqué en PROGMEM |
-| Scan réseau LAN | Sweep ARP sur tout le sous-réseau, tâche FreeRTOS asynchrone |
-| Inventaire équipements | IP · Fabricant · Type · MAC · Vu il y a |
+| Scan réseau LAN | Sweep ARP sur tout le sous-réseau, tâche FreeRTOS asynchrone Core 0 |
+| Résolution hostnames | mDNS passif (annonces `.local`) + PTR DNS batch (≤ 500 ms) |
+| Détection boxes FAI | Free / Orange / SFR / Bouygues — modèle identifié via hostname + OUI |
+| Inventaire équipements | IP · Nom d'hôte · Fabricant · Modèle · Catégorie · MAC · Source · Vu il y a |
 | Identification OUI | 152 entrées (`data/oui.json`), 16 catégories (IoT, Mobile, NAS, Camera, TV…) |
 | OTA web | Upload firmware `.bin` via navigateur + redirection automatique |
 | OTA réseau | Mise à jour via PlatformIO / IDE (ArduinoOTA) |
@@ -72,7 +74,9 @@ Gateway-Lab-V1/
 │   │   ├── wifi_manager.*        # WiFiMulti + mDNS + reconnexion
 │   │   ├── ota_manager.*         # ArduinoOTA + routes web OTA
 │   │   ├── web_server.*          # WebServer + routes API
-│   │   └── network_scanner.*     # Scan ARP FreeRTOS + lookup OUI
+│   │   ├── network_scanner.*     # Scan ARP FreeRTOS + lookup OUI
+│   │   ├── hostname_resolver.*   # mDNS passif + PTR DNS batch
+│   │   └── isp_detector.h        # Détection boxes FAI FR (header-only)
 │   └── utils/
 │       └── logger.h              # Log header-only (DEBUG/INFO/WARN/ERROR)
 ├── include/
@@ -124,11 +128,11 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 | GET | `/scan` | Page équipements |
 | GET | `/update` | Page OTA |
 | GET | `/api/status` | `{ssid, ip, rssi, uptime, version, hostname, scanning}` |
-| GET | `/api/devices` | `{scanning, devices:[{ip, mac, manufacturer, type, hostname, elapsedMs, online}]}` |
+| GET | `/api/devices` | `{scanning, devices:[{ip, mac, manufacturer, hostname, category, model, os, source, elapsedMs, online}]}` |
 | POST | `/api/scan` | Déclenche un scan asynchrone |
 | POST | `/update` | Upload firmware `.bin` |
 
-> Note : le champ `hostname` est présent dans la réponse JSON mais reste vide — la résolution PTR DNS est planifiée en v0.0.6.
+> Le champ `source` indique la méthode de résolution du nom : `"mDNS"` (annonce .local), `"PTR"` (reverse DNS), `"MAC"` (OUI uniquement), ou `""` si inconnu.
 
 ---
 
@@ -136,7 +140,8 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 
 | Version | État | Contenu |
 |---------|------|---------|
-| v0.0.6 | ✅ Actuelle | Corrections de bugs : reconnexion WiFi relance les services, mDNS republié, mutex guard, callbacks OTA idempotents, `resultsToJson()` sécurisé (ArduinoJson) |
+| v0.0.7 | ✅ Actuelle | Résolution hostnames (mDNS passif + PTR DNS batch), détection boxes FAI FR, nouvelle `struct NetworkDevice`, badges source + modèle dans l'UI |
+| v0.0.6 | ✅ | Corrections de bugs : reconnexion WiFi relance les services, mDNS republié, mutex guard, callbacks OTA idempotents, `resultsToJson()` sécurisé (ArduinoJson) |
 | v0.0.5 | ✅ | OUI externalisé (`data/oui.json`, 152 entrées), badges Type, pipeline unifié |
 | v0.0.4 | ✅ | Page `/scan` dédiée, `struct NetworkDevice`, fix "Vu il y a 56 ans", OTA redirect, champ `hostname` (stub) |
 | v0.0.3 | ✅ | Architecture modulaire `src/modules/`, scanner ARP FreeRTOS, lookup OUI ~40 entrées |
@@ -149,8 +154,8 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 
 | Version | Objectif |
 |---------|----------|
-| v0.0.7 | Résolution des noms d'hôtes (requête PTR DNS manuelle via `lwip/dns.h`) |
-| v0.1.x | Scan de ports, historique NVS, détection nouveaux équipements, `/api/export` |
+| v0.0.8 | Scan de ports, détection nouveaux équipements, `/api/export` |
+| v0.1.x | Historique NVS, mDNS/Bonjour passif étendu, SSDP/UPnP |
 | v0.2.x | mDNS/Bonjour passif, SSDP/UPnP, DNS-SD |
 | v0.3.x | Intégrations domotiques (Philips Hue, Tado, X-Sense) |
 | v0.4.x | MQTT, webhooks événements réseau |

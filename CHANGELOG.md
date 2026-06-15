@@ -5,6 +5,76 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.7] — 2026-06-15
+
+### Ajouté
+
+- **`src/modules/hostname_resolver.h/.cpp`** : nouveau module de résolution des noms d'hôtes
+  - **mDNS passif** : écoute multicast sur 224.0.0.251:5353 pendant le sweep ARP ;
+    les enregistrements A (nom.local → IPv4) peuplent un cache interne sans interrogation active
+  - **PTR DNS batch** : pour chaque IP sans hostname mDNS, envoie des requêtes
+    `d.c.b.a.in-addr.arpa` au DNS du réseau ; toutes les requêtes sont envoyées simultanément,
+    réponses collectées dans une fenêtre unique de 500 ms (impact temps total : ≤ 500 ms)
+  - Priorité de résolution : mDNS > PTR DNS
+  - Non bloquant : timeout court, graceful fallback si le réseau ne répond pas
+  - Champ `source` renseigné : `"mDNS"`, `"PTR"`, `"MAC"` ou `""`
+
+- **`src/modules/isp_detector.h`** : détection des boxes des FAI français (header-only)
+  - **Free / Freebox** : Ultra, Pop, Révolution, Delta, Mini 4K
+    (signatures hostname : `freebox-*` ; OUI : `freebox sas`, `free sas`)
+  - **Orange / Livebox** : 4, 5, 6
+    (signatures hostname : `livebox`, `livebox4`… ; OUI : `orange`)
+  - **SFR / SFR Box** : Box Plus, Box 8
+    (signatures hostname : `sfrbox`, `sfr-box`, `sfr-*` ; OUI : `sfr`)
+  - **Bouygues / Bbox** : Miami, Ultym
+    (signatures hostname : `bbox*` ; OUI : `bouygues`)
+  - Remplit `manufacturer` (marque FAI), `model` (ex: "Livebox 6"), `category` = "Router"
+  - Détection non bloquante, 100 % locale (pas de requête réseau)
+
+- **Champ `hostname` effectivement renseigné** : `_resolveHostnames()` n'est plus un no-op —
+  implémentation complète avec `HostnameResolver`
+
+### Modifié
+
+- **`struct NetworkDevice`** : refactoring des champs
+  - `type` → `category` (alignement avec `OuiEntry.category`)
+  - Ajout `model` (ex: "Freebox Ultra", "Livebox 6", `""` si inconnu)
+  - Ajout `os`     (usage futur — vide en v0.0.7)
+  - Ajout `source` (`"mDNS"` | `"PTR"` | `"MAC"` | `""`)
+
+- **`network_scanner.cpp`** :
+  - `_readArpTable()` : `h.type` → `h.category`
+  - `_sweepSubnet()` : appel de `hostnameResolver.update()` après chaque lot ARP
+    pour collecter les annonces mDNS reçues pendant le sweep
+  - `_run()` : `hostnameResolver.begin()` / `.clearCaches()` avant le sweep,
+    `hostnameResolver.end()` après la résolution
+  - `_resolveHostnames()` : implémentée (remplace le no-op)
+  - `resultsToJson()` : champ `"type"` → `"category"`, ajout `"model"`, `"os"`, `"source"`
+  - Stack FreeRTOS : 8 192 → 16 384 octets (lwIP + résolution DNS + `std::map`)
+
+- **`web_src/scan.html`** :
+  - `d.type` → `d.category` dans `renderDevices()`
+  - Badge **source** sur le hostname (`mDNS` vert, `PTR` violet)
+  - Modèle affiché sous le fabricant (ex: "Freebox Ultra" sous "Free")
+  - Fonction `esc()` : échappement HTML des valeurs serveur (XSS defense)
+  - `max-width` porté à 900 px pour accommoder la colonne enrichie
+  - Titre colonne : "Type" → "Catégorie", "Nom" → "Nom d'hôte"
+
+- **`platformio.ini`** : `PROJECT_VERSION` → `0.0.7`
+
+### Technique
+
+- **Écoute mDNS et ESPmDNS coexistent** grâce à `SO_REUSEADDR` (activé par `beginMulticast`) ;
+  si la jointure du groupe échoue, le système bascule silencieusement sur PTR DNS uniquement
+- **Batch PTR** : toutes les requêtes envoyées en rafale → une seule fenêtre d'attente de 500 ms
+  pour N équipements (vs N × timeout en mode séquentiel)
+- **ISP detection** : appliquée après résolution hostname pour bénéficier du nom complet ;
+  n'écrase pas les champs déjà renseignés par l'OUI si la détection FAI ne matche pas
+- **`HostnameResolver`** : instance globale partagée, appelée uniquement depuis la tâche FreeRTOS
+  du scanner → pas de mutex nécessaire pour le resolver lui-même
+
+---
+
 ## [0.0.6] — 2026-06-15
 
 ### Corrigé
