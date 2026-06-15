@@ -4,35 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gateway Lab V1 — Équipements</title>
+  <link rel="stylesheet" href="styles.css">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 0 1rem;
-    }
-    /* ── Site header ─────────────────────────────────────────── */
+    /* ── Mise en page (largeur 960px) ────────────────────────── */
     .site-hdr {
       width: 100%; max-width: 960px;
       display: flex; justify-content: space-between; align-items: center;
       padding: 1.1rem 0 0.9rem;
     }
-    .site-name {
-      font-size: 1.05rem; font-weight: 700; color: #f1f5f9;
-      display: flex; align-items: center; gap: 0.5rem;
-    }
-    .site-ver {
-      font-size: 0.63rem; font-weight: 700; letter-spacing: 0.05em;
-      color: #06b6d4; background: #0c2a40;
-      padding: 0.15rem 0.45rem; border-radius: 4px;
-    }
-    .site-tag { font-size: 0.72rem; color: #94a3b8; }
-    /* ── Navigation ──────────────────────────────────────────── */
     nav {
       width: 100%; max-width: 960px;
       display: flex; gap: 0.25rem;
@@ -41,13 +20,6 @@
       border-bottom: 1px solid #ffffff0a;
       margin-bottom: 1.5rem;
     }
-    nav a {
-      font-size: 0.8rem; padding: 0.35rem 0.8rem;
-      border-radius: 6px; text-decoration: none;
-      color: #94a3b8; transition: background 0.15s, color 0.15s;
-    }
-    nav a:hover  { background: #1e293b; color: #e2e8f0; }
-    nav a.active { background: #0c4a6e; color: #38bdf8; font-weight: 600; }
     /* ── Card ────────────────────────────────────────────────── */
     .card {
       background: #1e293b; border-radius: 12px; padding: 1.5rem;
@@ -129,7 +101,7 @@
     .empty-msg { color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 1.5rem 0; }
     .scan-info { font-size: 0.78rem; color: #38bdf8; margin-bottom: 0.75rem; }
     .none { color: #334155; }
-    /* ── Footer ──────────────────────────────────────────────── */
+    /* ── Pied de page ────────────────────────────────────────── */
     footer {
       width: 100%; max-width: 960px;
       display: flex; justify-content: space-between; align-items: center;
@@ -138,8 +110,6 @@
       margin-top: auto;
       font-size: 0.78rem; color: #94a3b8;
     }
-    footer a { color: #38bdf8; text-decoration: none; font-weight: 500; }
-    footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
