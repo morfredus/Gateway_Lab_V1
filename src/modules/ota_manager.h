@@ -20,6 +20,8 @@
 class OtaManager {
 public:
     // Configuration et démarrage d'ArduinoOTA avec le nom de la carte
+    // Idempotent : les callbacks ne sont enregistrés qu'une seule fois ;
+    // ArduinoOTA.begin() est rappelé à chaque reconnexion WiFi pour ré-ouvrir le port UDP.
     void begin(const char* hostname);
 
     // Traitement des paquets ArduinoOTA — appeler dans loop() à chaque itération
@@ -29,6 +31,9 @@ public:
     //   GET  /update — affiche le formulaire d'upload
     //   POST /update — reçoit et installe le firmware .bin
     void registerRoutes(WebServer& server);
+
+private:
+    bool _callbacksRegistered = false;
 };
 
 // Instance globale

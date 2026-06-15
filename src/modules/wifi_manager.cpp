@@ -24,10 +24,25 @@ static WiFiMulti _multi;
 static constexpr unsigned long RECONNECT_DEBOUNCE_MS = 30000;
 static unsigned long _lastReconnectAttempt = 0;
 
+// Callback conservé pour le rappeler lors d'une reconnexion automatique
+static WiFiManager::Callback _storedCb;
+
+// État précédent : permet de détecter la transition déconnecté → connecté
+static bool _wasConnected = false;
+
 // Instance globale exportée
 WiFiManager wifiMgr;
 
+static void _startMdns() {
+#ifdef ENABLE_MDNS
+    if (MDNS.begin(MDNS_HOSTNAME)) {
+        Log::i(TAG, "mDNS actif : http://%s.local", MDNS_HOSTNAME);
+    }
+#endif
+}
+
 void WiFiManager::begin(Callback cb) {
+    _storedCb = cb;
     WiFi.mode(WIFI_STA);   // Mode station (client) — pas point d'accès
 
     // Enregistrement de tous les réseaux définis dans secrets.h
@@ -51,23 +66,20 @@ void WiFiManager::begin(Callback cb) {
     if (WiFi.isConnected()) {
         Log::i(TAG, "Connecté à \"%s\" — IP %s — RSSI %d dBm",
                WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
-
-#ifdef ENABLE_MDNS
-        // mDNS permet d'accéder à l'ESP32 par nom plutôt que par IP
-        // ex : http://gateway-lab-v1.local au lieu de http://192.168.1.x
-        if (MDNS.begin(MDNS_HOSTNAME)) {
-            Log::i(TAG, "mDNS actif : http://%s.local", MDNS_HOSTNAME);
-        }
-#endif
+        _startMdns();
+        _wasConnected = true;
         if (cb) cb(true);   // Succès : démarrage des services réseau
     } else {
         Log::w(TAG, "Échec de connexion après %lu ms", WIFI_CONNECT_TIMEOUT);
+        _wasConnected = false;
         if (cb) cb(false);  // Échec : les services réseau ne seront pas démarrés
     }
 }
 
 void WiFiManager::loop() {
-    if (WiFi.status() != WL_CONNECTED) {
+    bool connected = WiFi.isConnected();
+
+    if (!connected) {
         unsigned long now = millis();
         // Tentative de reconnexion seulement si le délai de debounce est écoulé
         if (now - _lastReconnectAttempt >= RECONNECT_DEBOUNCE_MS) {
@@ -75,7 +87,15 @@ void WiFiManager::loop() {
             Log::w(TAG, "WiFi perdu — tentative de reconnexion...");
             _multi.run();   // Retourne immédiatement, la connexion est async
         }
+    } else if (!_wasConnected) {
+        // Transition déconnecté → connecté : relancer mDNS et tous les services
+        Log::i(TAG, "WiFi rétabli sur \"%s\" — IP %s",
+               WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+        _startMdns();
+        if (_storedCb) _storedCb(true);
     }
+
+    _wasConnected = connected;
 }
 
 bool   WiFiManager::isConnected() const { return WiFi.isConnected(); }

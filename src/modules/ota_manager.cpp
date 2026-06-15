@@ -20,24 +20,26 @@ OtaManager otaMgr;
 
 void OtaManager::begin(const char* hostname) {
 #ifdef ENABLE_OTA
-    // Nom visible dans PlatformIO lors de la sélection du port réseau
     ArduinoOTA.setHostname(hostname);
 
-    // Callbacks d'état — affichés dans le moniteur série pendant la mise à jour
-    ArduinoOTA.onStart([]() {
-        Log::i(TAG, "ArduinoOTA: réception du firmware...");
-    });
-    ArduinoOTA.onEnd([]() {
-        Log::i(TAG, "ArduinoOTA: installation terminée, redémarrage...");
-    });
-    ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
-        // Affichage de la progression sans saut de ligne (écrase la ligne précédente)
-        Log::d(TAG, "Progression : %u%%", p * 100 / t);
-    });
-    ArduinoOTA.onError([](ota_error_t err) {
-        Log::e(TAG, "Erreur OTA [%u] — vérifiez la connexion réseau", (unsigned)err);
-    });
+    if (!_callbacksRegistered) {
+        // Callbacks d'état — enregistrés une seule fois pour éviter l'empilement
+        ArduinoOTA.onStart([]() {
+            Log::i(TAG, "ArduinoOTA: réception du firmware...");
+        });
+        ArduinoOTA.onEnd([]() {
+            Log::i(TAG, "ArduinoOTA: installation terminée, redémarrage...");
+        });
+        ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
+            Log::d(TAG, "Progression : %u%%", p * 100 / t);
+        });
+        ArduinoOTA.onError([](ota_error_t err) {
+            Log::e(TAG, "Erreur OTA [%u] — vérifiez la connexion réseau", (unsigned)err);
+        });
+        _callbacksRegistered = true;
+    }
 
+    // Rappelé à chaque reconnexion WiFi pour ré-ouvrir le port UDP et re-publier mDNS
     ArduinoOTA.begin();
     Log::i(TAG, "ArduinoOTA actif (nom réseau : %s)", hostname);
 #endif

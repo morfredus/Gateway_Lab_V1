@@ -31,6 +31,8 @@ void WebServerModule::registerScanProvider(ScanProvider p) {
 }
 
 void WebServerModule::begin(uint16_t port) {
+    if (_started) return;  // Le socket TCP persiste après reconnexion WiFi
+    _started = true;
     // Enregistrement de toutes les routes HTTP
     // HTTP_GET = le navigateur demande une ressource
     // HTTP_POST = le navigateur envoie des données (formulaire, upload...)
