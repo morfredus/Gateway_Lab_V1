@@ -5,7 +5,14 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
-## [0.0.7] — 2026-06-15 (suite — passe cosmétique UI)
+Ce document décrit l'état réel du projet à chaque version publiée.
+
+Pour les fonctionnalités futures et les priorités de développement,
+consulter `ROADMAP.md`.
+
+---
+
+## [0.0.7] — 2026-06-15 (compléments interface)
 
 ### Amélioré
 
@@ -122,6 +129,14 @@ Format : [Semantic Versioning](https://semver.org/)
 - **`HostnameResolver`** : instance globale partagée, appelée uniquement depuis la tâche FreeRTOS
   du scanner → pas de mutex nécessaire pour le resolver lui-même
 
+### Résultat utilisateur
+
+- Les équipements apparaissent désormais avec un nom exploitable lorsque le routeur fournit un enregistrement PTR DNS.
+- Les équipements compatibles mDNS sont identifiés automatiquement.
+- Les box Internet françaises sont reconnues et catégorisées sans configuration manuelle.
+- L'ESP32 apparaît dans sa propre liste d'équipements.
+- L'inventaire réseau devient lisible sans avoir à interpréter les adresses IP ou MAC.
+- Les badges et tooltips expliquent désormais la provenance des informations affichées.
 ---
 
 ## [0.0.6] — 2026-06-15
