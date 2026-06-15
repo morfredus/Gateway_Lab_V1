@@ -25,6 +25,7 @@ struct HostInfo {
     String   ip;           // Adresse IPv4 (ex: "192.168.1.10")
     String   mac;          // Adresse MAC (ex: "B8:27:EB:AA:BB:CC")
     String   vendor;       // Fabricant déduit du MAC (ex: "Raspberry Pi")
+    String   hostname;     // Nom DNS résolu (ex: "mon-pc.local"), vide si inconnu
     uint32_t lastSeenMs;   // Horodatage de la dernière détection (millis())
 };
 
@@ -50,11 +51,14 @@ private:
     // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
     static void _task(void* self);
 
-    // Corps du scan : sweep + lecture ARP + attente finale
+    // Corps du scan : sweep + résolution hostnames + lecture ARP finale
     void _run();
 
-    // Envoi UDP sur tout le sous-réseau pour déclencher la résolution ARP
+    // Envoi de requêtes ARP natives sur tout le sous-réseau
     void _sweepSubnet();
+
+    // Résolution DNS inverse (PTR) pour chaque équipement découvert
+    void _resolveHostnames();
 
     // Lecture et intégration des entrées de la table ARP lwIP
     void _readArpTable();

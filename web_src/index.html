@@ -14,16 +14,32 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 2rem 1rem;
+      padding: 0 1rem 2rem;
     }
-    h1 {
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: #06b6d4;
-      margin-bottom: 0.25rem;
-      letter-spacing: 0.05em;
+    /* Navigation */
+    nav {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      gap: 0.25rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #ffffff0a;
+      margin-bottom: 1.5rem;
     }
+    nav a {
+      font-size: 0.8rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #94a3b8;
+      transition: background 0.15s, color 0.15s;
+    }
+    nav a:hover  { background: #1e293b; color: #e2e8f0; }
+    nav a.active { background: #0c4a6e; color: #38bdf8; font-weight: 600; }
+    /* Header */
+    h1 { font-size: 1.8rem; font-weight: 700; color: #06b6d4; margin-bottom: 0.25rem; letter-spacing: 0.05em; }
     .subtitle { font-size: 0.8rem; color: #94a3b8; margin-bottom: 2rem; }
+    /* Cards */
     .card {
       background: #1e293b;
       border-radius: 12px;
@@ -33,105 +49,43 @@
       box-shadow: 0 4px 24px rgba(0,0,0,0.3);
       margin-bottom: 1.5rem;
     }
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-    .card-title {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #64748b;
-      font-weight: 600;
-    }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.6rem 0;
-      border-bottom: 1px solid #ffffff0a;
-    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .card-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: #64748b; font-weight: 600; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid #ffffff0a; }
     .info-row:last-child { border-bottom: none; }
     .info-label { color: #94a3b8; font-size: 0.875rem; }
     .info-value { color: #e2e8f0; font-size: 0.875rem; font-weight: 600; text-align: right; }
-    .badge {
-      padding: 0.2rem 0.7rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-    }
+    .badge { padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; }
     .badge-ok   { background: #064e3b; color: #10b981; }
     .badge-warn { background: #451a03; color: #f59e0b; }
-    .badge-info { background: #0c4a6e; color: #38bdf8; }
-    /* Table équipements */
-    .scan-btn {
-      font-size: 0.72rem;
-      padding: 0.3rem 0.8rem;
-      background: #0891b2;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: background 0.2s;
-    }
-    .scan-btn:hover { background: #06b6d4; }
-    .scan-btn:disabled { background: #334155; color: #64748b; cursor: default; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.78rem;
-      margin-top: 0.5rem;
-    }
-    th {
-      text-align: left;
-      color: #475569;
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      padding: 0.4rem 0.3rem;
-      border-bottom: 1px solid #ffffff0a;
-    }
-    td {
-      padding: 0.5rem 0.3rem;
-      border-bottom: 1px solid #ffffff07;
-      color: #cbd5e1;
-      vertical-align: middle;
-    }
-    tr:last-child td { border-bottom: none; }
-    .vendor-badge {
-      font-size: 0.65rem;
-      background: #1e3a5f;
-      color: #7dd3fc;
-      border-radius: 4px;
-      padding: 0.1rem 0.4rem;
-    }
-    .empty-msg { color: #475569; font-size: 0.8rem; text-align: center; padding: 1rem 0; }
-    /* OTA button */
-    .btn {
-      display: block;
-      width: 100%;
-      max-width: 480px;
-      padding: 0.875rem;
-      background: #0891b2;
-      color: #fff;
-      border: none;
+    /* Shortcut buttons */
+    .shortcuts { display: flex; gap: 0.75rem; width: 100%; max-width: 480px; margin-bottom: 1.5rem; }
+    .shortcut {
+      flex: 1;
+      padding: 0.875rem 0.5rem;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #ffffff0a;
       border-radius: 10px;
-      font-size: 1rem;
+      font-size: 0.8rem;
       font-weight: 600;
       cursor: pointer;
       text-align: center;
       text-decoration: none;
-      transition: background 0.2s;
+      transition: background 0.2s, color 0.2s;
     }
-    .btn:hover { background: #06b6d4; }
-    .last-update { font-size: 0.72rem; color: #64748b; margin-top: 1.2rem; }
+    .shortcut:hover { background: #0c4a6e; color: #38bdf8; border-color: #0891b200; }
+    .shortcut .icon { display: block; font-size: 1.3rem; margin-bottom: 0.25rem; }
+    .last-update { font-size: 0.72rem; color: #64748b; margin-top: 0.5rem; }
   </style>
 </head>
 <body>
+  <nav>
+    <a href="/" class="active">Accueil</a>
+    <a href="/scan">Équipements</a>
+    <a href="/update">OTA</a>
+  </nav>
+
   <h1>Gateway Lab V1</h1>
   <p class="subtitle" id="version-label">v—</p>
 
@@ -163,34 +117,19 @@
     </div>
   </div>
 
-  <!-- Cartouche équipements réseau -->
-  <div class="card">
-    <div class="card-header">
-      <p class="card-title">Équipements réseau</p>
-      <button class="scan-btn" id="scan-btn" onclick="triggerScan()">Scanner</button>
-    </div>
-    <div id="scan-status"></div>
-    <table id="devices-table">
-      <thead>
-        <tr>
-          <th>IP</th>
-          <th>MAC</th>
-          <th>Fabricant</th>
-          <th>Vu</th>
-        </tr>
-      </thead>
-      <tbody id="devices-body">
-        <tr><td colspan="4" class="empty-msg">Aucun scan lancé</td></tr>
-      </tbody>
-    </table>
+  <!-- Raccourcis -->
+  <div class="shortcuts">
+    <a class="shortcut" href="/scan">
+      <span class="icon">📡</span>Équipements
+    </a>
+    <a class="shortcut" href="/update">
+      <span class="icon">🔄</span>Mise à jour
+    </a>
   </div>
 
-  <a class="btn" href="/update">Mise à jour OTA</a>
   <p class="last-update" id="last-update"></p>
 
   <script>
-    var scanPollTimer = null;
-
     function fmtUptime(ms) {
       var s = Math.floor(ms / 1000);
       var m = Math.floor(s / 60); s %= 60;
@@ -204,14 +143,7 @@
       if (r >= -70) return 'Moyen';
       return 'Faible';
     }
-    function fmtSeen(ms) {
-      var s = Math.floor((Date.now() - ms) / 1000);
-      if (s < 60) return s + 's';
-      if (s < 3600) return Math.floor(s / 60) + 'min';
-      return Math.floor(s / 3600) + 'h';
-    }
-
-    function refreshStatus() {
+    function refresh() {
       fetch('/api/status')
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -224,74 +156,15 @@
           document.getElementById('status-badge').className = 'badge badge-ok';
           document.getElementById('status-badge').textContent = 'Connecté';
           document.getElementById('last-update').textContent =
-            'Dernière mise à jour : ' + new Date().toLocaleTimeString('fr-FR');
+            'Actualisé : ' + new Date().toLocaleTimeString('fr-FR');
         })
         .catch(function() {
           document.getElementById('status-badge').className = 'badge badge-warn';
           document.getElementById('status-badge').textContent = 'Erreur';
         });
     }
-
-    function renderDevices(devices) {
-      var tbody = document.getElementById('devices-body');
-      if (!devices || devices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-msg">Aucun équipement détecté</td></tr>';
-        return;
-      }
-      // Trier par IP
-      devices.sort(function(a, b) {
-        var pa = a.ip.split('.').map(Number);
-        var pb = b.ip.split('.').map(Number);
-        for (var i = 0; i < 4; i++) { if (pa[i] !== pb[i]) return pa[i] - pb[i]; }
-        return 0;
-      });
-      tbody.innerHTML = devices.map(function(d) {
-        var vendor = d.vendor
-          ? '<span class="vendor-badge">' + d.vendor + '</span>'
-          : '<span style="color:#334155">—</span>';
-        return '<tr>' +
-          '<td><b>' + d.ip + '</b></td>' +
-          '<td style="font-family:monospace;font-size:0.72rem">' + d.mac + '</td>' +
-          '<td>' + vendor + '</td>' +
-          '<td style="color:#64748b">' + fmtSeen(d.lastSeen) + '</td>' +
-          '</tr>';
-      }).join('');
-    }
-
-    function fetchDevices(poll) {
-      fetch('/api/devices')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          renderDevices(data.devices);
-          var btn = document.getElementById('scan-btn');
-          var status = document.getElementById('scan-status');
-          if (data.scanning) {
-            btn.disabled = true;
-            btn.textContent = 'Scan…';
-            status.innerHTML = '<p style="font-size:0.75rem;color:#38bdf8;margin-bottom:0.5rem">⟳ Scan en cours…</p>';
-            if (poll && !scanPollTimer) {
-              scanPollTimer = setInterval(function() { fetchDevices(true); }, 2000);
-            }
-          } else {
-            btn.disabled = false;
-            btn.textContent = 'Scanner';
-            status.innerHTML = '';
-            if (scanPollTimer) { clearInterval(scanPollTimer); scanPollTimer = null; }
-          }
-        });
-    }
-
-    function triggerScan() {
-      document.getElementById('scan-btn').disabled = true;
-      fetch('/api/scan', { method: 'POST' })
-        .then(function() { fetchDevices(true); });
-    }
-
-    // Init
-    refreshStatus();
-    fetchDevices(false);
-    setInterval(refreshStatus, 10000);
-    setInterval(function() { fetchDevices(false); }, 30000);
+    refresh();
+    setInterval(refresh, 10000);
   </script>
 </body>
 </html>
