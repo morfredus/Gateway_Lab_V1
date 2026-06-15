@@ -2,10 +2,9 @@
  * NetworkScanner — Découverte des équipements connectés au réseau local
  *
  * Fonctionnement du scan :
- *   1. Envoi d'un paquet UDP vide sur le port 9 (discard) à chaque adresse
- *      IP du sous-réseau → déclenche la résolution ARP par lwIP
- *   2. Lecture de la table ARP lwIP toutes les 16 sondes pour capturer
- *      les réponses avant que la table (10 entrées max) ne soit écrasée
+ *   1. Envoi de requêtes ARP (etharp_request) sur tout le sous-réseau
+ *   2. Lecture de la table ARP lwIP par lots pour capturer les réponses
+ *      avant que la table (10 entrées max) ne soit écrasée
  *   3. Déduplication par adresse MAC — un équipement garde son entrée
  *      même s'il change d'IP entre deux scans
  *   4. Identification du fabricant via les 3 premiers octets MAC (OUI)
@@ -21,12 +20,14 @@
 #include <vector>
 
 // Informations collectées pour chaque équipement découvert
-struct HostInfo {
-    String   ip;           // Adresse IPv4 (ex: "192.168.1.10")
-    String   mac;          // Adresse MAC (ex: "B8:27:EB:AA:BB:CC")
-    String   vendor;       // Fabricant déduit du MAC (ex: "Raspberry Pi")
-    String   hostname;     // Nom DNS résolu (ex: "mon-pc.local"), vide si inconnu
-    uint32_t lastSeenMs;   // Horodatage de la dernière détection (millis())
+struct NetworkDevice {
+    String   ip;              // Adresse IPv4 (ex: "192.168.1.10")
+    String   mac;             // Adresse MAC (ex: "B8:27:EB:AA:BB:CC")
+    String   manufacturer;    // Fabricant déduit du MAC OUI (ex: "Raspberry Pi")
+    String   hostname;        // Nom DNS résolu (ex: "mon-pc.local"), vide si inconnu
+    String   type;            // Type d'équipement (ex: "IoT", "Mobile") — usage futur
+    uint32_t lastSeen;        // Horodatage de la dernière détection (millis())
+    bool     online;          // true si détecté lors du dernier scan
 };
 
 class NetworkScanner {
@@ -42,7 +43,7 @@ public:
     bool isScanRunning() const;
 
     // Copie thread-safe des résultats (protégée par mutex)
-    std::vector<HostInfo> getResults() const;
+    std::vector<NetworkDevice> getResults() const;
 
     // Sérialisation JSON des résultats pour l'API web /api/devices
     String resultsToJson() const;
@@ -51,22 +52,22 @@ private:
     // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
     static void _task(void* self);
 
-    // Corps du scan : sweep + résolution hostnames + lecture ARP finale
+    // Corps du scan : sweep + lecture ARP finale
     void _run();
 
     // Envoi de requêtes ARP natives sur tout le sous-réseau
     void _sweepSubnet();
 
-    // Résolution DNS inverse (PTR) pour chaque équipement découvert
+    // Résolution DNS inverse — non disponible sur lwIP ESP32 (no-op)
     void _resolveHostnames();
 
     // Lecture et intégration des entrées de la table ARP lwIP
     void _readArpTable();
 
-    SemaphoreHandle_t      _mutex      = nullptr;  // Protection concurrente de _results
-    TaskHandle_t           _taskHandle = nullptr;  // Handle de la tâche FreeRTOS
-    std::vector<HostInfo>  _results;               // Liste accumulée des équipements
-    volatile bool          _scanning   = false;    // Indicateur d'état du scan
+    SemaphoreHandle_t           _mutex      = nullptr;  // Protection concurrente de _results
+    TaskHandle_t                _taskHandle = nullptr;  // Handle de la tâche FreeRTOS
+    std::vector<NetworkDevice>  _results;               // Liste accumulée des équipements
+    volatile bool               _scanning   = false;    // Indicateur d'état du scan
 };
 
 // Instance globale
