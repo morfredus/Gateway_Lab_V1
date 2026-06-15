@@ -1,15 +1,33 @@
 /*
- * Gateway Lab V1 — Styles communs
- * Partagés par index.html, scan.html et ota.html.
- * Ce fichier est injecté inline par tools/minify_web.py à la place de :
- *   <link rel="stylesheet" href="styles.css">
- * L'ESP32 sert chaque page en HTML auto-contenu (pas de serveur de fichiers statiques).
+ * Gateway Lab V1 — Feuille de style globale
+ * ==========================================
+ * Injectée inline dans chaque page par tools/minify_web.py.
+ * Source : web_src/styles.css  →  include/web_interface*.h
+ *
+ * Structure :
+ *   1. Reset & corps
+ *   2. Mise en page (conteneurs)
+ *   3. En-tête
+ *   4. Navigation
+ *   5. Carte (base)
+ *   6. Pied de page
+ *   ── Page Accueil (/) ──────────────────
+ *   7. Informations réseau
+ *   8. Raccourcis
+ *   ── Page Équipements (/scan) ──────────
+ *   9.  Bouton scan & barre de progression
+ *   10. Tableau des équipements
+ *   11. Badges (source, catégorie, fabricant)
+ *   ── Page OTA (/update) ────────────────
+ *   12. Formulaire upload firmware
  */
 
-/* ── Reset ───────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════
+   1. RESET & CORPS
+   ════════════════════════════════════════════════════ */
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── Corps ───────────────────────────────────────────────── */
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: #0f172a;
@@ -21,27 +39,391 @@ body {
   padding: 0 1rem;
 }
 
-/* ── En-tête du site ─────────────────────────────────────── */
-.site-name {
-  font-size: 1.05rem; font-weight: 700; color: #f1f5f9;
-  display: flex; align-items: center; gap: 0.5rem;
-}
-.site-ver {
-  font-size: 0.63rem; font-weight: 700; letter-spacing: 0.05em;
-  color: #06b6d4; background: #0c2a40;
-  padding: 0.15rem 0.45rem; border-radius: 4px;
-}
-.site-tag { font-size: 0.72rem; color: #94a3b8; }
+/* ════════════════════════════════════════════════════
+   2. MISE EN PAGE — CONTENEURS
+   Largeur par défaut : 520px (/ et /update)
+   .page-scan élargit à 960px pour le tableau (/scan)
+   ════════════════════════════════════════════════════ */
 
-/* ── Navigation — liens (le conteneur nav est défini par page) ── */
-nav a {
-  font-size: 0.8rem; padding: 0.35rem 0.8rem;
-  border-radius: 6px; text-decoration: none;
-  color: #94a3b8; transition: background 0.15s, color 0.15s;
+.site-hdr, nav, .card, .shortcuts, footer {
+  width: 100%;
+  max-width: 520px;
 }
+
+.page-scan .site-hdr,
+.page-scan nav,
+.page-scan .card,
+.page-scan footer {
+  max-width: 960px;
+}
+
+/* ════════════════════════════════════════════════════
+   3. EN-TÊTE
+   ════════════════════════════════════════════════════ */
+
+.site-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.1rem 0 0.9rem;
+}
+
+.site-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.site-ver {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #06b6d4;
+  background: #0c2a40;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.site-tag {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+/* ════════════════════════════════════════════════════
+   4. NAVIGATION
+   ════════════════════════════════════════════════════ */
+
+nav {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid #ffffff0a;
+  border-bottom: 1px solid #ffffff0a;
+  margin-bottom: 1.5rem;
+}
+
+nav a {
+  font-size: 0.875rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #94a3b8;
+  transition: background 0.15s, color 0.15s;
+}
+
 nav a:hover  { background: #1e293b; color: #e2e8f0; }
 nav a.active { background: #0c4a6e; color: #38bdf8; font-weight: 600; }
 
-/* ── Pied de page — liens (le conteneur footer est défini par page) ── */
+/* ════════════════════════════════════════════════════
+   5. CARTE (composant de base)
+   ════════════════════════════════════════════════════ */
+
+.card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  margin-bottom: 1.5rem;
+}
+
+/* Variante centrée (page OTA) */
+.card-center {
+  padding: 1.75rem;
+  text-align: center;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+/* Carte de la page scan : flex-wrap pour que le bouton passe en dessous sur mobile */
+.page-scan .card-header {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.card-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Sous-titre de carte (page scan) */
+.card-meta {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin-top: 0.2rem;
+}
+
+/* ════════════════════════════════════════════════════
+   6. PIED DE PAGE
+   ════════════════════════════════════════════════════ */
+
+footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0 1.5rem;
+  border-top: 1px solid #ffffff0a;
+  margin-top: auto;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
 footer a { color: #38bdf8; text-decoration: none; font-weight: 500; }
 footer a:hover { text-decoration: underline; }
+
+
+/* ════════════════════════════════════════════════════
+   7. PAGE ACCUEIL — Informations réseau
+   ════════════════════════════════════════════════════ */
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #ffffff0a;
+}
+.info-row:last-child { border-bottom: none; }
+
+.info-label { color: #94a3b8; font-size: 0.9rem; }
+.info-value { color: #f1f5f9; font-size: 0.9rem; font-weight: 600; text-align: right; }
+
+/* Badges statut (Connecté / Erreur) */
+.badge {
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.badge-ok   { background: #064e3b; color: #10b981; }
+.badge-warn { background: #451a03; color: #f59e0b; }
+
+
+/* ════════════════════════════════════════════════════
+   8. PAGE ACCUEIL — Raccourcis
+   ════════════════════════════════════════════════════ */
+
+.shortcuts {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.shortcut {
+  flex: 1;
+  padding: 0.875rem 0.5rem;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #ffffff0a;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+.shortcut:hover { background: #0c4a6e; color: #38bdf8; }
+.shortcut .icon { display: block; font-size: 1.4rem; margin-bottom: 0.3rem; }
+
+
+/* ════════════════════════════════════════════════════
+   9. PAGE ÉQUIPEMENTS — Bouton scan & barre de progression
+   ════════════════════════════════════════════════════ */
+
+.scan-btn {
+  font-size: 0.875rem;
+  padding: 0.4rem 1rem;
+  background: #0891b2;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+.scan-btn:hover    { background: #06b6d4; }
+.scan-btn:disabled { background: #334155; color: #64748b; cursor: default; }
+
+.progress-wrap {
+  width: 100%;
+  background: #0f172a;
+  border-radius: 6px;
+  height: 4px;
+  margin-bottom: 1rem;
+  display: none;
+}
+.progress-bar {
+  height: 100%;
+  background: #06b6d4;
+  border-radius: 6px;
+  width: 0;
+  transition: width 0.5s;
+}
+
+.scan-info { font-size: 0.85rem; color: #38bdf8; margin-bottom: 0.75rem; }
+
+
+/* ════════════════════════════════════════════════════
+   10. PAGE ÉQUIPEMENTS — Tableau
+   ════════════════════════════════════════════════════ */
+
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 620px;
+}
+
+th {
+  text-align: left;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.5rem;
+  border-bottom: 1px solid #ffffff14;
+  white-space: nowrap;
+}
+
+td {
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid #ffffff0a;
+  color: #e2e8f0;
+  vertical-align: middle;
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover td      { background: #ffffff06; }
+
+.ip-cell   { font-weight: 700; color: #f1f5f9; font-family: monospace; font-size: 0.87rem; white-space: nowrap; }
+.mac-cell  { font-family: monospace; font-size: 0.78rem; color: #94a3b8; white-space: nowrap; }
+.name-cell { color: #7dd3fc; }
+.mfr-model { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
+.seen-cell { color: #94a3b8; white-space: nowrap; }
+
+.empty-msg { color: #94a3b8; font-size: 0.875rem; text-align: center; padding: 1.5rem 0; }
+.none      { color: #334155; }
+
+
+/* ════════════════════════════════════════════════════
+   11. PAGE ÉQUIPEMENTS — Badges
+   ════════════════════════════════════════════════════ */
+
+/* Fabricant */
+.vendor-badge {
+  font-size: 0.7rem;
+  background: #1e3a5f;
+  color: #93c5fd;
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+}
+
+/* Source de résolution (mDNS / DNS↩ / ESP32) */
+.source-badge {
+  font-size: 0.65rem;
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+  white-space: nowrap;
+  font-weight: 600;
+  cursor: default;
+}
+.source-mdns { background: #064e3b; color: #34d399; }
+.source-ptr  { background: #1e1a36; color: #a78bfa; }
+.source-self { background: #0c2a3a; color: #38bdf8; }
+
+/* Catégorie (IoT, Mobile, Router…) */
+.type-badge {
+  font-size: 0.65rem;
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.type-iot       { background: #1c3a2a; color: #4ade80; }
+.type-mobile    { background: #1e2e4a; color: #818cf8; }
+.type-network   { background: #1e3a3a; color: #22d3ee; }
+.type-router    { background: #1e3a3a; color: #22d3ee; }
+.type-gateway   { background: #0c2a3a; color: #38bdf8; }
+.type-computer  { background: #2a2a1e; color: #facc15; }
+.type-sbc       { background: #2a1e3a; color: #c084fc; }
+.type-smarthome { background: #2a1e2a; color: #f472b6; }
+.type-homeauto  { background: #2a1e2a; color: #f472b6; }
+.type-audio     { background: #1e2a2a; color: #34d399; }
+.type-tv        { background: #2a1e1e; color: #fb923c; }
+.type-streaming { background: #2a1e1e; color: #fb923c; }
+.type-nas       { background: #2a2a1e; color: #fbbf24; }
+.type-camera    { background: #2a1e1e; color: #f87171; }
+.type-security  { background: #2a1e1e; color: #f87171; }
+.type-printer   { background: #1e2a1e; color: #86efac; }
+.type-robot     { background: #1c3a2a; color: #4ade80; }
+
+
+/* ════════════════════════════════════════════════════
+   12. PAGE OTA — Formulaire upload firmware
+   ════════════════════════════════════════════════════ */
+
+label {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+input[type=file] {
+  width: 100%;
+  padding: 0.55rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  margin-bottom: 1.25rem;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 0.875rem;
+  background: #0891b2;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn:hover { background: #06b6d4; }
+
+/* Barre de progression OTA (nom différent de .progress-wrap pour éviter conflits) */
+.progress {
+  width: 100%;
+  background: #334155;
+  border-radius: 8px;
+  height: 10px;
+  display: none;
+  margin-top: 1.25rem;
+  overflow: hidden;
+}
+.bar { height: 100%; background: #06b6d4; width: 0; transition: width 0.2s; }
+
+#msg { margin-top: 1rem; font-size: 0.9rem; color: #94a3b8; min-height: 1.25rem; }
+
+/* OTA — titre dans la carte (margin spécifique) */
+.card-center .card-title { margin-bottom: 1.25rem; }

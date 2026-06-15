@@ -165,12 +165,12 @@ Gateway-Lab-V1/
 │   └── web_interface_ota.h      # Généré depuis web_src/ota.html
 │
 ├── web_src/
-│   ├── index.html
-│   ├── scan.html
-│   ├── ota.html
-│   ├── styles.css
-│   ├── template.html
-│   └── README.md
+│   ├── index.html                # Page d'accueil (source)
+│   ├── scan.html                 # Page équipements (source)
+│   ├── ota.html                  # Page OTA (source)
+│   ├── styles.css                # Feuille de style unique (injectée inline par minify_web.py)
+│   ├── template.html             # Gabarit de référence (documentation)
+│   └── README.md                 # Guide développeur web_src/
 │
 ├── data/
 │   ├── oui.json                 # Base OUI source
@@ -232,10 +232,24 @@ include/*.h générés
         ▼
 pio run
 ```
+web_src/styles.css  ──┐
+web_src/*.html      ──┼─ python tools/minify_web.py ──► include/*.h ──► pio run
+data/oui.json       ──┘
+```
 
-Les fichiers générés sont volontairement versionnés dans Git.
+`styles.css` contient **tout le CSS** des trois pages (organisé par sections).
+`minify_web.py` l'injecte inline dans chaque page — l'ESP32 sert du HTML auto-contenu.
 
-Aucun script PlatformIO automatique n'est nécessaire.
+Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO requis.
+
+### Outils disponibles
+
+| Outil | Usage |
+|---|---|
+| `python tools/minify_web.py` | Génère les headers PROGMEM depuis `web_src/` et `data/oui.json` |
+| `python tools/validate_html.py` | Valide la structure HTML des 3 pages + gabarit |
+| `python tools/extract_web_sources.py` | Prévisualise l'extraction des headers → `web_src/` (dry-run) |
+| `python tools/extract_web_sources.py --force` | Récupération d'urgence : écrase `web_src/*.html` depuis les headers |
 
 ---
 
@@ -329,28 +343,12 @@ Pour les fonctionnalités prévues, consulter `ROADMAP.md`.
 
 ## Contraintes de développement
 
-* `include/board_config.h` est considéré comme non modifiable par l'utilisateur
-* `include/secrets.h` ne doit jamais être commité
-* Les pages web sont modifiées dans `web_src/`
-* Les headers web sont générés automatiquement
-* La version du projet est définie dans `platformio.ini`
-
-Après toute modification de :
-
-```text
-web_src/*
-data/oui.json
-```
-
-relancer :
-
-```bash
-python tools/minify_web.py
-```
-
-avant compilation.
-
----
+- `include/board_config.h` — ne pas modifier
+- `include/secrets.h` — ne jamais committer
+- CSS modifiable uniquement dans `web_src/styles.css`
+- HTML modifiable uniquement dans `web_src/*.html`
+- Versioning uniquement dans `platformio.ini` via `PROJECT_VERSION`
+- Après toute modification de `web_src/` ou `data/oui.json` → relancer `python tools/minify_web.py`
 
 ## Licence
 
