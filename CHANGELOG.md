@@ -5,6 +5,27 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.7] — 2026-06-15 (suite — passe cosmétique UI)
+
+### Amélioré
+
+- **En-tête cohérent sur toutes les pages** : chaque page (`/`, `/scan`, `/update`) affiche
+  désormais un en-tête identique avec le nom du projet « Gateway Lab V1 », une pastille
+  de version (`v0.0.7` récupérée dynamiquement via `/api/status`) et un sous-titre
+  contextuel (ex. « Passerelle réseau locale », « Équipements réseau », « Mise à jour OTA »).
+
+- **Navigation présente sur toutes les pages** : la barre de navigation (Accueil /
+  Équipements / OTA) est maintenant visible sur les trois pages, y compris la page OTA
+  qui en était dépourvue.
+
+- **Pied de page unifié** : chaque page affiche un pied de page commun avec la date/heure
+  de la dernière actualisation à gauche et un lien « ← Accueil » à droite.
+
+- **Contraste du texte amélioré** : les textes de couleur `#475569` (trop sombre sur fond
+  `#1e293b`) remplacés par `#94a3b8` sur l'ensemble des pages pour une lisibilité correcte.
+
+---
+
 ## [0.0.7] — 2026-06-15
 
 ### Corrigé
