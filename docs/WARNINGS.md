@@ -53,22 +53,26 @@ Chaque équipement réseau est représenté par une structure unique :
 
 ```cpp
 struct NetworkDevice {
-    String   ip;
-    String   mac;
-    String   manufacturer;
-    String   hostname;
-    String   type;
-    uint32_t lastSeen;
-    bool     online;
+    String   ip;           // Adresse IPv4
+    String   mac;          // Adresse MAC
+    String   manufacturer; // Fabricant (OUI / SSDP / API)
+    String   hostname;     // Nom d'hôte résolu
+    String   category;     // Catégorie : "Router", "NAS", "TV", "SmartHub"…
+    String   model;        // Modèle précis : "Freebox Ultra", "DS224+"…
+    String   os;           // Système : "FreeboxOS 4.8", "DSM"…
+    String   source;       // Méthode : "mDNS", "PTR", "SSDP", "HueAPI"…
+    uint32_t lastSeen;     // millis() du dernier scan
+    bool     online;       // true si détecté au dernier scan
 };
 ```
 
 Cette structure constitue la source de vérité utilisée par :
 
-* le scanner réseau
+* le scanner réseau (ARP)
+* le résolveur de noms (mDNS + PTR)
+* le scanner SSDP/UPnP et les APIs spécifiques
 * l'API REST
 * l'interface web
-* les futurs modules mDNS, SSDP, Hue et MQTT
 
 ---
 
@@ -87,34 +91,63 @@ Objectifs :
 
 # Limitations connues
 
-## Résolution des noms d'hôtes non fonctionnelle
+## Résolution des noms d'hôtes (implémentée depuis v0.0.7)
 
-### ⚠️ gethostbyaddr() indisponible
+### ℹ️ Deux mécanismes complémentaires
 
-**Symptôme**
+`HostnameResolver` implémente deux stratégies parallèles :
 
-La colonne "Nom" affiche généralement "—".
+1. **mDNS passif** — écoute les annonces multicast `224.0.0.251:5353` pendant le sweep ARP.
+   Capture les enregistrements A des devices compatibles (`.local`).
+2. **PTR DNS batch** — envoie des requêtes `d.c.b.a.in-addr.arpa` au DNS du réseau.
+   Toutes les requêtes sont envoyées simultanément (fenêtre d'attente unique de 500 ms).
 
-**Cause**
+`gethostbyaddr()` n'est pas utilisé (indisponible sur lwIP Arduino ESP32) ;
+ces deux mécanismes manuels le remplacent efficacement.
 
-`gethostbyaddr()` (résolution DNS inverse PTR) n'est pas disponible dans la version
-de lwIP intégrée au framework Arduino ESP32.
+**Champ `source`** : `"mDNS"` (priorité) ou `"PTR"` (fallback).
 
-**État**
+---
 
-`NetworkScanner::_resolveHostnames()` est actuellement un no-op volontaire.
+## SSDP — Limitations connues
 
-**Évolution prévue**
+### ⚠️ Équipements hors UPnP non détectés par SSDP
 
-Construction manuelle des requêtes PTR via :
+Le scanner SSDP ne découvre que les devices qui répondent à M-SEARCH multicast.
+Les équipements suivants n'apparaissent pas dans les résultats SSDP :
 
-```text
-x.x.x.x.in-addr.arpa
-```
+* Smartphones (Android/iOS) — UPnP désactivé par défaut
+* Raspberry Pi sans serveur UPnP
+* Imprimantes sans UPnP
+* Équipements avec pare-feu bloquant le multicast
 
-et utilisation de `dns_gethostbyname()`.
+**Mitigation** : le scan ARP couvre ces équipements indépendamment.
+SSDP enrichit les devices ARP et ajoute uniquement les devices UPnP-only.
 
-Voir ROADMAP v0.0.6.
+---
+
+### ⚠️ HTTP GET des descripteurs XML peut échouer
+
+Certains devices annoncent une `LOCATION` qui n'est plus joignable (device éteint
+entre l'annonce et le fetch, port changé, redirection non gérée).
+
+**Comportement** : timeout de 2 s, entrée minimale conservée avec `source="SSDP"`
+et champs vides — aucun crash, aucun blocage.
+
+---
+
+### ℹ️ APIs spécifiques non authentifiées
+
+Les APIs Hue, Synology et Freebox sont appelées sans authentification.
+
+| API | Endpoint | Données accessibles sans auth |
+|---|---|---|
+| Hue | `/api/config` | name, modelid, swversion |
+| Synology | `/webapi/query.cgi` | confirmation DSM seulement |
+| Freebox | `/api_version` | device_name, device_type, firmware_version |
+
+Les APIs authentifiées (ex: liste des lumières Hue, infos disques Synology)
+sont réservées à des versions futures.
 
 ---
 

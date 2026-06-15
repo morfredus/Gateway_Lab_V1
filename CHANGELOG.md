@@ -5,6 +5,97 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.8] — 2026-06-15
+
+### Ajouté
+
+- **`src/modules/ssdp_scanner.h/.cpp`** — scanner SSDP/UPnP complet et modulaire
+
+  **Niveau 4 — Découverte UPnP :**
+  - Envoi M-SEARCH multicast UDP → `239.255.255.250:1900`, collecte des réponses SSDP
+  - Déduplication des réponses par URL `LOCATION` (un device peut annoncer plusieurs services)
+  - HTTP GET non bloquant du descripteur XML pour chaque device découvert (timeout 2 s)
+  - Parsing XML robuste : supporte les namespaces (`<ns:friendlyName>`), les attributs,
+    et le XML partiellement malformé — retourne `""` plutôt que de planter
+  - Extraction : `friendlyName` → `hostname`, `manufacturer`, `modelName` → `model`,
+    `deviceType`, `presentationURL`
+  - Catégorisation automatique des équipements courants :
+
+    | Équipement détecté | Catégorie assignée |
+    |---|---|
+    | Sonos | Speaker |
+    | Philips Hue Bridge / Signify | SmartHub |
+    | Freebox (Free SAS) | Router |
+    | Synology DiskStation / RackStation | NAS |
+    | Samsung TV | TV |
+    | Google Chromecast | Streaming |
+    | Livebox / Orange | Router |
+    | Bbox / Bouygues | Router |
+    | SFR Box | Router |
+    | Inférence via `deviceType` UPnP | MediaRenderer→Streaming, MediaServer→NAS… |
+    | Fallback | IoT |
+
+  **Niveau 5 — APIs spécifiques (non authentifiées) :**
+  - **Philips Hue Bridge** : `GET http://<ip>/api/config`
+    - Extrait : `name`, `modelid` (BSB002 → "Hue Bridge v2"), `swversion` → `os`
+    - Renseigne : `manufacturer="Philips Hue"`, `category="SmartHub"`, `source="HueAPI"`
+  - **Synology DSM** : `GET http://<ip>:5000/webapi/query.cgi?api=SYNO.API.Info&…`
+    - Confirme la présence d'un DSM ; modèle extrait depuis le XML UPnP (DS224+, RS…)
+    - Renseigne : `manufacturer="Synology"`, `category="NAS"`, `os="DSM"`, `source="SynologyAPI"`
+  - **Freebox** : `GET http://<ip>/api_version`
+    - Extrait : `device_name` (ex: "Freebox Ultra"), `device_type` (V9→Ultra, V8→Pop,
+      V7→Révolution, V6→Mini 4K), `firmware_version`
+    - Renseigne : `manufacturer="Free"`, `category="Router"`, `os="FreeboxOS x.y"`,
+      `source="FreeboxAPI"`
+
+- **`NetworkScanner::_mergeSsdp()`** — fusion des résultats SSDP dans la liste ARP :
+  - Enrichit les champs vides d'un device déjà découvert par ARP (sans écraser mDNS/PTR)
+  - Ajoute les devices UPnP non détectés par ARP (cas rare mais possible)
+  - Appelée après `_resolveHostnames()` dans `_run()`, sous protection du mutex
+
+- **UI — `web_src/scan.html`** :
+  - Nouveaux badges source : `UPnP`, `Hue`, `DSM`, `Freebox` (avec tooltips explicatifs)
+  - Champ `os` affiché sous le modèle (`.mfr-os`) — ex: "FreeboxOS 4.8.3", "Hue FW 1.60"
+
+- **UI — `web_src/styles.css`** :
+  - Badges source : `.source-ssdp` (vert pâle), `.source-hue` (orange), `.source-synology` (bleu),
+    `.source-freebox` (violet)
+  - Nouvelles catégories : `.type-smarthub` (rose/fuchsia), `.type-speaker` (vert)
+  - Nouvelle classe `.mfr-os` pour le texte OS en italique sous le modèle
+
+### Modifié
+
+- **`src/modules/network_scanner.h`** : déclaration de `_mergeSsdp()`
+- **`src/modules/network_scanner.cpp`** :
+  - Import de `ssdp_scanner.h`
+  - Appel de `_mergeSsdp()` en fin de `_run()` (après hostname resolution, avant `_addSelfEntry`)
+  - Stack FreeRTOS augmentée **16 → 20 Ko** (HTTP client + XML parsing SSDP)
+- **`platformio.ini`** : `PROJECT_VERSION` → `0.0.8`
+
+### Technique
+
+- **HTTP GET sans HTTPClient** : implémentation directe sur `WiFiClient` pour limiter la
+  consommation de stack FreeRTOS ; timeout court (2 s), corps limité à 16 Ko par réponse
+- **Déduplication LOCATION** : `std::vector<String>` parcouru linéairement — suffisant pour
+  les ≤ 30 devices UPnP typiques d'un réseau domestique
+- **Robustesse XML** : deux stratégies de recherche (`<tag>` exact puis `:<tag>`) ;
+  fermeture `</` cherchée après la valeur sans nécessiter le nom exact du tag fermant —
+  tolérant aux namespaces et aux malformations courantes
+- **APIs non bloquantes** : chaque appel API spécifique a son propre timeout de 2 s ;
+  si le device ne répond pas, le résultat SSDP de base est conservé sans erreur fatale
+- **Source prioritaire** : `source` ARP (mDNS/PTR) remplacée par la source API enrichie
+  (HueAPI > SynologyAPI > FreeboxAPI > SSDP) si disponible ; source MAC conservée en fallback
+
+### Documentation
+
+- `ROADMAP.md` mis à jour : SSDP/UPnP et APIs Hue/Freebox déplacés en ✅ Réalisé
+- `README.md` mis à jour : nouvelles fonctionnalités, structure du projet, badges source
+- `docs/WARNINGS.md` mis à jour : limitations SSDP, struct NetworkDevice corrigée
+- Nouvelles docs débutant : `docs/GETTING_STARTED.md`, `docs/ARCHITECTURE.md`,
+  `docs/PROTOCOLS.md`
+
+---
+
 ## [0.0.7] — 2026-06-15 (suite — refactoring CSS & outils)
 
 ### Amélioré
