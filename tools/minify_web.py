@@ -28,6 +28,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 WEB_SRC_DIR  = PROJECT_ROOT / "web_src"
 DATA_DIR     = PROJECT_ROOT / "data"
 INCLUDE_DIR  = PROJECT_ROOT / "include"
+STYLES_CSS   = WEB_SRC_DIR / "styles.css"
 
 # ---------------------------------------------------------------------------
 # Pages HTML à traiter : (source, header_dest, const_name, data_copy|None)
@@ -88,8 +89,23 @@ def _minify_js_block(js: str) -> str:
     return js
 
 
+def _load_shared_css() -> str:
+    if STYLES_CSS.exists():
+        return STYLES_CSS.read_text(encoding='utf-8')
+    return ''
+
+
 def minify_html(html: str) -> str:
     html = re.sub(r'<!--(?!\[if).*?-->', '', html, flags=re.DOTALL)
+    # Inline styles.css in place of <link rel="stylesheet" href="styles.css">
+    shared_css = _load_shared_css()
+    if shared_css:
+        inlined = '<style>' + _minify_css_block(shared_css) + '</style>'
+        html = re.sub(
+            r'<link\s[^>]*href=["\']styles\.css["\'][^>]*>',
+            inlined,
+            html,
+        )
     def _repl_style(m):
         return '<style>' + _minify_css_block(m.group(1)) + '</style>'
     html = re.sub(r'<style>(.*?)</style>', _repl_style, html, flags=re.DOTALL)
@@ -198,6 +214,16 @@ def run():
 
     INCLUDE_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Signale la présence (ou absence) du CSS commun
+    if STYLES_CSS.exists():
+        css_raw = STYLES_CSS.read_text(encoding='utf-8')
+        css_min = _minify_css_block(css_raw)
+        print(f"\n  [styles.css]  → injecté inline dans chaque page")
+        print(f"    Source  : {len(css_raw):,} octets")
+        print(f"    Minifié : {len(css_min):,} octets  (gain {100*(1-len(css_min)/len(css_raw)):.1f}%)")
+    else:
+        print(f"\n  [styles.css]  ABSENT — injection ignorée")
 
     ok = True
 
