@@ -1,11 +1,11 @@
-- Support Tado
-- Support X-Sense
-- Analyse Bluetooth
-- Détection des caméras Xiaomi
-- Historique des équipements
-- Écran OLED
-- Export JSON
-- MQTT Broker intégré
-- Scan des ports
-- Interface Web
-- Identifier automatiquement les fabricants via les adresses MAC (OUI)
+-[] Support Tado
+-[] Support X-Sense
+-[] Analyse Bluetooth
+-[] Détection des caméras Xiaomi
+-[] Historique des équipements
+-[] Écran OLED
+-[] Export JSON
+-[] MQTT Broker intégré
+-[] Scan des ports
+-[X] Interface Web
+-[] Identifier automatiquement les fabricants via les adresses MAC (OUI)
