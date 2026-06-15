@@ -48,5 +48,5 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.0.1 | Structure PlatformIO, `board_config.h`, `app_config.h`, `secrets_example.h`, outils Python |
 | v0.0.2 | WiFiMulti, ArduinoOTA, WebServer, mDNS, HTML PROGMEM (abandon SPIFFS), pipeline minification |
 | v0.0.3 | Architecture modulaire (`src/modules/`, `src/utils/`), NetworkScanner FreeRTOS, sweep ARP lwIP, OUI ~40 entrées |
-| v0.0.4 | Page `/scan` dédiée, navigation multi-pages, `struct NetworkDevice`, fix "Vu il y a 56 ans", redirection auto vers `/` après reboot OTA |
-| v0.0.5 | OUI externalisé dans `data/oui.json` (151 entrées, 16 catégories), `include/oui_table.h` généré, colonne Type avec badges colorés, `minify_web.py` unifié, `docs/WARNINGS.md` |
+| v0.0.4 | Page `/scan` dédiée, navigation multi-pages, `struct NetworkDevice`, fix "Vu il y a 56 ans", OTA redirect, champ `hostname` préparé (stub — `gethostbyaddr()` indisponible sur lwIP ESP32) |
+| v0.0.5 | OUI externalisé dans `data/oui.json` (152 entrées, 16 catégories), `include/oui_table.h` généré (151 entrées après déduplication), colonne Type avec badges colorés, `minify_web.py` unifié, `docs/WARNINGS.md` |
