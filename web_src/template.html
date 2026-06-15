@@ -1,201 +1,111 @@
 <!DOCTYPE html>
-<html lang="en">
 <!--
-/**
- * HTML Template
- * Version: 1.0.0
- *
- * This file contains the readable HTML template for the web interface.
- *
- * NOTE: The HTML is currently generated dynamically in C++ (web_interface.h).
- * This template serves as:
- * 1. Documentation of the HTML structure
- * 2. Reference for development
- * 3. Validation of HTML structure
- *
- * The actual HTML generation in C++ includes dynamic content like:
- * - Language codes
- * - System information
- * - IP addresses
- * - Real-time data
- *
- * To rebuild web_interface.h after making changes:
- *   python tools/minify_web.py
- */
+  Gateway Lab V1 — Gabarit de référence
+  ======================================
+  Ce fichier documente la structure HTML commune aux trois pages de l'interface.
+  Il n'est PAS traité par minify_web.py (non listé dans PAGES).
+
+  Pages réelles (sources à modifier) :
+    web_src/index.html   →  include/web_interface.h       (route GET /)
+    web_src/scan.html    →  include/web_interface_scan.h  (route GET /scan)
+    web_src/ota.html     →  include/web_interface_ota.h   (route GET /update)
+
+  CSS commun :
+    web_src/styles.css   →  injecté inline par minify_web.py à la place de
+                            <link rel="stylesheet" href="styles.css">
+
+  Workflow :
+    1. Modifier web_src/*.html ou web_src/styles.css
+    2. python tools/minify_web.py
+    3. pio run --target upload
 -->
-
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Diagnostic - Version 3.31.0</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gateway Lab V1 — [Titre de page]</title>
 
-    <!-- CSS is minified and embedded inline -->
-    <style>
-        /* CSS content from web_src/styles.css (minified) */
-    </style>
+  <!-- CSS commun (reset, body, .site-name/ver/tag, nav a, footer a) -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- CSS spécifique à la page :
+       - .site-hdr, nav, footer (avec max-width selon page : 520px ou 960px)
+       - composants propres à la page (.card, table, formulaire…)
+  -->
+  <style>
+    .site-hdr {
+      width: 100%; max-width: 520px; /* ou 960px pour /scan */
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.1rem 0 0.9rem;
+    }
+    nav {
+      width: 100%; max-width: 520px;
+      display: flex; gap: 0.25rem;
+      padding: 0.6rem 0;
+      border-top: 1px solid #ffffff0a;
+      border-bottom: 1px solid #ffffff0a;
+      margin-bottom: 1.5rem;
+    }
+    footer {
+      width: 100%; max-width: 520px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1rem 0 1.5rem;
+      border-top: 1px solid #ffffff0a;
+      margin-top: auto;
+      font-size: 0.78rem; color: #94a3b8;
+    }
+    /* … styles spécifiques à la page … */
+  </style>
 </head>
-
 <body>
-    <!-- Update Indicator (Toast Notification) -->
-    <div class="update-indicator" id="updateIndicator" data-i18n="updating">
-        Updating...
+
+  <!-- ── En-tête ────────────────────────────────────────────── -->
+  <!-- Identique sur les 3 pages ; seul site-tag change -->
+  <header class="site-hdr">
+    <div class="site-name">
+      Gateway Lab&nbsp;V1
+      <span class="site-ver" id="site-ver">v—</span>
+      <!-- Rempli par JS : fetch('/api/status').then(d => site-ver.textContent = 'v' + d.version) -->
     </div>
+    <span class="site-tag">Titre contextuel de la page</span>
+  </header>
 
-    <!-- Main Container -->
-    <div class="container">
+  <!-- ── Navigation ────────────────────────────────────────── -->
+  <!-- Lien actif marqué class="active" selon la page courante -->
+  <nav>
+    <a href="/">Accueil</a>
+    <a href="/scan">Équipements</a>
+    <a href="/update">OTA</a>
+  </nav>
 
-        <!-- Header -->
-        <div class="header">
-            <h1 id="main-title">
-                <span class="status-indicator status-online" id="statusIndicator"></span>
-                ESP32 Diagnostic - Version 3.31.0 -
-                <span class="chip-type" id="chipModel">ESP32-S3</span>
-            </h1>
+  <!-- ── Contenu de la page ────────────────────────────────── -->
+  <!-- Varie selon la page :
+       /        → carte Informations réseau + raccourcis
+       /scan    → carte tableau des équipements + bouton Lancer un scan
+       /update  → formulaire upload firmware + barre de progression
+  -->
+  <main>
+    <!-- contenu ici -->
+  </main>
 
-            <!-- Access Links Row -->
-            <div class="access-row">
-                <span class="access-label" data-i18n="access" data-i18n-suffix=" :">Access</span>
+  <!-- ── Pied de page ──────────────────────────────────────── -->
+  <!-- Identique sur les 3 pages ; contenu rempli par JS -->
+  <footer>
+    <span id="footer-ts">—</span>
+    <!-- Accueil : "Actualisé : HH:MM:SS"      (+ adresse mDNS à droite) -->
+    <!-- Scan    : "N équipements — Actualisé : HH:MM:SS" -->
+    <!-- OTA     : "Firmware actuel : vX.X.X"  -->
+    <a href="/">← Accueil</a>
+    <!-- Absent sur la page Accueil (remplacé par l'adresse mDNS) -->
+  </footer>
 
-                <!-- mDNS Link -->
-                <a class="access-link"
-                   id="mdnsLink"
-                   href="http://ESP32-Diagnostic.local"
-                   data-access-host="ESP32-Diagnostic.local"
-                   data-secure="https://"
-                   data-legacy="http://"
-                   data-access-label="ESP32-Diagnostic.local"
-                   data-legacy-label="http://ESP32-Diagnostic.local"
-                   data-label-id="mdnsAddressText"
-                   aria-disabled="false">
-                    <strong id="mdnsAddressText">http://ESP32-Diagnostic.local</strong>
-                </a>
-
-                <span class="access-sep">•</span>
-
-                <!-- IP Address Link -->
-                <a id="ipAddressLink"
-                   class="access-link"
-                   href="http://192.168.1.100"
-                   data-access-host="192.168.1.100"
-                   data-secure="https://"
-                   data-legacy="http://"
-                   data-access-label="192.168.1.100"
-                   data-legacy-label="http://192.168.1.100"
-                   data-label-id="ipAddressText"
-                   aria-disabled="false">
-                    <strong id="ipAddressText"
-                            data-placeholder="IP Unavailable"
-                            data-placeholder-key="ip_unavailable">
-                        http://192.168.1.100
-                    </strong>
-                </a>
-
-                <!-- Language Switcher -->
-                <span class="lang-switch" role="group" aria-label="Language">
-                    <span class="lang-label" data-i18n="language_label">Language</span>
-                    <button type="button"
-                            class="lang-btn"
-                            data-lang="fr"
-                            onclick="changeLang('fr',this);">FR</button>
-                    <button type="button"
-                            class="lang-btn active"
-                            data-lang="en"
-                            onclick="changeLang('en',this);">EN</button>
-                </span>
-            </div>
-
-            <!-- Navigation Tabs -->
-            <div class="nav">
-                <button type="button"
-                        class="nav-btn active"
-                        data-tab="overview"
-                        data-i18n="nav_overview"
-                        onclick="showTab('overview',this);">
-                    Overview
-                </button>
-                <button type="button"
-                        class="nav-btn"
-                        data-tab="display-signal"
-                        data-i18n="nav_display_signal"
-                        onclick="showTab('display-signal',this);">
-                    Display & Signal
-                </button>
-                <button type="button"
-                        class="nav-btn"
-                        data-tab="sensors"
-                        data-i18n="nav_sensors"
-                        onclick="showTab('sensors',this);">
-                    Sensors
-                </button>
-                <button type="button"
-                        class="nav-btn"
-                        data-tab="input-devices"
-                        data-i18n="nav_input_devices"
-                        onclick="showTab('input-devices',this);">
-                    Input Devices
-                </button>
-                <button type="button"
-                        class="nav-btn"
-                        data-tab="memory"
-                        data-i18n="nav_memory"
-                        onclick="showTab('memory',this);">
-                    Memory
-                </button>
-                <button type="button"
-                        class="nav-btn"
-                        data-tab="hardware-tests"
-                        data-i18n="nav_hardware_tests"
-                        onclick="showTab('hardware-tests',this);">
-                    Hardware Tests
-                </button>
-                <button type="button"
-                        class="nav-btn"
-                        data-tab="wireless"
-                        data-i18n="nav_wireless"
-                        onclick="showTab('wireless',this);">
-                    Wireless
-                </button>
-                <button type="button"
-                        class="nav-btn"
-                        data-tab="benchmark"
-                        data-i18n="nav_benchmark"
-                        onclick="showTab('benchmark',this);">
-                    Benchmark
-                </button>
-                <button type="button"
-                        class="nav-btn"
-                        data-tab="export"
-                        data-i18n="nav_export"
-                        onclick="showTab('export',this);">
-                    Export
-                </button>
-            </div>
-        </div>
-
-        <!-- Content Area (Tab content loaded dynamically via JavaScript) -->
-        <div class="content">
-            <div id="tabContainer">
-                <!-- Tab content is loaded dynamically by JavaScript -->
-                <!-- Each tab builds its own HTML structure via buildXXX() functions -->
-            </div>
-        </div>
-
-    </div>
-
-    <!-- JavaScript Application -->
-    <script src="/js/app.js"></script>
-
-    <!--
-    Note: In the actual implementation, JavaScript is embedded inline
-    from the minified web_src/app.js file, not loaded externally.
-
-    The JavaScript includes:
-    - Translation system
-    - Navigation handlers
-    - API communication
-    - Dynamic content builders
-    - All interactive functionality
-    -->
+  <script>
+    // Récupère la version au chargement (commun à toutes les pages)
+    fetch('/api/status').then(function(r) { return r.json(); }).then(function(d) {
+      if (d.version) document.getElementById('site-ver').textContent = 'v' + d.version;
+      // … mise à jour du pied de page selon la page …
+    }).catch(function() {});
+  </script>
 
 </body>
 </html>
