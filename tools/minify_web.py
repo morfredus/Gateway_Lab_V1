@@ -236,13 +236,16 @@ def run():
 
         raw = src.read_text(encoding='utf-8')
         minified = minify_html(raw)
-        ratio = 100 * (1 - len(minified) / len(raw))
+        # Taille de référence = source HTML + CSS commun (non minifié)
+        css_raw_len = len(STYLES_CSS.read_text(encoding='utf-8')) if STYLES_CSS.exists() else 0
+        total_src = len(raw) + css_raw_len
+        ratio = 100 * (1 - len(minified) / total_src) if total_src else 0
 
         header = generate_html_header(src, const_name, minified)
         header_dst.write_text(header, encoding='utf-8')
 
         print(f"\n  [{src.name}]")
-        print(f"    Source  : {len(raw):,} octets")
+        print(f"    Source  : {len(raw):,} o  +  styles.css {css_raw_len:,} o  =  {total_src:,} o")
         print(f"    Minifié : {len(minified):,} octets  (gain {ratio:.1f}%)")
         print(f"    Header  : {header_dst.relative_to(PROJECT_ROOT)}")
 
