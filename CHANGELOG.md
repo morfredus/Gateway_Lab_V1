@@ -71,6 +71,57 @@ Aucune étape « Upload Filesystem Image » requise — le HTML voyage avec le f
 
 ---
 
+## [0.0.3] — 2026-06-15
+
+### Ajouté
+- **Architecture modulaire** : `src/` réorganisé en sous-dossiers thématiques
+  - `src/modules/` — modules fonctionnels indépendants et transposables
+  - `src/utils/` — utilitaires partagés header-only
+- **`WiFiManager`** (`modules/wifi_manager.h/.cpp`) : encapsule WiFiMulti, reconnexion
+  avec debounce 30 s, callback de connexion, mDNS intégré
+- **`OtaManager`** (`modules/ota_manager.h/.cpp`) : encapsule ArduinoOTA + routes web OTA,
+  `registerRoutes(WebServer&)` découplé
+- **`WebServerModule`** (`modules/web_server.h/.cpp`) : WebServer avec interface
+  `ScanProvider` pour découpler le scanner du serveur
+- **`NetworkScanner`** (`modules/network_scanner.h/.cpp`) : scan LAN async (FreeRTOS
+  task Core 0), sweep UDP du sous-réseau, lecture table ARP lwIP, déduplication par MAC,
+  lookup OUI embarqué (~40 fabricants courants)
+- **`Log`** (`utils/logger.h`) : wrapper Serial header-only avec niveaux DEBUG/INFO/WARN/ERROR,
+  désactivable via `-D LOG_LEVEL=0`
+- **Cartouche "Équipements réseau"** dans `web_src/index.html` : table IP / MAC / Fabricant /
+  Vu il y a, bouton "Scanner", rafraîchissement auto toutes les 30 s, polling 2 s pendant scan
+- **API REST** nouvelles routes :
+  - `GET  /api/devices` → `{scanning: bool, devices: [...]}`
+  - `POST /api/scan`    → déclenche un scan async
+
+### Modifié
+- `src/main.cpp` : réduit à 30 lignes — orchestre uniquement l'initialisation des modules
+- `web_src/index.html` : cartouche réseau aligné à la largeur du nouveau tableau équipements
+
+### Technique
+- **`ScanProvider`** (struct de lambdas) : interface de découplage entre `WebServerModule`
+  et `NetworkScanner` — pas d'include croisé entre modules
+- **Thread-safety** : `NetworkScanner` protège `_results` par `SemaphoreHandle_t` ;
+  `getResults()` retourne une copie value, jamais une référence mutable
+- **Sweep UDP** : envoie un paquet vide sur le port 9 (discard) pour chaque IP du sous-réseau
+  → déclenche la résolution ARP sans nécessiter `CONFIG_LWIP_RAW` ni socket ICMP
+- **Lecture ARP incrémentale** : `_readArpTable()` appelée tous les 16 hôtes pendant le sweep
+  pour capturer les réponses rapides avant que la table lwIP (10 entrées) ne soit réécrasée
+- **Déduplication MAC** : un équipement qui change d'IP entre deux scans est mis à jour
+  sans doublon dans `_results`
+- **`etharp_get_entry()`** : API lwIP 2.x disponible dans le SDK Arduino ESP32 ;
+  appelée depuis Core 0 (même core que le stack TCP/IP)
+
+### Infrastructure
+- **`src/modules/*.h`** : interfaces conçues pour être copiées dans d'autres projets ESP32
+  sans modification (seules `app_config.h` et `secrets.h` varient par projet)
+- **PlatformIO auto-discovery** : les `.cpp` dans `src/modules/` et `src/utils/` sont
+  compilés automatiquement sans modifier `platformio.ini`
+- **`main.cpp` comme orchestrateur** : aucune logique métier, uniquement
+  `module.begin()` + `module.loop()` — extension future = ajouter un module, pas modifier main
+
+---
+
 ## [0.0.1] — 2026-06-13
 
 ### Ajouté
