@@ -5,14 +5,51 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
-Ce document décrit l'état réel du projet à chaque version publiée.
+## [0.0.7] — 2026-06-15 (suite — refactoring CSS & outils)
 
-Pour les fonctionnalités futures et les priorités de développement,
-consulter `ROADMAP.md`.
+### Amélioré
+
+- **CSS entièrement externalisé dans `styles.css`** : les blocs `<style>` inline ont été
+  supprimés des trois pages HTML. `styles.css` est la source unique pour tous les styles,
+  organisée en 12 sections (reset, conteneurs, en-tête, nav, carte, footer, puis sections
+  spécifiques à chaque page). Le script `minify_web.py` l'injecte inline dans chaque page
+  lors de la minification — l'ESP32 continue de servir du HTML auto-contenu.
+
+- **Polices légèrement agrandies** pour une meilleure lisibilité :
+
+  | Élément | Avant | Après |
+  |---|---|---|
+  | Navigation | 0.80 rem | 0.875 rem |
+  | Données réseau (label/valeur) | 0.875 rem | 0.90 rem |
+  | Tableau (cellules) | 0.80 rem | 0.85 rem |
+  | En-têtes de colonne | 0.65 rem | 0.72 rem |
+  | Pied de page | 0.78 rem | 0.85 rem |
+  | Sous-titre en-tête | 0.72 rem | 0.80 rem |
+  | Pastille version | 0.63 rem | 0.72 rem |
+  | Badges source/catégorie | 0.58–0.65 rem | 0.65–0.72 rem |
+
+- **Largeur de page gérée par classe CSS** (`body.page-scan` → max-width 960px,
+  défaut → 520px) : élimine les règles dupliquées entre les pages et simplifie
+  la maintenance.
+
+- **Outils Python mis à jour** :
+  - `extract_web_sources.py` : réécrit pour extraire les constantes PROGMEM
+    `R"HTML(...)HTML"` réelles (index, scan, ota) ; mode dry-run par défaut,
+    `--force` requis pour écraser les sources existantes
+  - `validate_html.py` : valide les 3 pages réelles + template ; vérifie la
+    présence du `<link styles.css>`, la structure `.site-hdr`/nav/footer,
+    l'unicité des IDs ; supprime les vérifications `data-i18n` hors-sujet
+  - `minify_web.py` : affiche le gain de compression réel (source HTML + styles.css
+    vs sortie minifiée)
+
+- **`web_src/` restructuré** : `styles.css` comme source unique, `template.html`
+  et `README.md` réécrits pour documenter la vraie architecture Gateway Lab V1 ;
+  suppression des fichiers hérités d'un projet précédent (`app.js` 119 Ko,
+  `app-lite.js`, `README_FR.md`).
 
 ---
 
-## [0.0.7] — 2026-06-15 (compléments interface)
+## [0.0.7] — 2026-06-15 (suite — passe cosmétique UI)
 
 ### Amélioré
 
