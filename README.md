@@ -1,29 +1,83 @@
 # Gateway Lab V1
 
-Passerelle intelligente ESP32-S3 pour la découverte et l'inventaire des équipements
-connectés au réseau local domestique.
+Passerelle intelligente ESP32-S3 pour la découverte, l'inventaire et l'exploration des équipements connectés au réseau local domestique.
+
+---
+
+## Présentation
+
+Gateway Lab V1 est un projet personnel développé autour d'un ESP32-S3.
+
+L'objectif est de construire progressivement une passerelle réseau autonome capable de :
+
+* Découvrir automatiquement les équipements présents sur le réseau local
+* Identifier les appareils détectés
+* Enrichir les informations collectées (nom, fabricant, catégorie, modèle...)
+* Fournir une interface web locale simple et légère
+* Permettre les mises à jour OTA sans accès physique au matériel
+* Servir de laboratoire d'expérimentation autour des protocoles réseau domestiques
+
+Le projet privilégie :
+
+* La simplicité de déploiement
+* La maintenabilité du code
+* La documentation
+* La compréhension des mécanismes réseau
 
 ---
 
 ## Matériel cible
 
-**ESP32-S3 DevKitC-1 N16R8** — 16 Mo flash · 8 Mo PSRAM · dual-core 240 MHz
+**ESP32-S3 DevKitC-1 N16R8**
+
+* 16 Mo Flash
+* 8 Mo PSRAM
+* Dual Core 240 MHz
 
 ---
 
 ## Fonctionnalités actuelles
 
-| Fonctionnalité | Détail |
-|---|---|
-| WiFi multi-réseaux | Connexion automatique au meilleur réseau disponible (`secrets.h`) |
-| mDNS | Accessible via `gateway-lab-v1.local` |
-| Interface web | Pages Accueil / Équipements / OTA — HTML embarqué en PROGMEM |
-| Scan réseau LAN | Sweep ARP sur tout le sous-réseau, tâche FreeRTOS asynchrone |
-| Inventaire équipements | IP · Fabricant · Type · MAC · Vu il y a |
-| Identification OUI | 152 entrées (`data/oui.json`), 16 catégories (IoT, Mobile, NAS, Camera, TV…) |
-| OTA web | Upload firmware `.bin` via navigateur + redirection automatique |
-| OTA réseau | Mise à jour via PlatformIO / IDE (ArduinoOTA) |
-| API REST | `/api/status` · `/api/devices` · `/api/scan` |
+| Fonctionnalité        | Détail                                                            |
+| --------------------- | ----------------------------------------------------------------- |
+| WiFi multi-réseaux    | Connexion automatique au meilleur réseau disponible (`secrets.h`) |
+| mDNS                  | Accessible via `gateway-lab-v1.local`                             |
+| Interface web         | Pages Accueil / Équipements / OTA                                 |
+| Scan réseau LAN       | Sweep ARP du sous-réseau local                                    |
+| Tâche FreeRTOS dédiée | Scan asynchrone sur Core 0                                        |
+| Résolution hostnames  | mDNS passif + DNS inverse PTR                                     |
+| Détection box FAI     | Orange, Free, SFR, Bouygues                                       |
+| Inventaire réseau     | IP, nom, fabricant, modèle, catégorie, MAC                        |
+| Auto-détection ESP32  | Le Gateway apparaît dans sa propre liste                          |
+| Identification OUI    | Base externalisée générée automatiquement                         |
+| OTA Web               | Upload firmware depuis le navigateur                              |
+| ArduinoOTA            | Mise à jour réseau depuis PlatformIO                              |
+| API REST              | `/api/status`, `/api/devices`, `/api/scan`                        |
+
+---
+
+## Captures d'écran
+
+### Accueil
+
+* Informations réseau
+* État de connexion
+* Accès rapide aux équipements
+* Accès OTA
+
+### Équipements
+
+* Inventaire des appareils détectés
+* Résolution des noms d'hôtes
+* Fabricant
+* Catégorie
+* Modèle
+* Temps depuis la dernière détection
+
+### OTA
+
+* Mise à jour firmware via navigateur
+* Redirection automatique après flash
 
 ---
 
@@ -31,16 +85,30 @@ connectés au réseau local domestique.
 
 ### 1. Configurer les identifiants WiFi
 
-Copier `include/secrets_example.h` → `include/secrets.h` et renseigner les réseaux :
+Copier :
+
+```text
+include/secrets_example.h
+```
+
+vers :
+
+```text
+include/secrets.h
+```
+
+Puis renseigner les réseaux :
 
 ```cpp
 static const char* WIFI_NETWORKS[][2] = {
-    {"MonSSID",    "MotDePasse"},
-    {"Hotspot",    "AutreMotDePasse"},
+    {"MonSSID", "MotDePasse"},
+    {"Hotspot", "AutreMotDePasse"}
 };
 ```
 
-> ⚠️ `secrets.h` est dans `.gitignore` — ne jamais le committer.
+⚠️ `include/secrets.h` est ignoré par Git et ne doit jamais être commité.
+
+---
 
 ### 2. Générer les assets web
 
@@ -48,113 +116,228 @@ static const char* WIFI_NETWORKS[][2] = {
 python tools/minify_web.py
 ```
 
+---
+
 ### 3. Compiler et flasher
 
 ```bash
 pio run --target upload
 ```
 
+---
+
 ### 4. Accéder à l'interface
 
-```
+```text
 http://gateway-lab-v1.local
 ```
+
+ou via l'adresse IP affichée sur la page d'accueil.
 
 ---
 
 ## Structure du projet
 
-```
+```text
 Gateway-Lab-V1/
 ├── src/
-│   ├── main.cpp                  # Orchestrateur (~65 lignes)
+│   ├── main.cpp
+│   │
 │   ├── modules/
-│   │   ├── wifi_manager.*        # WiFiMulti + mDNS + reconnexion
-│   │   ├── ota_manager.*         # ArduinoOTA + routes web OTA
-│   │   ├── web_server.*          # WebServer + routes API
-│   │   └── network_scanner.*     # Scan ARP FreeRTOS + lookup OUI
+│   │   ├── wifi_manager.*
+│   │   ├── ota_manager.*
+│   │   ├── web_server.*
+│   │   ├── network_scanner.*
+│   │   ├── hostname_resolver.*
+│   │   └── isp_detector.h
+│   │
 │   └── utils/
-│       └── logger.h              # Log header-only (DEBUG/INFO/WARN/ERROR)
+│       └── logger.h
+│
 ├── include/
-│   ├── app_config.h              # Paramètres centralisés (hostname, port…)
-│   ├── board_config.h            # Brochage ESP32-S3 (ne pas modifier)
-│   ├── secrets_example.h         # Modèle credentials WiFi
-│   ├── web_interface.h           # HTML page d'accueil PROGMEM (généré)
-│   ├── web_interface_scan.h      # HTML page équipements PROGMEM (généré)
-│   ├── web_interface_ota.h       # HTML page OTA PROGMEM (généré)
-│   └── oui_table.h               # Table OUI C++ (générée, 151 entrées après dédup)
+│   ├── app_config.h
+│   ├── board_config.h
+│   ├── secrets_example.h
+│   ├── secrets.h                # Non versionné
+│   ├── oui_table.h              # Généré depuis data/oui.json
+│   ├── web_interface.h          # Généré depuis web_src/index.html
+│   ├── web_interface_scan.h     # Généré depuis web_src/scan.html
+│   └── web_interface_ota.h      # Généré depuis web_src/ota.html
+│
 ├── web_src/
 │   ├── index.html                # Page d'accueil (source)
 │   ├── scan.html                 # Page équipements (source)
 │   ├── ota.html                  # Page OTA (source)
-│   ├── template.html             # Gabarit commun (navigation, style)
-│   ├── app.js                    # JavaScript principal
-│   ├── app-lite.js               # JavaScript réduit (page OTA)
-│   └── styles.css                # Feuille de style commune
+│   ├── styles.css                # Feuille de style unique (injectée inline par minify_web.py)
+│   ├── template.html             # Gabarit de référence (documentation)
+│   └── README.md                 # Guide développeur web_src/
+│
 ├── data/
-│   └── oui.json                  # Base OUI — 152 entrées, 16 catégories
-├── tools/
-│   ├── minify_web.py             # Génère les headers depuis web_src/ et data/
-│   ├── extract_web_sources.py    # Extracteur/beautifier depuis un header existant
-│   └── validate_html.py          # Validateur HTML
+│   ├── oui.json                 # Base OUI source
+│   └── index.html
+│
 ├── docs/
-│   └── WARNINGS.md               # Limitations connues et points de vigilance
+│   └── WARNINGS.md
+│
+├── tools/
+│   ├── minify_web.py
+│   ├── extract_web_sources.py
+│   └── validate_html.py
+│
+├── test/
+│
 ├── CHANGELOG.md
-└── ROADMAP.md
+├── ROADMAP.md
+├── README.md
+└── platformio.ini
+```
+### Fichiers générés
+
+Les fichiers suivants sont générés automatiquement et versionnés dans Git :
+
+```text
+include/oui_table.h
+include/web_interface.h
+include/web_interface_scan.h
+include/web_interface_ota.h
+```
+
+Ils sont reconstruits à partir de :
+
+```text
+data/oui.json
+web_src/*.html
+```
+
+via :
+
+```bash
+python tools/minify_web.py
 ```
 
 ---
 
 ## Workflow de développement web
 
+```text
+web_src/*.html
+        │
+        ├─────► tools/minify_web.py
+        │
+data/oui.json
+        │
+        ▼
+include/*.h générés
+        │
+        ▼
+pio run
 ```
-web_src/*.html  ──┐
-data/oui.json   ──┴─ python tools/minify_web.py ──► include/*.h ──► pio run
+web_src/styles.css  ──┐
+web_src/*.html      ──┼─ python tools/minify_web.py ──► include/*.h ──► pio run
+data/oui.json       ──┘
 ```
 
+`styles.css` contient **tout le CSS** des trois pages (organisé par sections).
+`minify_web.py` l'injecte inline dans chaque page — l'ESP32 sert du HTML auto-contenu.
+
 Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO requis.
+
+### Outils disponibles
+
+| Outil | Usage |
+|---|---|
+| `python tools/minify_web.py` | Génère les headers PROGMEM depuis `web_src/` et `data/oui.json` |
+| `python tools/validate_html.py` | Valide la structure HTML des 3 pages + gabarit |
+| `python tools/extract_web_sources.py` | Prévisualise l'extraction des headers → `web_src/` (dry-run) |
+| `python tools/extract_web_sources.py --force` | Récupération d'urgence : écrase `web_src/*.html` depuis les headers |
 
 ---
 
 ## API REST
 
-| Méthode | Route | Description |
-|---------|-------|-------------|
-| GET | `/` | Page d'accueil |
-| GET | `/scan` | Page équipements |
-| GET | `/update` | Page OTA |
-| GET | `/api/status` | `{ssid, ip, rssi, uptime, version, hostname, scanning}` |
-| GET | `/api/devices` | `{scanning, devices:[{ip, mac, manufacturer, type, hostname, elapsedMs, online}]}` |
-| POST | `/api/scan` | Déclenche un scan asynchrone |
-| POST | `/update` | Upload firmware `.bin` |
+### GET /
 
-> Note : le champ `hostname` est présent dans la réponse JSON mais reste vide — la résolution PTR DNS est planifiée en v0.0.6.
+Page d'accueil
+
+### GET /scan
+
+Inventaire réseau
+
+### GET /update
+
+Interface OTA
+
+### GET /api/status
+
+Retourne :
+
+```json
+{
+  "ssid": "...",
+  "ip": "...",
+  "rssi": -42,
+  "uptime": "...",
+  "version": "...",
+  "hostname": "...",
+  "scanning": false
+}
+```
+
+### GET /api/devices
+
+Retourne :
+
+```json
+{
+  "scanning": false,
+  "devices": [...]
+}
+```
+
+### POST /api/scan
+
+Déclenche un scan réseau asynchrone.
+
+### POST /update
+
+Upload d'un firmware `.bin`.
 
 ---
 
-## Versioning
+## Sources d'identification
 
-| Version | État | Contenu |
-|---------|------|---------|
-| v0.0.5 | ✅ Actuelle | OUI externalisé (`data/oui.json`, 152 entrées), badges Type, pipeline unifié |
-| v0.0.4 | ✅ | Page `/scan` dédiée, `struct NetworkDevice`, fix "Vu il y a 56 ans", OTA redirect, champ `hostname` (stub) |
-| v0.0.3 | ✅ | Architecture modulaire `src/modules/`, scanner ARP FreeRTOS, lookup OUI ~40 entrées |
-| v0.0.2 | ✅ | WebServer, mDNS, OTA web, HTML PROGMEM, pipeline minification |
-| v0.0.1 | ✅ | Structure PlatformIO, board_config, app_config, secrets_example, outils Python |
+Les informations affichées peuvent provenir de plusieurs mécanismes :
+
+| Source | Description                             |
+| ------ | --------------------------------------- |
+| OUI    | Fabricant déduit de l'adresse MAC       |
+| PTR    | DNS inverse fourni par la box DHCP      |
+| mDNS   | Annonces `.local` détectées passivement |
+| Self   | Informations de l'ESP32 lui-même        |
 
 ---
 
-## Roadmap
+## Documentation
 
-| Version | Objectif |
-|---------|----------|
-| v0.0.6 | Résolution des noms d'hôtes (requête PTR DNS manuelle via `lwip/dns.h`) |
-| v0.1.x | Scan de ports, historique NVS, détection nouveaux équipements, `/api/export` |
-| v0.2.x | mDNS/Bonjour passif, SSDP/UPnP, DNS-SD |
-| v0.3.x | Intégrations domotiques (Philips Hue, Tado, X-Sense) |
-| v0.4.x | MQTT, webhooks événements réseau |
-| v0.5.x | Écran OLED, BLE scan |
-| v1.0.0 | Cartographie complète du réseau domotique |
+| Fichier          | Description                                |
+| ---------------- | ------------------------------------------ |
+| CHANGELOG.md     | Historique détaillé des versions           |
+| ROADMAP.md       | Fonctionnalités planifiées                 |
+| docs/WARNINGS.md | Limitations connues et points de vigilance |
+
+---
+
+## Évolution du projet
+
+Le développement suit une progression volontaire :
+
+1. Découvrir les équipements du réseau
+2. Identifier les équipements détectés
+3. Comprendre les services qu'ils exposent
+4. Construire une cartographie logique du réseau
+5. Interagir avec les équipements compatibles
+
+Pour les fonctionnalités prévues, consulter `ROADMAP.md`.
 
 ---
 
@@ -162,6 +345,11 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 
 - `include/board_config.h` — ne pas modifier
 - `include/secrets.h` — ne jamais committer
-- HTML modifiable uniquement dans `web_src/`
+- CSS modifiable uniquement dans `web_src/styles.css`
+- HTML modifiable uniquement dans `web_src/*.html`
 - Versioning uniquement dans `platformio.ini` via `PROJECT_VERSION`
-- Après toute modification HTML ou `data/oui.json` → relancer `python tools/minify_web.py`
+- Après toute modification de `web_src/` ou `data/oui.json` → relancer `python tools/minify_web.py`
+
+## Licence
+
+Projet personnel open source publié à des fins d'apprentissage, d'expérimentation et de partage de connaissances autour de l'ESP32, du réseau et des systèmes embarqués.

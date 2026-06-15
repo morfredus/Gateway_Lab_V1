@@ -5,6 +5,232 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.7] — 2026-06-15 (suite — refactoring CSS & outils)
+
+### Amélioré
+
+- **CSS entièrement externalisé dans `styles.css`** : les blocs `<style>` inline ont été
+  supprimés des trois pages HTML. `styles.css` est la source unique pour tous les styles,
+  organisée en 12 sections (reset, conteneurs, en-tête, nav, carte, footer, puis sections
+  spécifiques à chaque page). Le script `minify_web.py` l'injecte inline dans chaque page
+  lors de la minification — l'ESP32 continue de servir du HTML auto-contenu.
+
+- **Polices légèrement agrandies** pour une meilleure lisibilité :
+
+  | Élément | Avant | Après |
+  |---|---|---|
+  | Navigation | 0.80 rem | 0.875 rem |
+  | Données réseau (label/valeur) | 0.875 rem | 0.90 rem |
+  | Tableau (cellules) | 0.80 rem | 0.85 rem |
+  | En-têtes de colonne | 0.65 rem | 0.72 rem |
+  | Pied de page | 0.78 rem | 0.85 rem |
+  | Sous-titre en-tête | 0.72 rem | 0.80 rem |
+  | Pastille version | 0.63 rem | 0.72 rem |
+  | Badges source/catégorie | 0.58–0.65 rem | 0.65–0.72 rem |
+
+- **Largeur de page gérée par classe CSS** (`body.page-scan` → max-width 960px,
+  défaut → 520px) : élimine les règles dupliquées entre les pages et simplifie
+  la maintenance.
+
+- **Outils Python mis à jour** :
+  - `extract_web_sources.py` : réécrit pour extraire les constantes PROGMEM
+    `R"HTML(...)HTML"` réelles (index, scan, ota) ; mode dry-run par défaut,
+    `--force` requis pour écraser les sources existantes
+  - `validate_html.py` : valide les 3 pages réelles + template ; vérifie la
+    présence du `<link styles.css>`, la structure `.site-hdr`/nav/footer,
+    l'unicité des IDs ; supprime les vérifications `data-i18n` hors-sujet
+  - `minify_web.py` : affiche le gain de compression réel (source HTML + styles.css
+    vs sortie minifiée)
+
+- **`web_src/` restructuré** : `styles.css` comme source unique, `template.html`
+  et `README.md` réécrits pour documenter la vraie architecture Gateway Lab V1 ;
+  suppression des fichiers hérités d'un projet précédent (`app.js` 119 Ko,
+  `app-lite.js`, `README_FR.md`).
+
+---
+
+## [0.0.7] — 2026-06-15 (suite — passe cosmétique UI)
+
+### Amélioré
+
+- **En-tête cohérent sur toutes les pages** : chaque page (`/`, `/scan`, `/update`) affiche
+  désormais un en-tête identique avec le nom du projet « Gateway Lab V1 », une pastille
+  de version (`v0.0.7` récupérée dynamiquement via `/api/status`) et un sous-titre
+  contextuel (ex. « Passerelle réseau locale », « Équipements réseau », « Mise à jour OTA »).
+
+- **Navigation présente sur toutes les pages** : la barre de navigation (Accueil /
+  Équipements / OTA) est maintenant visible sur les trois pages, y compris la page OTA
+  qui en était dépourvue.
+
+- **Pied de page unifié** : chaque page affiche un pied de page commun avec la date/heure
+  de la dernière actualisation à gauche et un lien « ← Accueil » à droite.
+
+- **Contraste du texte amélioré** : les textes de couleur `#475569` (trop sombre sur fond
+  `#1e293b`) remplacés par `#94a3b8` sur l'ensemble des pages pour une lisibilité correcte.
+
+---
+
+## [0.0.7] — 2026-06-15
+
+### Corrigé
+
+- **Catégorie (badges Type) absente sur la page Équipements** : le header PROGMEM
+  `include/web_interface_scan.h` n'avait pas été régénéré après le renommage
+  `d.type` → `d.category` dans `web_src/scan.html`. L'ESP32 servait encore
+  l'ancienne version minifiée qui référençait `d.type` (toujours `undefined`
+  dans la réponse JSON v0.0.7). Correction : regénération via
+  `python tools/minify_web.py` — le header intègre maintenant `d.category`,
+  `d.model` et `d.source`.
+
+- **ESP32 absent de sa propre liste d'équipements** (`network_scanner.cpp`) :
+  Le protocole ARP ne peut pas découvrir sa propre adresse IP (pas de réponse ARP
+  pour soi-même). L'ESP32 n'apparaissait donc jamais dans le tableau.
+  Correction : nouvelle méthode `_addSelfEntry()` injectée en fin de `_run()` ;
+  crée une entrée avec `WiFi.localIP()`, `WiFi.macAddress()`, `hostname = MDNS_HOSTNAME`,
+  `category = "Gateway"`, `source = "Self"`. Idempotente entre deux scans.
+
+- **Badge "PTR" opaque pour l'utilisateur** (`web_src/scan.html`) :
+  Le badge affiché à côté du nom d'hôte ne donnait aucune indication sur sa
+  signification. Correction : renommé `"DNS↩"` (flèche inverse = résolution inverse)
+  avec tooltip `title="DNS inverse (PTR) — nom fourni par le routeur / box"`.
+  Le badge `"Self"` pour l'ESP32 affiche `"ESP32"` avec tooltip explicatif.
+
+- **Modèle sous le fabricant peu lisible** (`web_src/scan.html`) :
+  La ligne modèle (ex: "Livebox") était trop sombre (#64748b) par rapport à
+  la couleur de fond. Correction : passage à #94a3b8 et margin-top légèrement
+  augmenté pour une meilleure séparation visuelle avec le badge fabricant.
+
+### Ajouté
+
+- **`src/modules/hostname_resolver.h/.cpp`** : nouveau module de résolution des noms d'hôtes
+  - **mDNS passif** : écoute multicast sur 224.0.0.251:5353 pendant le sweep ARP ;
+    les enregistrements A (nom.local → IPv4) peuplent un cache interne sans interrogation active
+  - **PTR DNS batch** : pour chaque IP sans hostname mDNS, envoie des requêtes
+    `d.c.b.a.in-addr.arpa` au DNS du réseau ; toutes les requêtes sont envoyées simultanément,
+    réponses collectées dans une fenêtre unique de 500 ms (impact temps total : ≤ 500 ms)
+  - Priorité de résolution : mDNS > PTR DNS
+  - Non bloquant : timeout court, graceful fallback si le réseau ne répond pas
+  - Champ `source` renseigné : `"mDNS"`, `"PTR"`, `"MAC"` ou `""`
+
+- **`src/modules/isp_detector.h`** : détection des boxes des FAI français (header-only)
+  - **Free / Freebox** : Ultra, Pop, Révolution, Delta, Mini 4K
+    (signatures hostname : `freebox-*` ; OUI : `freebox sas`, `free sas`)
+  - **Orange / Livebox** : 4, 5, 6
+    (signatures hostname : `livebox`, `livebox4`… ; OUI : `orange`)
+  - **SFR / SFR Box** : Box Plus, Box 8
+    (signatures hostname : `sfrbox`, `sfr-box`, `sfr-*` ; OUI : `sfr`)
+  - **Bouygues / Bbox** : Miami, Ultym
+    (signatures hostname : `bbox*` ; OUI : `bouygues`)
+  - Remplit `manufacturer` (marque FAI), `model` (ex: "Livebox 6"), `category` = "Router"
+  - Détection non bloquante, 100 % locale (pas de requête réseau)
+
+- **Champ `hostname` effectivement renseigné** : `_resolveHostnames()` n'est plus un no-op —
+  implémentation complète avec `HostnameResolver`
+
+### Modifié
+
+- **`struct NetworkDevice`** : refactoring des champs
+  - `type` → `category` (alignement avec `OuiEntry.category`)
+  - Ajout `model` (ex: "Freebox Ultra", "Livebox 6", `""` si inconnu)
+  - Ajout `os`     (usage futur — vide en v0.0.7)
+  - Ajout `source` (`"mDNS"` | `"PTR"` | `"MAC"` | `""`)
+
+- **`network_scanner.cpp`** :
+  - `_readArpTable()` : `h.type` → `h.category`
+  - `_sweepSubnet()` : appel de `hostnameResolver.update()` après chaque lot ARP
+    pour collecter les annonces mDNS reçues pendant le sweep
+  - `_run()` : `hostnameResolver.begin()` / `.clearCaches()` avant le sweep,
+    `hostnameResolver.end()` après la résolution
+  - `_resolveHostnames()` : implémentée (remplace le no-op)
+  - `resultsToJson()` : champ `"type"` → `"category"`, ajout `"model"`, `"os"`, `"source"`
+  - Stack FreeRTOS : 8 192 → 16 384 octets (lwIP + résolution DNS + `std::map`)
+
+- **`web_src/scan.html`** :
+  - `d.type` → `d.category` dans `renderDevices()`
+  - Badge **source** sur le hostname (`mDNS` vert, `PTR` violet)
+  - Modèle affiché sous le fabricant (ex: "Freebox Ultra" sous "Free")
+  - Fonction `esc()` : échappement HTML des valeurs serveur (XSS defense)
+  - `max-width` porté à 900 px pour accommoder la colonne enrichie
+  - Titre colonne : "Type" → "Catégorie", "Nom" → "Nom d'hôte"
+
+- **`platformio.ini`** : `PROJECT_VERSION` → `0.0.7`
+
+### Technique
+
+- **Écoute mDNS et ESPmDNS coexistent** grâce à `SO_REUSEADDR` (activé par `beginMulticast`) ;
+  si la jointure du groupe échoue, le système bascule silencieusement sur PTR DNS uniquement
+- **Batch PTR** : toutes les requêtes envoyées en rafale → une seule fenêtre d'attente de 500 ms
+  pour N équipements (vs N × timeout en mode séquentiel)
+- **ISP detection** : appliquée après résolution hostname pour bénéficier du nom complet ;
+  n'écrase pas les champs déjà renseignés par l'OUI si la détection FAI ne matche pas
+- **`HostnameResolver`** : instance globale partagée, appelée uniquement depuis la tâche FreeRTOS
+  du scanner → pas de mutex nécessaire pour le resolver lui-même
+
+### Résultat utilisateur
+
+- Les équipements apparaissent désormais avec un nom exploitable lorsque le routeur fournit un enregistrement PTR DNS.
+- Les équipements compatibles mDNS sont identifiés automatiquement.
+- Les box Internet françaises sont reconnues et catégorisées sans configuration manuelle.
+- L'ESP32 apparaît dans sa propre liste d'équipements.
+- L'inventaire réseau devient lisible sans avoir à interpréter les adresses IP ou MAC.
+- Les badges et tooltips expliquent désormais la provenance des informations affichées.
+---
+
+## [0.0.6] — 2026-06-15
+
+### Corrigé
+
+- **Services réseau non relancés après reconnexion WiFi** (`wifi_manager.cpp`) :
+  `WiFiManager::loop()` détectait la perte du WiFi et déclenchait `_multi.run()`, mais ne
+  rappelait jamais le callback une fois le WiFi rétabli. OTA, scanner et serveur web
+  restaient donc inactifs après une reconnexion automatique.
+  Correction : `_storedCb` conserve le callback de `begin()` ; la transition
+  déconnecté → connecté est détectée via `_wasConnected` et rappelle les services.
+
+- **mDNS non republié après reconnexion** (`wifi_manager.cpp`) :
+  `MDNS.begin()` n'était appelé qu'une seule fois dans `begin()`. Après perte et
+  reprise du WiFi, `gateway-lab-v1.local` devenait injoignable.
+  Correction : `_startMdns()` est extrait en fonction interne et rappelé lors de
+  chaque reconnexion détectée dans `loop()`.
+
+- **Fuite de mutex sur double initialisation** (`network_scanner.cpp`) :
+  Rappeler `NetworkScanner::begin()` (via le callback de reconnexion) créait un
+  second mutex FreeRTOS sans libérer le premier.
+  Correction : guard `if (_mutex) return;` en tête de `begin()`.
+
+- **Callbacks ArduinoOTA empilés à chaque reconnexion** (`ota_manager.h/.cpp`) :
+  `ArduinoOTA.onStart/onEnd/onError` s'enregistrent en liste — les rappeler à
+  chaque reconnexion faisait croître la chaîne indéfiniment.
+  Correction : flag `_callbacksRegistered` ; les lambdas ne s'enregistrent qu'une
+  fois. `ArduinoOTA.begin()` est toujours rappelé (nécessaire pour ré-ouvrir le
+  port UDP et republier le service mDNS après reconnexion).
+
+- **Routes HTTP re-enregistrées inutilement** (`web_server.h/.cpp`) :
+  `WebServerModule::begin()` pouvait être rappelé par le callback de reconnexion,
+  dupliquant les handlers et rappelant `_server.begin()` sur un socket déjà actif.
+  Le socket TCP du WebServer persiste à travers les reconnexions WiFi côté lwIP.
+  Correction : flag `_started` ; `begin()` est idempotent.
+
+- **Injection JSON dans `resultsToJson()`** (`network_scanner.cpp`) :
+  Les champs `hostname` et `type` étaient concaténés directement dans la chaîne JSON
+  sans échappement. Toute valeur contenant `"` ou `\` (ex. nom d'hôte mDNS avec
+  guillemet) produisait un JSON invalide ou une injection.
+  Correction : remplacement de la concaténation manuelle par `JsonDocument` /
+  `serializeJson()` (ArduinoJson déjà présent dans `lib_deps`).
+
+### Technique
+
+- Modèle de robustesse adopté : chaque `begin()` exposé publiquement est désormais
+  **idempotent** — appelable plusieurs fois sans effet de bord (guard mutex,
+  flag `_started`, flag `_callbacksRegistered`).
+- `WiFiManager` est le seul point de déclenchement post-reconnexion : il stocke le
+  callback applicatif et le rappelle lors de toute transition déconnecté → connecté,
+  sans modifier `main.cpp`.
+- ArduinoJson étendu à `resultsToJson()` : cohérence avec `/api/status` qui utilisait
+  déjà `JsonDocument` dans `web_server.cpp`.
+
+---
+
 ## [0.0.5] — 2026-06-15
 
 ### Ajouté

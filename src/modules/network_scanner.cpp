@@ -1,20 +1,27 @@
 /**
- * NetworkScanner — Implémentation
+ * NetworkScanner — Implémentation v0.0.7
  *
  * Bibliothèques utilisées :
- *   WiFiUdp       — envoi de paquets UDP pour déclencher la résolution ARP
- *   lwip/etharp.h — accès à la table ARP du stack réseau lwIP
- *   lwip/netif.h  — accès à l'interface réseau active
- *   FreeRTOS      — tâche asynchrone pour ne pas bloquer l'interface web
+ *   lwip/etharp.h     — etharp_get_entry(), etharp_request()
+ *   lwip/netif.h      — netif_default (interface réseau active)
+ *   lwip/inet.h       — ip4addr_ntoa_r()
+ *   FreeRTOS          — tâche asynchrone Core 0, mutex
+ *   ArduinoJson       — sérialisation JSON sécurisée (champs échappés)
+ *   HostnameResolver  — résolution mDNS + PTR DNS
+ *   IspDetector       — détection des boxes FAI françaises
  */
 
 #include "network_scanner.h"
 #include "ssdp_scanner.h"   // Niveau 4 : découverte UPnP/SSDP
 #include "device_apis.h"    // Niveau 5 : APIs Hue / Synology / Freebox
+#include "hostname_resolver.h"   // mDNS passif + PTR DNS batch
+#include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include <WiFi.h>
+#include <ArduinoJson.h>
+#include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
 #include "lwip/etharp.h"   // etharp_get_entry(), etharp_request()
 #include "lwip/netif.h"    // netif_default
-#include "lwip/inet.h"     // inet_pton()
+#include "lwip/inet.h"     // ip4addr_ntoa_r()
 #include "../../include/oui_table.h"  // OUI_TABLE[] généré depuis data/oui.json
 #include "../utils/logger.h"
 
@@ -23,11 +30,11 @@ static const char* TAG = "Scanner";
 // Instance globale exportée
 NetworkScanner netScanner;
 
-// Recherche de l'entrée OUI à partir des 3 premiers octets de l'adresse MAC
-// Retourne nullptr si non trouvé
+// Recherche de l'entrée OUI à partir des 3 premiers octets de l'adresse MAC.
+// Retourne nullptr si l'OUI n'est pas dans la table.
 static const OuiEntry* lookupOui(const String& mac) {
     if (mac.length() < 8) return nullptr;
-    String prefix = mac.substring(0, 8);  // ex: "B8:27:EB"
+    String prefix = mac.substring(0, 8);
     prefix.toUpperCase();
     for (const auto& e : OUI_TABLE) {
         if (prefix == e.oui) return &e;
@@ -38,31 +45,28 @@ static const OuiEntry* lookupOui(const String& mac) {
 // ---------------------------------------------------------------------------
 // Lecture de la table ARP lwIP
 //
-// La table ARP (Address Resolution Protocol) associe chaque adresse IP
-// à une adresse MAC. Elle est peuplée automatiquement par lwIP quand
-// l'ESP32 communique avec un équipement ou reçoit une réponse ARP.
-// Taille max : ARP_TABLE_SIZE entrées (10 par défaut sur ESP32).
+// La table ARP associe chaque adresse IP à une adresse MAC. Elle est peuplée
+// automatiquement par lwIP quand l'ESP32 communique avec un équipement ou
+// reçoit une réponse ARP. Taille max : ARP_TABLE_SIZE (10 sur ESP32).
+// On lit la table fréquemment pour éviter de perdre des entrées entre deux lots.
 // ---------------------------------------------------------------------------
 void NetworkScanner::_readArpTable() {
-    ip4_addr_t*      ip_ptr;    // Pointeur vers l'adresse IP de l'entrée
-    struct netif*    netif_ptr; // Pointeur vers l'interface réseau concernée
-    struct eth_addr* eth_ptr;   // Pointeur vers l'adresse MAC de l'entrée
+    ip4_addr_t*      ip_ptr;
+    struct netif*    netif_ptr;
+    struct eth_addr* eth_ptr;
 
     for (int i = 0; i < ARP_TABLE_SIZE; i++) {
-        // Lecture de l'entrée i de la table ARP (retourne false si vide)
         if (!etharp_get_entry(i, &ip_ptr, &netif_ptr, &eth_ptr)) continue;
 
-        // Conversion de l'adresse IP en chaîne lisible (ex: "192.168.1.5")
         char ipStr[16];
         ip4addr_ntoa_r(ip_ptr, ipStr, sizeof(ipStr));
 
-        // Formatage de l'adresse MAC en notation standard (ex: "B8:27:EB:AA:BB:CC")
         char macStr[18];
         snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
             eth_ptr->addr[0], eth_ptr->addr[1], eth_ptr->addr[2],
             eth_ptr->addr[3], eth_ptr->addr[4], eth_ptr->addr[5]);
 
-        // Déduplication : si le MAC existe déjà, on met à jour l'IP et l'horodatage
+        // Déduplication par MAC — mise à jour si le MAC existe déjà
         bool found = false;
         for (auto& d : _results) {
             if (d.mac == macStr) {
@@ -73,7 +77,7 @@ void NetworkScanner::_readArpTable() {
                 break;
             }
         }
-        // Nouvel équipement découvert : ajout à la liste
+
         if (!found) {
             NetworkDevice h;
             h.ip       = ipStr;
@@ -85,6 +89,7 @@ void NetworkScanner::_readArpTable() {
                 h.manufacturer = oui->manufacturer;
                 h.category     = oui->category;
                 h.source       = "MAC";
+                h.category     = oui->category;   // "Router", "IoT", "SBC"…
             }
             _results.push_back(h);
         }
@@ -94,21 +99,16 @@ void NetworkScanner::_readArpTable() {
 // ---------------------------------------------------------------------------
 // Sweep ARP du sous-réseau
 //
-// Pourquoi etharp_request() plutôt que UDP ?
-//   - Le sweep UDP envoyait des paquets sans attendre la réponse ARP.
-//     lwIP résout l'ARP de façon asynchrone : la réponse arrivait souvent
-//     APRÈS qu'on ait déjà avancé dans la boucle et réécrasé la table.
-//   - etharp_request() envoie directement un ARP Request (broadcast),
-//     qui est la bonne primitive pour découvrir des équipements.
+// etharp_request() envoie un ARP Request broadcast (la bonne primitive pour
+// découvrir les équipements, contrairement au sweep UDP qui ne déclenche pas
+// de réponse ARP directe).
 //
 // Stratégie par lots :
-//   - On envoie BATCH_SIZE requêtes ARP, puis on attend BATCH_DELAY_MS
-//     pour laisser le temps aux équipements de répondre.
-//   - On lit la table ARP après chaque lot et on accumule dans _results.
-//   - La table lwIP ne fait que ARP_TABLE_SIZE entrées (10) :
-//     lire fréquemment évite de perdre des réponses entre deux lectures.
-//
-// Durée typique sur /24 : ~5 s (254 hôtes / 5 par lot × 100 ms)
+//   - BATCH_SIZE requêtes ARP, puis attente BATCH_DELAY_MS pour les réponses
+//   - Lecture de la table ARP après chaque lot avant que la table (10 entrées)
+//     ne soit écrasée par le lot suivant
+//   - hostnameResolver.update() appelé après chaque lecture pour accumuler
+//     les annonces mDNS passives pendant le sweep
 // ---------------------------------------------------------------------------
 void NetworkScanner::_sweepSubnet() {
     IPAddress local = WiFi.localIP();
@@ -123,13 +123,10 @@ void NetworkScanner::_sweepSubnet() {
     int h_start = (net[3]   == 0)   ? 1   : (int)net[3]   + 1;
     int h_end   = (bcast[3] == 255) ? 254 : (int)bcast[3] - 1;
 
-    // Nombre de requêtes ARP envoyées avant de lire la table et d'attendre
-    // Valeur faible = plus de précision, scan plus lent
-    // Valeur élevée = scan plus rapide, risque de manquer des équipements lents
     constexpr int BATCH_SIZE     = 5;
     constexpr int BATCH_DELAY_MS = 100;
 
-    Log::i(TAG, "Scan ARP %d.%d.%d.%d – .%d (lots de %d, %d ms)",
+    Log::i(TAG, "Sweep ARP %d.%d.%d.%d – .%d (lots de %d, %d ms/lot)",
            net[0], net[1], net[2], h_start, h_end, BATCH_SIZE, BATCH_DELAY_MS);
 
     int inBatch = 0;
@@ -137,49 +134,157 @@ void NetworkScanner::_sweepSubnet() {
         IPAddress target(net[0], net[1], net[2], h);
         if (target == local) continue;
 
-        // Envoi d'un ARP Request broadcast via lwIP
-        // L'équipement cible répondra avec son adresse MAC → peuplera la table ARP
         ip4_addr_t ip4target;
         IP4_ADDR(&ip4target, net[0], net[1], net[2], (uint8_t)h);
         etharp_request(netif_default, &ip4target);
         inBatch++;
 
         if (inBatch >= BATCH_SIZE) {
-            // Attente des réponses ARP (la plupart arrivent en < 20 ms sur LAN)
             vTaskDelay(pdMS_TO_TICKS(BATCH_DELAY_MS));
-            // Capture des entrées ARP avant qu'elles soient écrasées par le lot suivant
             xSemaphoreTake(_mutex, portMAX_DELAY);
             _readArpTable();
             xSemaphoreGive(_mutex);
+            hostnameResolver.update();   // Collecter les annonces mDNS reçues
             inBatch = 0;
         }
     }
 
-    // Traiter le dernier lot incomplet
     if (inBatch > 0) {
         vTaskDelay(pdMS_TO_TICKS(BATCH_DELAY_MS));
         xSemaphoreTake(_mutex, portMAX_DELAY);
         _readArpTable();
         xSemaphoreGive(_mutex);
+        hostnameResolver.update();
     }
 }
 
 // ---------------------------------------------------------------------------
-// Tâche FreeRTOS — exécutée sur le Core 0 (même core que lwIP)
+// Résolution des noms d'hôtes + détection ISP
+//
+// 1. Collecte les IPs online sans hostname (candidats à la résolution)
+// 2. Lance les requêtes PTR DNS batch (≤ 500 ms pour toutes les IPs)
+// 3. Pour chaque équipement : résolution mDNS > PTR, puis ISP detection
+// 4. Réécrit les champs enrichis dans _results sous protection du mutex
+// ---------------------------------------------------------------------------
+void NetworkScanner::_resolveHostnames() {
+    // 1. Copie des IPs à résoudre (sans mutex prolongé)
+    std::vector<String> ipsToResolve;
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (const auto& d : _results) {
+            if (d.online) ipsToResolve.push_back(d.ip);
+        }
+        xSemaphoreGive(_mutex);
+    }
+
+    if (ipsToResolve.empty()) return;
+
+    // 2. Batch PTR DNS (toutes les requêtes envoyées simultanément,
+    //    réponses collectées dans une fenêtre unique de 500 ms)
+    hostnameResolver.batchPtrDns(ipsToResolve);
+
+    // 3. Enrichissement de chaque équipement
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if (!d.online) continue;
+
+        // Résolution hostname (mDNS cache en priorité, PTR DNS en fallback)
+        HostnameSource src = HostnameSource::None;
+        String name = hostnameResolver.resolve(d.ip, src);
+
+        if (!name.isEmpty()) {
+            d.hostname = name;
+            d.source   = hostnameSourceStr(src);
+        } else if (!d.manufacturer.isEmpty()) {
+            d.source = hostnameSourceStr(HostnameSource::MAC);
+        }
+
+        // Détection ISP (Free / Orange / SFR / Bouygues)
+        // Utilise le hostname fraîchement résolu + manufacturer OUI
+        applyIspDetection(d);
+    }
+    xSemaphoreGive(_mutex);
+}
+
+// ---------------------------------------------------------------------------
+// Entrée propre de l'ESP32 dans la liste des équipements
+//
+// Le protocole ARP ne peut pas découvrir sa propre adresse IP : on ne
+// reçoit jamais de réponse ARP pour soi-même. On injecte donc manuellement
+// une entrée représentant cet appareil, identifiable par son hostname mDNS
+// et son adresse MAC. La source "Self" distingue cette entrée dans l'UI.
+// ---------------------------------------------------------------------------
+void NetworkScanner::_addSelfEntry() {
+    String ip  = WiFi.localIP().toString();
+    String mac = WiFi.macAddress();
+    mac.toUpperCase();   // WiFi.macAddress() peut retourner des minuscules
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+
+    // Déduplication : si l'ESP32 est déjà dans la liste (scan précédent), mise à jour
+    for (auto& d : _results) {
+        if (d.mac == mac) {
+            d.ip       = ip;
+            d.lastSeen = millis();
+            d.online   = true;
+            xSemaphoreGive(_mutex);
+            return;
+        }
+    }
+
+    NetworkDevice self;
+    self.ip       = ip;
+    self.mac      = mac;
+    self.hostname = MDNS_HOSTNAME;       // ex: "gateway-lab-v1"
+    self.model    = PROJECT_NAME;        // ex: "GatewayLabV1"
+    self.source   = "Self";
+    self.category = "Gateway";
+    self.lastSeen = millis();
+    self.online   = true;
+
+    // Fabricant depuis l'OUI (Espressif Systems pour les ESP32)
+    const OuiEntry* oui = lookupOui(mac);
+    if (oui) self.manufacturer = oui->manufacturer;
+
+    _results.push_back(self);
+    xSemaphoreGive(_mutex);
+    Log::i(TAG, "Auto-entrée : %s (%s) → %s", ip.c_str(), mac.c_str(), MDNS_HOSTNAME);
+}
+
+// ---------------------------------------------------------------------------
+// Tâche FreeRTOS — exécutée sur Core 0 (même core que lwIP / TCP stack)
+// Stack 16 Ko : nécessaire pour les appels lwIP + résolution DNS + std::map
 // ---------------------------------------------------------------------------
 void NetworkScanner::_task(void* self) {
     static_cast<NetworkScanner*>(self)->_run();
-    vTaskDelete(nullptr);   // Suppression de la tâche une fois terminée
+    vTaskDelete(nullptr);
 }
 
 void NetworkScanner::_run() {
+    // Démarrer l'écoute mDNS passive avant le sweep (capture les annonces
+    // émises par les équipements qui deviennent actifs sur le réseau)
+    hostnameResolver.clearCaches();
+    hostnameResolver.begin();
+
     _sweepSubnet();
 
-    // Dernière lecture ARP après le dernier lot
+    // Dernière lecture ARP après la fin du sweep
     vTaskDelay(pdMS_TO_TICKS(200));
     xSemaphoreTake(_mutex, portMAX_DELAY);
     _readArpTable();
     xSemaphoreGive(_mutex);
+    hostnameResolver.update();   // Traiter les derniers paquets mDNS
+
+    Log::i(TAG, "Sweep ARP terminé — %u équipement(s) détecté(s)", (unsigned)_results.size());
+
+    // Résolution des hostnames + détection ISP
+    _resolveHostnames();
+
+    // Arrêter l'écoute mDNS (libère le socket UDP multicast)
+    hostnameResolver.end();
+
+    // Ajouter l'ESP32 lui-même (non détectable par ARP)
+    _addSelfEntry();
 
     // =========================================================
     // NIVEAU 4 — Scan SSDP/UPnP
@@ -243,22 +348,10 @@ void NetworkScanner::_run() {
 }
 
 // ---------------------------------------------------------------------------
-// Résolution DNS inverse (PTR) — non disponible sur lwIP ESP32
-//
-// gethostbyaddr() n'est pas compilé dans le lwIP fourni par le framework
-// Arduino ESP32. La colonne "Nom" affiche "—" pour les équipements sans
-// entrée mDNS visible. Une alternative (requête PTR manuelle via netdb ou
-// mDNS) est documentée dans ROADMAP.md.
-// ---------------------------------------------------------------------------
-void NetworkScanner::_resolveHostnames() {
-    // no-op : gethostbyaddr non disponible sur cette plateforme
-}
-
-// ---------------------------------------------------------------------------
 // API publique
 // ---------------------------------------------------------------------------
 void NetworkScanner::begin() {
-    // Création du mutex de protection (obligatoire avant tout accès à _results)
+    if (_mutex) return;   // Idempotent — guard contre la double initialisation
     _mutex = xSemaphoreCreateMutex();
     Log::i(TAG, "Module initialisé");
 }
@@ -271,6 +364,7 @@ void NetworkScanner::startScan() {
     _scanning = true;
     // Création de la tâche sur Core 0 (8 Ko de stack — nécessaire pour les appels lwIP)
     // Stack augmenté à 16 Ko pour absorber les appels SSDP/HTTP (niveaux 4 et 5)
+    // Stack 16 Ko : lwIP + résolution DNS + std::map + buffers de paquets
     xTaskCreatePinnedToCore(_task, "net_scan", 16384, this, 1, &_taskHandle, 0);
     Log::i(TAG, "Scan réseau lancé");
 }
@@ -285,8 +379,6 @@ std::vector<NetworkDevice> NetworkScanner::getResults() const {
 }
 
 String NetworkScanner::resultsToJson() const {
-    // lastSeen est envoyé comme durée écoulée (ms) — le navigateur n'a pas
-    // à connaître l'epoch ESP32, il peut afficher directement "il y a Xs"
     uint32_t now = millis();
     xSemaphoreTake(_mutex, portMAX_DELAY);
     String json = "[";
@@ -304,7 +396,8 @@ String NetworkScanner::resultsToJson() const {
                 "\"elapsedMs\":" + String(now - d.lastSeen) + ","
                 "\"online\":" + (d.online ? "true" : "false") + "}";
     }
-    json += "]";
     xSemaphoreGive(_mutex);
+    String json;
+    serializeJson(doc, json);
     return json;
 }

@@ -2,81 +2,56 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gateway Lab V1 - OTA</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem 1rem;
-    }
-    h1 { color: #06b6d4; margin-bottom: 0.25rem; }
-    p.sub { color: #475569; font-size: 0.8rem; margin-bottom: 2rem; }
-    .card {
-      background: #1e293b;
-      border-radius: 12px;
-      padding: 1.5rem;
-      width: 100%;
-      max-width: 420px;
-      text-align: center;
-    }
-    label { display: block; color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.75rem; }
-    input[type=file] {
-      width: 100%;
-      padding: 0.5rem;
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      color: #e2e8f0;
-      margin-bottom: 1rem;
-    }
-    .btn {
-      display: block;
-      width: 100%;
-      padding: 0.875rem;
-      background: #0891b2;
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .btn:hover { background: #06b6d4; }
-    .progress {
-      width: 100%;
-      background: #334155;
-      border-radius: 8px;
-      height: 12px;
-      display: none;
-      margin-top: 1rem;
-      overflow: hidden;
-    }
-    .bar { height: 100%; background: #06b6d4; width: 0; transition: width 0.2s; }
-    #msg { margin-top: 1rem; font-size: 0.875rem; color: #94a3b8; }
-    a { color: #06b6d4; font-size: 0.8rem; margin-top: 1.5rem; display: block; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gateway Lab V1 — Mise à jour OTA</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>Gateway Lab V1</h1>
-  <p class="sub">Mise à jour OTA</p>
-  <div class="card">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="site-hdr">
+    <div class="site-name">
+      Gateway Lab&nbsp;V1
+      <span class="site-ver" id="site-ver">v—</span>
+    </div>
+    <span class="site-tag">Mise à jour OTA</span>
+  </header>
+
+  <!-- ── Navigation ────────────────────────────────────────── -->
+  <nav>
+    <a href="/">Accueil</a>
+    <a href="/scan">Équipements</a>
+    <a href="/update" class="active">OTA</a>
+  </nav>
+
+  <!-- ── Contenu ───────────────────────────────────────────── -->
+  <div class="card card-center">
+    <p class="card-title">Mise à jour du firmware</p>
     <form id="f">
-      <label>Sélectionnez le firmware (.bin)</label>
+      <label>Sélectionnez le fichier firmware (.bin)</label>
       <input type="file" id="fw" accept=".bin">
       <button type="submit" class="btn">Mettre à jour</button>
     </form>
-    <div class="progress" id="pg"><div class="bar" id="bar"></div></div>
+    <div class="progress" id="pg">
+      <div class="bar" id="bar"></div>
+    </div>
     <p id="msg"></p>
   </div>
-  <a href="/">← Retour</a>
+
+  <!-- ── Footer ────────────────────────────────────────────── -->
+  <footer>
+    <span id="footer-ts">—</span>
+    <a href="/">← Accueil</a>
+  </footer>
 
   <script>
+    // Récupère la version au chargement
+    fetch('/api/status').then(function(r) { return r.json(); }).then(function(d) {
+      if (d.version) document.getElementById('site-ver').textContent = 'v' + d.version;
+      document.getElementById('footer-ts').textContent =
+        'Firmware actuel : v' + (d.version || '—');
+    }).catch(function() {});
+
     document.getElementById('f').addEventListener('submit', function(e) {
       e.preventDefault();
       var file = document.getElementById('fw').files[0];
@@ -90,6 +65,8 @@
       xhr.upload.onprogress = function(e) {
         document.getElementById('pg').style.display = 'block';
         document.getElementById('bar').style.width = (e.loaded / e.total * 100) + '%';
+        document.getElementById('msg').textContent =
+          'Transfert : ' + Math.round(e.loaded / e.total * 100) + '%';
       };
       xhr.onload = function() {
         var m = document.getElementById('msg');
@@ -107,16 +84,14 @@
       xhr.send(fd);
     });
 
-    // Attend que l'ESP32 réponde à nouveau après le reboot, puis redirige vers /
     function waitForReboot() {
-      var m   = document.getElementById('msg');
+      var m = document.getElementById('msg');
       var dot = 0;
       var dots = ['', '.', '..', '...'];
-      // Attente initiale : laisser le temps à l'ESP32 de couper la connexion (~2 s)
       setTimeout(function poll() {
         dot = (dot + 1) % 4;
         m.textContent = 'Redémarrage en cours' + dots[dot];
-        fetch('/api/status', { method: 'GET', cache: 'no-store' })
+        fetch('/api/status', { cache: 'no-store' })
           .then(function(r) {
             if (r.ok) {
               m.textContent = 'Redémarrage terminé — redirection…';
