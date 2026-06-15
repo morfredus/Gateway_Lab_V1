@@ -26,7 +26,7 @@ struct NetworkDevice {
     String   manufacturer;    // Fabricant déduit du MAC OUI (ex: "Raspberry Pi")
     String   hostname;        // Nom DNS résolu (ex: "mon-pc.local"), vide si inconnu
     String   type;            // Type d'équipement (ex: "IoT", "Mobile") — usage futur
-    uint32_t lastSeen;        // Horodatage de la dernière détection (millis())
+    uint32_t lastSeen;        // millis() depuis le démarrage - à remplacer par epoch si RTC/NTP
     bool     online;          // true si détecté lors du dernier scan
 };
 
