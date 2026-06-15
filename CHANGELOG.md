@@ -5,6 +5,71 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.5] — 2026-06-15
+
+### Ajouté
+- **`data/oui.json`** : source unique pour 151 entrées OUI avec champs `manufacturer` et `category`
+  (SBC, IoT, Mobile, Network, Router, NAS, Camera, Printer, Audio, TV, Streaming, Smart Home,
+  Home Automation, Robot Vacuum, Security, Computer) — seul fichier à modifier pour enrichir la base
+- **`include/oui_table.h`** : header C++ généré automatiquement depuis `data/oui.json` par
+  `tools/minify_web.py`, contient `struct OuiEntry{oui, manufacturer, category}` et `OUI_TABLE[]`
+- **`doc/warnings.md`** : catalogue des limitations connues, comportements non évidents et points
+  de vigilance pour la maintenance et l'évolution du projet
+
+### Modifié
+- **`struct NetworkDevice`** (renommé depuis `HostInfo`) : champs refactorisés
+  `vendor` → `manufacturer`, `lastSeenMs` → `lastSeen`, ajout `type` (alimenté depuis `category` OUI)
+  et `online` — structure extensible pour les futures colonnes de l'interface
+- **`tools/minify_web.py`** : traite désormais `data/oui.json` en plus des pages HTML ;
+  génère `include/oui_table.h` avec déduplications des OUI et échappement des caractères spéciaux
+- **`network_scanner.cpp`** : retire la table OUI inline (100+ lignes), inclut `oui_table.h`,
+  `lookupOui()` retourne `const OuiEntry*` et alimente `manufacturer` + `type` en une seule passe
+- **`resultsToJson()`** : envoie `elapsedMs = millis() - d.lastSeen` (durée écoulée en ms)
+  au lieu du timestamp brut `millis()` — corrige l'affichage **"56 ans"** dans "Vu il y a"
+- **`web_src/scan.html`** : `fmtSeen()` reçoit `elapsedMs` directement (plus de `Date.now()`),
+  champ `d.vendor` → `d.manufacturer`, couleurs de texte éclaircies pour meilleur contraste
+- **`platformio.ini`** : `PROJECT_VERSION` → `0.0.5`
+
+### Technique
+- La durée "Vu il y a" était erronée car `millis()` (ms depuis boot ESP32, ex: 5 000)
+  était comparé à `Date.now()` (epoch Unix, ex: 1 750 000 000 000) côté navigateur — différence ≈ 56 ans.
+  Correction : `resultsToJson()` calcule l'écart côté ESP32 avant serialisation.
+- `lookupOui()` retourne `const OuiEntry*` (nullptr si inconnu) plutôt qu'une `String` copiée —
+  un seul accès à la table pour remplir deux champs de `NetworkDevice`
+- `OUI_TABLE[]` est en flash (`static const`) depuis `oui_table.h` inclus dans le `.cpp` uniquement —
+  pas d'exposition dans l'interface publique du module
+
+### Infrastructure
+- Workflow de génération unifié : `data/oui.json` + `web_src/*.html` → `python tools/minify_web.py`
+  → headers C++ versionnés — aucun autre outil requis
+- `minify_web.py` déduplique les OUI au passage (protection contre les doublons dans le JSON)
+
+---
+
+## [0.0.4] — 2026-06-15
+
+### Ajouté
+- **Résolution des noms d'hôtes** : après le sweep ARP, `gethostbyaddr()` interroge le DNS interne du routeur pour chaque IP découverte — les noms DHCP (ex: `iphone-de-alice`, `samsung-tv.lan`) s'affichent dans l'interface
+- **Page dédiée équipements** (`web_src/scan.html`) : tableau IP / Nom / Fabricant / MAC / Vu il y a, barre de progression animée, polling 2 s pendant le scan, rafraîchissement auto 60 s
+- **Navigation** : menu persistant Accueil / Équipements / OTA sur toutes les pages
+- **Route `GET /scan`** : sert `SCAN_PAGE` depuis la flash (PROGMEM)
+- **`include/web_interface_scan.h`** : header PROGMEM généré depuis `web_src/scan.html`
+- **`ROADMAP.md`** : renommé depuis `BACKLOG.md`
+
+### Modifié
+- `src/modules/network_scanner.h` : ajout du champ `hostname` dans `HostInfo`, déclaration `_resolveHostnames()`
+- `src/modules/network_scanner.cpp` : implémentation de `_resolveHostnames()` (appels `gethostbyaddr` séquentiels, mutex relâché pendant chaque résolution), `resultsToJson()` inclut le champ `hostname`
+- `web_src/index.html` : simplifié (tableau équipements retiré), accès `/scan` via menu et raccourcis
+- `tools/minify_web.py` : ajout de `scan.html` dans `PAGES[]`
+- `platformio.ini` : `PROJECT_VERSION` → `0.0.4`
+
+### Technique
+- `_resolveHostnames()` prend un snapshot thread-safe des IPs avant de relâcher le mutex, évitant de bloquer le serveur web (appels DNS pouvant dépasser 100 ms)
+- `gethostbyaddr()` non-réentrant : appelé séquentiellement depuis une unique tâche FreeRTOS dédiée, pas de risque de concurrence
+- `send_P()` pour `/scan` : lecture directe depuis la flash sans copie en RAM
+
+---
+
 ## [0.0.2] — 2026-06-14
 
 ### Ajouté
@@ -68,6 +133,63 @@ web_src/index.html  ──minify──►  include/web_interface.h      (INDEX_H
 web_src/ota.html    ──minify──►  include/web_interface_ota.h  (OTA_PAGE[]  PROGMEM)
 ```
 Aucune étape « Upload Filesystem Image » requise — le HTML voyage avec le firmware.
+
+---
+
+## [0.0.3] — 2026-06-15
+
+### Ajouté
+- **Architecture modulaire** : `src/` réorganisé en sous-dossiers thématiques
+  - `src/modules/` — modules fonctionnels indépendants et transposables
+  - `src/utils/` — utilitaires partagés header-only
+- **`WiFiManager`** (`modules/wifi_manager.h/.cpp`) : encapsule WiFiMulti, reconnexion
+  avec debounce 30 s, callback de connexion, mDNS intégré
+- **`OtaManager`** (`modules/ota_manager.h/.cpp`) : encapsule ArduinoOTA + routes web OTA,
+  `registerRoutes(WebServer&)` découplé
+- **`WebServerModule`** (`modules/web_server.h/.cpp`) : WebServer avec interface
+  `ScanProvider` pour découpler le scanner du serveur
+- **`NetworkScanner`** (`modules/network_scanner.h/.cpp`) : scan LAN async (FreeRTOS
+  task Core 0), sweep UDP du sous-réseau, lecture table ARP lwIP, déduplication par MAC,
+  lookup OUI embarqué (~40 fabricants courants)
+- **`Log`** (`utils/logger.h`) : wrapper Serial header-only avec niveaux DEBUG/INFO/WARN/ERROR,
+  désactivable via `-D LOG_LEVEL=0`
+- **Cartouche "Équipements réseau"** dans `web_src/index.html` : table IP / MAC / Fabricant /
+  Vu il y a, bouton "Scanner", rafraîchissement auto toutes les 30 s, polling 2 s pendant scan
+- **API REST** nouvelles routes :
+  - `GET  /api/devices` → `{scanning: bool, devices: [...]}`
+  - `POST /api/scan`    → déclenche un scan async
+
+### Modifié
+- `src/main.cpp` : réduit à 30 lignes — orchestre uniquement l'initialisation des modules
+- `web_src/index.html` : cartouche réseau aligné à la largeur du nouveau tableau équipements
+
+### Technique
+- **`ScanProvider`** (struct de lambdas) : interface de découplage entre `WebServerModule`
+  et `NetworkScanner` — pas d'include croisé entre modules
+- **Thread-safety** : `NetworkScanner` protège `_results` par `SemaphoreHandle_t` ;
+  `getResults()` retourne une copie value, jamais une référence mutable
+- **Sweep UDP** : envoie un paquet vide sur le port 9 (discard) pour chaque IP du sous-réseau
+  → déclenche la résolution ARP sans nécessiter `CONFIG_LWIP_RAW` ni socket ICMP
+- **Lecture ARP incrémentale** : `_readArpTable()` appelée tous les 16 hôtes pendant le sweep
+  pour capturer les réponses rapides avant que la table lwIP (10 entrées) ne soit réécrasée
+- **Déduplication MAC** : un équipement qui change d'IP entre deux scans est mis à jour
+  sans doublon dans `_results`
+- **`etharp_get_entry()`** : API lwIP 2.x disponible dans le SDK Arduino ESP32 ;
+  appelée depuis Core 0 (même core que le stack TCP/IP)
+
+### Infrastructure
+- **`src/modules/*.h`** : interfaces conçues pour être copiées dans d'autres projets ESP32
+  sans modification (seules `app_config.h` et `secrets.h` varient par projet)
+- **PlatformIO auto-discovery** : les `.cpp` dans `src/modules/` et `src/utils/` sont
+  compilés automatiquement sans modifier `platformio.ini`
+- **`main.cpp` comme orchestrateur** : aucune logique métier, uniquement
+  `module.begin()` + `module.loop()` — extension future = ajouter un module, pas modifier main
+- **`extra_scripts` corrigé** : déplacé de la section `[platformio]` vers `[env:esp32s3_n16r8]`
+  (seul emplacement valide selon la doc PlatformIO)
+- **`PROJECT_VERSION`** mis à jour → `0.0.3`
+- **Commentaires pédagogiques** ajoutés dans tous les fichiers `.h` et `.cpp` :
+  description du rôle de chaque fichier, explication des bibliothèques,
+  justification des choix techniques (byte-order, ARP, FreeRTOS, PROGMEM...)
 
 ---
 

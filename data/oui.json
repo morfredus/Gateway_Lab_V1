@@ -1,0 +1,192 @@
+[
+  {"oui": "B8:27:EB", "manufacturer": "Raspberry Pi", "category": "SBC"},
+  {"oui": "DC:A6:32", "manufacturer": "Raspberry Pi", "category": "SBC"},
+  {"oui": "E4:5F:01", "manufacturer": "Raspberry Pi", "category": "SBC"},
+  {"oui": "D8:3A:DD", "manufacturer": "Raspberry Pi", "category": "SBC"},
+
+  {"oui": "18:FE:34", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "24:6F:28", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "A4:CF:12", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "30:AE:A4", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "AC:67:B2", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "3C:61:05", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "FC:F5:C4", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "10:06:1C", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "50:FF:20", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "C8:F0:9E", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "CC:50:E3", "manufacturer": "Espressif", "category": "IoT"},
+  {"oui": "08:3A:F2", "manufacturer": "Espressif", "category": "IoT"},
+
+  {"oui": "00:17:88", "manufacturer": "Philips Hue", "category": "Home Automation"},
+  {"oui": "EC:B5:FA", "manufacturer": "Philips Hue", "category": "Home Automation"},
+
+  {"oui": "54:10:EC", "manufacturer": "Tado", "category": "Home Automation"},
+  {"oui": "88:6B:0F", "manufacturer": "Tado", "category": "Home Automation"},
+
+  {"oui": "28:CF:E9", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "AC:BC:32", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "F0:18:98", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "DC:56:E7", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "3C:22:FB", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "00:25:00", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "00:1B:63", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "00:16:CB", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "A8:86:DD", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "70:3E:AC", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "8C:85:90", "manufacturer": "Apple", "category": "Mobile"},
+  {"oui": "BC:D0:74", "manufacturer": "Apple", "category": "Mobile"},
+
+  {"oui": "8C:8D:28", "manufacturer": "Intel", "category": "Computer"},
+  {"oui": "00:1A:7D", "manufacturer": "Intel", "category": "Computer"},
+  {"oui": "00:1E:64", "manufacturer": "Intel", "category": "Computer"},
+  {"oui": "74:E5:F9", "manufacturer": "Intel", "category": "Computer"},
+
+  {"oui": "18:31:BF", "manufacturer": "Amazon", "category": "Smart Home"},
+  {"oui": "FC:A1:83", "manufacturer": "Amazon", "category": "Smart Home"},
+  {"oui": "74:75:48", "manufacturer": "Amazon", "category": "Smart Home"},
+  {"oui": "44:65:0D", "manufacturer": "Amazon", "category": "Smart Home"},
+  {"oui": "F0:27:2D", "manufacturer": "Amazon", "category": "Smart Home"},
+  {"oui": "40:B4:CD", "manufacturer": "Amazon", "category": "Smart Home"},
+
+  {"oui": "34:D2:70", "manufacturer": "Samsung", "category": "Mobile"},
+  {"oui": "78:F5:FD", "manufacturer": "Samsung", "category": "Mobile"},
+  {"oui": "8C:77:12", "manufacturer": "Samsung", "category": "Mobile"},
+  {"oui": "CC:07:AB", "manufacturer": "Samsung", "category": "Mobile"},
+  {"oui": "00:26:37", "manufacturer": "Samsung", "category": "Mobile"},
+  {"oui": "F4:9F:54", "manufacturer": "Samsung", "category": "Mobile"},
+
+  {"oui": "28:6C:07", "manufacturer": "Xiaomi", "category": "Mobile"},
+  {"oui": "F4:8B:32", "manufacturer": "Xiaomi", "category": "Mobile"},
+  {"oui": "50:EC:50", "manufacturer": "Xiaomi", "category": "Mobile"},
+  {"oui": "64:09:80", "manufacturer": "Xiaomi", "category": "Mobile"},
+  {"oui": "78:02:F8", "manufacturer": "Xiaomi", "category": "Mobile"},
+  {"oui": "18:59:36", "manufacturer": "Xiaomi", "category": "Mobile"},
+  {"oui": "34:CE:00", "manufacturer": "Xiaomi", "category": "Mobile"},
+  {"oui": "AC:F7:F3", "manufacturer": "Xiaomi", "category": "Mobile"},
+
+  {"oui": "00:E0:FC", "manufacturer": "Huawei", "category": "Mobile"},
+  {"oui": "08:19:A6", "manufacturer": "Huawei", "category": "Mobile"},
+  {"oui": "E8:CD:2D", "manufacturer": "Huawei", "category": "Mobile"},
+  {"oui": "48:46:FB", "manufacturer": "Huawei", "category": "Mobile"},
+
+  {"oui": "7C:D1:C3", "manufacturer": "Google", "category": "Smart Home"},
+  {"oui": "F4:F5:D8", "manufacturer": "Google", "category": "Smart Home"},
+  {"oui": "54:60:09", "manufacturer": "Google", "category": "Smart Home"},
+  {"oui": "20:DF:B9", "manufacturer": "Google", "category": "Smart Home"},
+  {"oui": "48:D6:D5", "manufacturer": "Google", "category": "Smart Home"},
+
+  {"oui": "A8:9C:ED", "manufacturer": "TP-Link", "category": "Network"},
+  {"oui": "50:C7:BF", "manufacturer": "TP-Link", "category": "Network"},
+  {"oui": "98:DA:C4", "manufacturer": "TP-Link", "category": "Network"},
+  {"oui": "C0:C9:E3", "manufacturer": "TP-Link", "category": "Network"},
+  {"oui": "B0:4E:26", "manufacturer": "TP-Link", "category": "Network"},
+  {"oui": "54:AF:97", "manufacturer": "TP-Link", "category": "Network"},
+
+  {"oui": "24:A4:3C", "manufacturer": "Ubiquiti", "category": "Network"},
+  {"oui": "68:D7:9A", "manufacturer": "Ubiquiti", "category": "Network"},
+  {"oui": "78:8A:20", "manufacturer": "Ubiquiti", "category": "Network"},
+  {"oui": "FC:EC:DA", "manufacturer": "Ubiquiti", "category": "Network"},
+  {"oui": "44:D9:E7", "manufacturer": "Ubiquiti", "category": "Network"},
+
+  {"oui": "4C:5E:0C", "manufacturer": "MikroTik", "category": "Network"},
+  {"oui": "D4:CA:6D", "manufacturer": "MikroTik", "category": "Network"},
+  {"oui": "CC:2D:E0", "manufacturer": "MikroTik", "category": "Network"},
+
+  {"oui": "00:09:5B", "manufacturer": "Netgear", "category": "Network"},
+  {"oui": "20:E5:2A", "manufacturer": "Netgear", "category": "Network"},
+  {"oui": "28:C6:8E", "manufacturer": "Netgear", "category": "Network"},
+  {"oui": "A0:40:A0", "manufacturer": "Netgear", "category": "Network"},
+
+  {"oui": "00:0C:6E", "manufacturer": "Asus", "category": "Network"},
+  {"oui": "04:92:26", "manufacturer": "Asus", "category": "Network"},
+  {"oui": "10:BF:48", "manufacturer": "Asus", "category": "Network"},
+  {"oui": "2C:FD:A1", "manufacturer": "Asus", "category": "Network"},
+
+  {"oui": "F8:1A:67", "manufacturer": "Freebox", "category": "Router"},
+  {"oui": "00:24:D4", "manufacturer": "Freebox", "category": "Router"},
+  {"oui": "68:A3:78", "manufacturer": "Freebox", "category": "Router"},
+
+  {"oui": "F4:CA:E5", "manufacturer": "Orange", "category": "Router"},
+  {"oui": "00:90:D0", "manufacturer": "Orange", "category": "Router"},
+  {"oui": "10:65:30", "manufacturer": "Orange", "category": "Router"},
+
+  {"oui": "00:22:A0", "manufacturer": "SFR", "category": "Router"},
+  {"oui": "84:9D:C7", "manufacturer": "SFR", "category": "Router"},
+
+  {"oui": "00:50:F2", "manufacturer": "Microsoft", "category": "Computer"},
+  {"oui": "28:18:78", "manufacturer": "Microsoft", "category": "Computer"},
+  {"oui": "00:17:FA", "manufacturer": "Microsoft", "category": "Computer"},
+
+  {"oui": "3C:52:82", "manufacturer": "HP", "category": "Computer"},
+  {"oui": "64:51:06", "manufacturer": "HP", "category": "Computer"},
+  {"oui": "98:90:96", "manufacturer": "HP", "category": "Computer"},
+
+  {"oui": "F8:B1:56", "manufacturer": "Dell", "category": "Computer"},
+  {"oui": "18:03:73", "manufacturer": "Dell", "category": "Computer"},
+  {"oui": "14:18:77", "manufacturer": "Dell", "category": "Computer"},
+
+  {"oui": "EC:89:14", "manufacturer": "Lenovo", "category": "Computer"},
+  {"oui": "F0:76:1C", "manufacturer": "Lenovo", "category": "Computer"},
+  {"oui": "54:EE:75", "manufacturer": "Lenovo", "category": "Computer"},
+
+  {"oui": "00:11:32", "manufacturer": "Synology", "category": "NAS"},
+  {"oui": "BC:5F:F4", "manufacturer": "Synology", "category": "NAS"},
+  {"oui": "00:11:32", "manufacturer": "Synology", "category": "NAS"},
+
+  {"oui": "24:5E:BE", "manufacturer": "QNAP", "category": "NAS"},
+  {"oui": "00:08:9B", "manufacturer": "QNAP", "category": "NAS"},
+
+  {"oui": "50:14:79", "manufacturer": "iRobot", "category": "Robot Vacuum"},
+  {"oui": "68:37:E9", "manufacturer": "iRobot", "category": "Robot Vacuum"},
+  {"oui": "00:50:C2", "manufacturer": "iRobot", "category": "Robot Vacuum"},
+
+  {"oui": "78:2B:46", "manufacturer": "Roborock", "category": "Robot Vacuum"},
+  {"oui": "58:63:56", "manufacturer": "Roborock", "category": "Robot Vacuum"},
+
+  {"oui": "78:28:CA", "manufacturer": "Sonos", "category": "Audio"},
+  {"oui": "5C:AA:FD", "manufacturer": "Sonos", "category": "Audio"},
+  {"oui": "94:9F:3E", "manufacturer": "Sonos", "category": "Audio"},
+  {"oui": "B8:E9:37", "manufacturer": "Sonos", "category": "Audio"},
+  {"oui": "34:7E:5C", "manufacturer": "Sonos", "category": "Audio"},
+
+  {"oui": "B0:09:DA", "manufacturer": "Ring", "category": "Security"},
+  {"oui": "EC:1A:59", "manufacturer": "Ring", "category": "Security"},
+
+  {"oui": "44:19:B6", "manufacturer": "Hikvision", "category": "Camera"},
+  {"oui": "BC:AD:28", "manufacturer": "Hikvision", "category": "Camera"},
+  {"oui": "28:57:BE", "manufacturer": "Hikvision", "category": "Camera"},
+
+  {"oui": "08:ED:ED", "manufacturer": "Dahua", "category": "Camera"},
+  {"oui": "3C:EF:8C", "manufacturer": "Dahua", "category": "Camera"},
+
+  {"oui": "EC:71:DB", "manufacturer": "Reolink", "category": "Camera"},
+  {"oui": "B0:4F:13", "manufacturer": "Reolink", "category": "Camera"},
+
+  {"oui": "00:1B:A9", "manufacturer": "Brother", "category": "Printer"},
+  {"oui": "00:80:77", "manufacturer": "Brother", "category": "Printer"},
+  {"oui": "00:0C:00", "manufacturer": "Brother", "category": "Printer"},
+  {"oui": "30:05:5C", "manufacturer": "Brother", "category": "Printer"},
+
+  {"oui": "F8:63:3F", "manufacturer": "Canon", "category": "Printer"},
+  {"oui": "74:38:B7", "manufacturer": "Canon", "category": "Printer"},
+  {"oui": "00:00:85", "manufacturer": "Canon", "category": "Printer"},
+
+  {"oui": "00:26:AB", "manufacturer": "Epson", "category": "Printer"},
+  {"oui": "74:F8:DB", "manufacturer": "Epson", "category": "Printer"},
+  {"oui": "AC:18:26", "manufacturer": "Epson", "category": "Printer"},
+
+  {"oui": "64:BC:0C", "manufacturer": "LG", "category": "TV"},
+  {"oui": "A8:23:FE", "manufacturer": "LG", "category": "TV"},
+  {"oui": "CC:2D:83", "manufacturer": "LG", "category": "TV"},
+
+  {"oui": "00:13:15", "manufacturer": "Sony", "category": "TV"},
+  {"oui": "AC:9B:0A", "manufacturer": "Sony", "category": "TV"},
+  {"oui": "70:35:09", "manufacturer": "Sony", "category": "TV"},
+
+  {"oui": "B8:3E:59", "manufacturer": "Roku", "category": "Streaming"},
+  {"oui": "D0:4D:2C", "manufacturer": "Roku", "category": "Streaming"},
+  {"oui": "CC:6D:A0", "manufacturer": "Roku", "category": "Streaming"},
+  {"oui": "08:05:81", "manufacturer": "Roku", "category": "Streaming"},
+
+  {"oui": "00:04:4B", "manufacturer": "Nvidia", "category": "Streaming"}
+]
