@@ -21,13 +21,19 @@
 
 // Informations collectées pour chaque équipement découvert
 struct NetworkDevice {
-    String   ip;              // Adresse IPv4 (ex: "192.168.1.10")
-    String   mac;             // Adresse MAC (ex: "B8:27:EB:AA:BB:CC")
-    String   manufacturer;    // Fabricant déduit du MAC OUI (ex: "Raspberry Pi")
-    String   hostname;        // Nom DNS résolu (ex: "mon-pc.local"), vide si inconnu
-    String   type;            // Type d'équipement (ex: "IoT", "Mobile") — usage futur
-    uint32_t lastSeen;        // millis() depuis le démarrage - à remplacer par epoch si RTC/NTP
-    bool     online;          // true si détecté lors du dernier scan
+    String   ip;            // Adresse IPv4 (ex: "192.168.1.10")
+    String   mac;           // Adresse MAC  (ex: "B8:27:EB:AA:BB:CC")
+
+    String   manufacturer;  // Fabricant déduit du MAC OUI ou de la détection FAI
+    String   hostname;      // Nom résolu (ex: "mon-pc", "livebox") — vide si inconnu
+
+    String   category;      // Type d'équipement : "Router", "IoT", "Mobile", "SBC"…
+    String   model;         // Modèle détaillé si disponible (ex: "Freebox Ultra", "")
+    String   os;            // Système d'exploitation (ex: "FreeboxOS", "DSM 7.x")
+    String   source;        // Source de résolution : "MAC" | "SSDP" | "HueAPI" | "SynologyAPI" | "FreeboxAPI" | ""
+
+    uint32_t lastSeen;      // millis() du dernier scan — converti en elapsed côté client
+    bool     online;        // true si détecté lors du dernier scan
 };
 
 class NetworkScanner {

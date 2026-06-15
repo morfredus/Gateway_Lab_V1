@@ -9,6 +9,8 @@
  */
 
 #include "network_scanner.h"
+#include "ssdp_scanner.h"   // Niveau 4 : découverte UPnP/SSDP
+#include "device_apis.h"    // Niveau 5 : APIs Hue / Synology / Freebox
 #include <WiFi.h>
 #include "lwip/etharp.h"   // etharp_get_entry(), etharp_request()
 #include "lwip/netif.h"    // netif_default
@@ -81,7 +83,8 @@ void NetworkScanner::_readArpTable() {
             const OuiEntry* oui = lookupOui(macStr);
             if (oui) {
                 h.manufacturer = oui->manufacturer;
-                h.type         = oui->category;
+                h.category     = oui->category;
+                h.source       = "MAC";
             }
             _results.push_back(h);
         }
@@ -178,6 +181,62 @@ void NetworkScanner::_run() {
     _readArpTable();
     xSemaphoreGive(_mutex);
 
+    // =========================================================
+    // NIVEAU 4 — Scan SSDP/UPnP
+    //
+    // discover() est non bloquant pour le serveur web car
+    // exécuté ici dans la tâche FreeRTOS (Core 0).
+    // Les I/O réseau se font HORS mutex pour ne pas bloquer
+    // les lectures /api/devices pendant le scan.
+    // =========================================================
+    std::vector<NetworkDevice> ssdpDevices = ssdpScanner.discover();
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (const auto& sd : ssdpDevices) {
+        bool found = false;
+        for (auto& d : _results) {
+            if (d.ip == sd.ip) {
+                // Enrichissement d'un device déjà découvert par ARP
+                if (d.manufacturer.isEmpty()) d.manufacturer = sd.manufacturer;
+                if (d.category.isEmpty())     d.category     = sd.category;
+                if (d.model.isEmpty())        d.model        = sd.model;
+                if (d.hostname.isEmpty())     d.hostname     = sd.hostname;
+                if (d.os.isEmpty())           d.os           = sd.os;
+                d.source = "SSDP";
+                found = true;
+                break;
+            }
+        }
+        // Device visible uniquement par SSDP (pas de réponse ARP)
+        if (!found && !sd.ip.isEmpty()) {
+            _results.push_back(sd);
+        }
+    }
+    xSemaphoreGive(_mutex);
+
+    // =========================================================
+    // NIVEAU 5 — APIs spécifiques (Hue, Synology, Freebox)
+    //
+    // On travaille sur une copie pour ne pas tenir le mutex
+    // pendant les appels HTTP (qui peuvent prendre 1-2 s).
+    // =========================================================
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    auto workCopy = _results;
+    xSemaphoreGive(_mutex);
+
+    bool anyEnriched = false;
+    for (auto& dev : workCopy) {
+        if (DeviceApis::enrichIfApplicable(dev)) {
+            anyEnriched = true;
+        }
+    }
+
+    if (anyEnriched) {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        _results = workCopy;
+        xSemaphoreGive(_mutex);
+    }
+
     Log::i(TAG, "Scan terminé — %u équipement(s) détecté(s)", (unsigned)_results.size());
     _scanning   = false;
     _taskHandle = nullptr;
@@ -211,7 +270,8 @@ void NetworkScanner::startScan() {
     }
     _scanning = true;
     // Création de la tâche sur Core 0 (8 Ko de stack — nécessaire pour les appels lwIP)
-    xTaskCreatePinnedToCore(_task, "net_scan", 8192, this, 1, &_taskHandle, 0);
+    // Stack augmenté à 16 Ko pour absorber les appels SSDP/HTTP (niveaux 4 et 5)
+    xTaskCreatePinnedToCore(_task, "net_scan", 16384, this, 1, &_taskHandle, 0);
     Log::i(TAG, "Scan réseau lancé");
 }
 
@@ -237,7 +297,10 @@ String NetworkScanner::resultsToJson() const {
                 "\"mac\":\"" + d.mac + "\","
                 "\"manufacturer\":\"" + d.manufacturer + "\","
                 "\"hostname\":\"" + d.hostname + "\","
-                "\"type\":\"" + d.type + "\","
+                "\"category\":\"" + d.category + "\","
+                "\"model\":\"" + d.model + "\","
+                "\"os\":\"" + d.os + "\","
+                "\"source\":\"" + d.source + "\","
                 "\"elapsedMs\":" + String(now - d.lastSeen) + ","
                 "\"online\":" + (d.online ? "true" : "false") + "}";
     }

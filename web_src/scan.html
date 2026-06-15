@@ -127,6 +127,8 @@
     .type-security   { background:#2a1e1e; color:#f87171; }
     .type-printer    { background:#1e2a1e; color:#86efac; }
     .type-robot      { background:#1c3a2a; color:#4ade80; }
+    .type-smarthub   { background:#2a1a3a; color:#e879f9; }
+    .type-speaker    { background:#1a2a3a; color:#67e8f9; }
     .seen-cell { color: #94a3b8; white-space: nowrap; }
     .empty-msg { color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 1.5rem 0; }
     .scan-info { font-size: 0.75rem; color: #38bdf8; margin-bottom: 0.75rem; }
@@ -207,14 +209,22 @@
       });
       tbody.innerHTML = devices.map(function(d) {
         var name   = d.hostname || '<span style="color:#475569">—</span>';
+        var mfrLabel = d.model ? d.manufacturer + ' · ' + d.model : d.manufacturer;
         var mfr    = d.manufacturer
-          ? '<span class="vendor-badge">' + d.manufacturer + '</span>'
+          ? '<span class="vendor-badge">' + mfrLabel + '</span>'
           : '<span style="color:#475569">—</span>';
-        var typeCls = d.type
-          ? 'type-' + d.type.toLowerCase().replace(/[^a-z]/g, '').replace('smarthome','smarthome').replace('homeautomation','homeauto').replace('robotvacuum','robot')
+        var cat = d.category || '';
+        var typeCls = cat
+          ? 'type-' + cat.toLowerCase()
+              .replace(/[^a-z]/g, '')
+              .replace('smarthome','smarthome')
+              .replace('homeautomation','homeauto')
+              .replace('robotvacuum','robot')
           : '';
-        var typeCell = d.type
-          ? '<span class="type-badge ' + typeCls + '">' + d.type + '</span>'
+        var typeLabel = cat || '';
+        var modelTip  = d.model ? ' title="' + d.model + (d.os ? ' · ' + d.os : '') + '"' : '';
+        var typeCell = cat
+          ? '<span class="type-badge ' + typeCls + '"' + modelTip + '>' + typeLabel + '</span>'
           : '<span style="color:#475569">—</span>';
         return '<tr>' +
           '<td class="ip-cell">' + d.ip + '</td>' +
