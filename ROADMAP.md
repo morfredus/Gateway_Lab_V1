@@ -1,44 +1,53 @@
-# Backlog — Gateway Lab V1
+# Roadmap — Gateway Lab V1
 
-Fonctionnalités planifiées par ordre de priorité.
+Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ---
 
-## En cours / Prochaine version
+## En cours / Prochaine version (v0.0.6)
 
-- **Scan de ports** (`v0.1.x`) : détection des services actifs sur chaque équipement (HTTP, SSH, MQTT...)
-- **Identification automatique des fabricants** : élargissement de la table OUI embarquée
-  (actuellement ~40 entrées) — import de la base IEEE complète tronquée
+- **Résolution des noms d'hôtes** : implémentation d'une requête PTR DNS manuelle
+  (construire `x.x.x.x.in-addr.arpa` et interroger le DNS du routeur via `lwip/dns.h`)
+  en remplacement du `gethostbyaddr()` non disponible sur lwIP ESP32 — voir `doc/warnings.md`
+- **Affichage de la catégorie OUI** dans la page Équipements (colonne Type ou badge coloré)
 
 ---
 
 ## Roadmap produit
 
-### Découverte réseau
-- **mDNS/SSDP/Bonjour** : annonces de services sur le réseau local (v0.3.0)
-- **DNS-SD** : découverte des services annoncés (_http._tcp, _mqtt._tcp...)
-- **Historique des équipements** : persistance des appareils vus entre les redémarrages (NVS ou SD)
-- **Détection de nouveaux équipements** : notification à l'apparition d'un MAC inconnu
+### v0.1.x — Inventaire enrichi
+- **Scan de ports** : détection des services actifs sur chaque équipement (HTTP, SSH, MQTT, SMB…)
+- **Détection de nouveaux équipements** : notification à l'apparition d'un MAC inconnu (log + API)
+- **Historique des équipements** : persistance des appareils vus entre les redémarrages (NVS ESP32)
+- **Endpoint `/api/export`** : téléchargement de l'inventaire complet en JSON
 
-### Intégrations domotiques
-- **Support Philips Hue** (`v0.4.0`) : liste des ampoules, état on/off, couleur
-- **Support Tado** : lecture des thermostats et zones de chauffe
-- **Support X-Sense** : capteurs de fumée et CO connectés
+### v0.2.x — Découverte passive
+- **mDNS/Bonjour passif** : écoute des annonces `_http._tcp`, `_mqtt._tcp`, etc.
+- **SSDP/UPnP** : découverte des équipements annoncés (TV, imprimantes, NAS…)
+- **DNS-SD** : agrégation des services annoncés par type
+
+### v0.3.x — Intégrations domotiques
+- **Philips Hue** : liste des ampoules, état on/off, couleur via API locale
+- **Tado** : lecture des thermostats et zones de chauffe
+- **X-Sense** : capteurs de fumée et CO connectés
 - **Détection caméras Xiaomi** : identification par signature HTTP/mDNS
 
-### Connectivité
-- **MQTT** (`v0.5.0`) : publication des équipements détectés sur un broker MQTT
-- **MQTT Broker intégré** : broker embarqué sur l'ESP32 pour les réseaux isolés
-- **Export JSON** : endpoint `/api/export` pour récupérer l'inventaire complet
+### v0.4.x — Connectivité
+- **MQTT** : publication des équipements détectés sur un broker externe
+- **Webhook** : notification HTTP sur événement (nouveau MAC, équipement hors ligne…)
 
-### Matériel
+### v0.5.x — Matériel
 - **Écran OLED** : affichage local du nombre d'équipements et de l'IP
-- **Analyse Bluetooth** : découverte des équipements BLE à proximité
+- **Analyse Bluetooth Low Energy** : découverte des équipements BLE à proximité
 
 ---
 
 ## ✅ Réalisé
 
-- ~~Interface Web~~ → v0.0.2 (page d'accueil PROGMEM, cartouche réseau, OTA)
-- ~~Identifier automatiquement les fabricants via les adresses MAC (OUI)~~ → v0.0.3 (table OUI embarquée ~40 entrées)
-- ~~Scan réseau~~ → v0.0.3 (sweep UDP + ARP lwIP, FreeRTOS async)
+| Version | Fonctionnalité |
+|---------|----------------|
+| v0.0.1 | Structure PlatformIO, board_config.h, app_config.h, secrets_example.h, outils Python |
+| v0.0.2 | WiFiMulti, ArduinoOTA, WebServer, mDNS, HTML PROGMEM (abandon SPIFFS), pipeline minification |
+| v0.0.3 | Architecture modulaire (`src/modules/`, `src/utils/`), NetworkScanner FreeRTOS, sweep ARP lwIP, OUI ~40 entrées |
+| v0.0.4 | Page `/scan` dédiée, navigation multi-pages, `struct NetworkDevice`, fix "Vu il y a 56 ans" |
+| v0.0.5 | OUI externalisé dans `data/oui.json` (151 entrées, 16 catégories), `include/oui_table.h` généré, `minify_web.py` unifié |
