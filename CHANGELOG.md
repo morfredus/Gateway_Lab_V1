@@ -17,6 +17,24 @@ Format : [Semantic Versioning](https://semver.org/)
   `python tools/minify_web.py` — le header intègre maintenant `d.category`,
   `d.model` et `d.source`.
 
+- **ESP32 absent de sa propre liste d'équipements** (`network_scanner.cpp`) :
+  Le protocole ARP ne peut pas découvrir sa propre adresse IP (pas de réponse ARP
+  pour soi-même). L'ESP32 n'apparaissait donc jamais dans le tableau.
+  Correction : nouvelle méthode `_addSelfEntry()` injectée en fin de `_run()` ;
+  crée une entrée avec `WiFi.localIP()`, `WiFi.macAddress()`, `hostname = MDNS_HOSTNAME`,
+  `category = "Gateway"`, `source = "Self"`. Idempotente entre deux scans.
+
+- **Badge "PTR" opaque pour l'utilisateur** (`web_src/scan.html`) :
+  Le badge affiché à côté du nom d'hôte ne donnait aucune indication sur sa
+  signification. Correction : renommé `"DNS↩"` (flèche inverse = résolution inverse)
+  avec tooltip `title="DNS inverse (PTR) — nom fourni par le routeur / box"`.
+  Le badge `"Self"` pour l'ESP32 affiche `"ESP32"` avec tooltip explicatif.
+
+- **Modèle sous le fabricant peu lisible** (`web_src/scan.html`) :
+  La ligne modèle (ex: "Livebox") était trop sombre (#64748b) par rapport à
+  la couleur de fond. Correction : passage à #94a3b8 et margin-top légèrement
+  augmenté pour une meilleure séparation visuelle avec le badge fabricant.
+
 ### Ajouté
 
 - **`src/modules/hostname_resolver.h/.cpp`** : nouveau module de résolution des noms d'hôtes
