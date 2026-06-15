@@ -45,8 +45,9 @@ private:
     void _handleApiScanTrigger();   // Démarre un scan réseau
     void _handleNotFound();         // Réponse 404 pour les routes inconnues
 
-    ScanProvider _scan;        // Fonctions fournies par le scanner
-    bool         _hasScan = false;  // true si registerScanProvider() a été appelé
+    ScanProvider _scan;
+    bool         _hasScan  = false;  // true si registerScanProvider() a été appelé
+    bool         _started  = false;  // true si begin() a déjà été appelé
 };
 
 // Instance globale
