@@ -1,46 +1,69 @@
+/**
+ * NetworkScanner — Découverte des équipements connectés au réseau local
+ *
+ * Fonctionnement du scan :
+ *   1. Envoi d'un paquet UDP vide sur le port 9 (discard) à chaque adresse
+ *      IP du sous-réseau → déclenche la résolution ARP par lwIP
+ *   2. Lecture de la table ARP lwIP toutes les 16 sondes pour capturer
+ *      les réponses avant que la table (10 entrées max) ne soit écrasée
+ *   3. Déduplication par adresse MAC — un équipement garde son entrée
+ *      même s'il change d'IP entre deux scans
+ *   4. Identification du fabricant via les 3 premiers octets MAC (OUI)
+ *
+ * Le scan s'exécute dans une tâche FreeRTOS sur le Core 0 (même core que
+ * le stack TCP/IP) pour ne pas bloquer l'interface web pendant l'opération.
+ *
+ * Durée typique sur un réseau /24 : 5 à 15 secondes selon le nombre d'hôtes.
+ */
+
 #pragma once
 #include <Arduino.h>
 #include <vector>
 
-// ---------------------------------------------------------------------------
-// NetworkScanner — découverte des équipements LAN
-// Sweep UDP du sous-réseau + lecture table ARP lwIP, tâche FreeRTOS async
-// Portable : dépend uniquement de WiFi.h et lwIP (esp32 Arduino)
-// ---------------------------------------------------------------------------
-
+// Informations collectées pour chaque équipement découvert
 struct HostInfo {
-    String   ip;
-    String   mac;
-    String   vendor;        // dérivé des 3 premiers octets MAC (OUI)
-    uint32_t lastSeenMs;    // millis() au moment de la découverte
+    String   ip;           // Adresse IPv4 (ex: "192.168.1.10")
+    String   mac;          // Adresse MAC (ex: "B8:27:EB:AA:BB:CC")
+    String   vendor;       // Fabricant déduit du MAC (ex: "Raspberry Pi")
+    uint32_t lastSeenMs;   // Horodatage de la dernière détection (millis())
 };
 
 class NetworkScanner {
 public:
-    // Initialise le mutex et la liste. Appeler après WiFi connecté.
+    // Initialisation du mutex de protection et de la liste des résultats
     void begin();
 
-    // Lance un scan async (FreeRTOS task Core 0). Sans effet si déjà en cours.
+    // Lancement du scan asynchrone (tâche FreeRTOS)
+    // Sans effet si un scan est déjà en cours
     void startScan();
 
+    // État du scan : true pendant l'exécution de la tâche FreeRTOS
     bool isScanRunning() const;
 
-    // Retourne une copie thread-safe des résultats courants
+    // Copie thread-safe des résultats (protégée par mutex)
     std::vector<HostInfo> getResults() const;
 
-    // Sérialise en JSON (thread-safe)
+    // Sérialisation JSON des résultats pour l'API web /api/devices
     String resultsToJson() const;
 
 private:
+    // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
     static void _task(void* self);
-    void        _run();             // corps de la tâche
-    void        _sweepSubnet();     // envoi UDP pour déclencher ARP
-    void        _readArpTable();    // lecture table ARP lwIP
 
-    SemaphoreHandle_t      _mutex      = nullptr;
-    TaskHandle_t           _taskHandle = nullptr;
-    std::vector<HostInfo>  _results;
-    volatile bool          _scanning   = false;
+    // Corps du scan : sweep + lecture ARP + attente finale
+    void _run();
+
+    // Envoi UDP sur tout le sous-réseau pour déclencher la résolution ARP
+    void _sweepSubnet();
+
+    // Lecture et intégration des entrées de la table ARP lwIP
+    void _readArpTable();
+
+    SemaphoreHandle_t      _mutex      = nullptr;  // Protection concurrente de _results
+    TaskHandle_t           _taskHandle = nullptr;  // Handle de la tâche FreeRTOS
+    std::vector<HostInfo>  _results;               // Liste accumulée des équipements
+    volatile bool          _scanning   = false;    // Indicateur d'état du scan
 };
 
+// Instance globale
 extern NetworkScanner netScanner;
