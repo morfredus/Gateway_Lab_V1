@@ -1,39 +1,53 @@
+/**
+ * WebServerModule — Serveur HTTP et interface web de Gateway Lab V1
+ *
+ * Routes exposées :
+ *   GET  /             — Page d'accueil (HTML embarqué en PROGMEM)
+ *   GET  /api/status   — État du système en JSON (WiFi, version, uptime...)
+ *   GET  /api/devices  — Liste des équipements découverts + état du scan
+ *   POST /api/scan     — Déclenchement d'un scan réseau
+ *   GET  /update       — Page de mise à jour OTA (formulaire upload)
+ *   POST /update       — Réception et installation d'un firmware .bin
+ *
+ * Découplage via ScanProvider :
+ *   WebServerModule ne connaît pas NetworkScanner directement.
+ *   Il reçoit un ensemble de fonctions lambda (ScanProvider) qui font le lien.
+ *   Cela permet de remplacer le scanner sans modifier le serveur.
+ */
+
 #pragma once
 #include <Arduino.h>
 #include <functional>
 
-// ---------------------------------------------------------------------------
-// WebServerModule — WebServer HTTP port 80 + mDNS
-// Découplé des autres modules via ScanProvider
-// Portable : dépend de web_interface*.h, app_config.h, ArduinoJson
-// ---------------------------------------------------------------------------
-
+// Interface de communication entre le serveur web et le scanner réseau.
+// Chaque champ est une fonction lambda fournie par main.cpp.
 struct ScanProvider {
-    std::function<bool()>   isScanning;      // scanner occupé ?
-    std::function<String()> getJson;         // résultats JSON
-    std::function<void()>   triggerScan;     // déclencher un scan
+    std::function<bool()>   isScanning;   // Le scan est-il en cours ?
+    std::function<String()> getJson;      // Résultats sérialisés en JSON
+    std::function<void()>   triggerScan;  // Lancement d'un nouveau scan
 };
 
 class WebServerModule {
 public:
-    // Enregistre le fournisseur de données scanner — avant begin()
+    // Enregistrement du fournisseur de données scanner (avant begin())
     void registerScanProvider(ScanProvider p);
 
-    // Démarre le WebServer et mDNS
+    // Démarrage du serveur HTTP sur le port spécifié
     void begin(uint16_t port = 80);
 
-    // À appeler dans loop()
+    // Traitement des requêtes HTTP en attente — appeler dans loop()
     void loop();
 
 private:
-    void _handleRoot();
-    void _handleApiStatus();
-    void _handleApiDevices();
-    void _handleApiScanTrigger();
-    void _handleNotFound();
+    void _handleRoot();             // Sert la page HTML principale
+    void _handleApiStatus();        // Retourne l'état WiFi/système en JSON
+    void _handleApiDevices();       // Retourne la liste des équipements en JSON
+    void _handleApiScanTrigger();   // Démarre un scan réseau
+    void _handleNotFound();         // Réponse 404 pour les routes inconnues
 
-    ScanProvider _scan;
-    bool         _hasScan = false;
+    ScanProvider _scan;        // Fonctions fournies par le scanner
+    bool         _hasScan = false;  // true si registerScanProvider() a été appelé
 };
 
+// Instance globale
 extern WebServerModule webSrv;
