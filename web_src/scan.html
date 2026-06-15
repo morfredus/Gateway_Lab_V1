@@ -19,7 +19,7 @@
     /* Navigation */
     nav {
       width: 100%;
-      max-width: 700px;
+      max-width: 900px;
       display: flex;
       gap: 0.25rem;
       padding: 0.75rem 0;
@@ -45,7 +45,7 @@
       border-radius: 12px;
       padding: 1.5rem;
       width: 100%;
-      max-width: 700px;
+      max-width: 900px;
       box-shadow: 0 4px 24px rgba(0,0,0,0.3);
       margin-bottom: 1.5rem;
     }
@@ -78,7 +78,7 @@
     .progress-bar  { height: 100%; background: #06b6d4; border-radius: 6px; width: 0; transition: width 0.5s; }
     /* Table */
     .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 500px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 620px; }
     th {
       text-align: left;
       color: #94a3b8;
@@ -92,9 +92,14 @@
     td { padding: 0.55rem 0.5rem; border-bottom: 1px solid #ffffff0a; color: #e2e8f0; vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #ffffff06; }
+    /* Cellules spécifiques */
     .ip-cell   { font-weight: 700; color: #f1f5f9; font-family: monospace; font-size: 0.82rem; white-space: nowrap; }
     .mac-cell  { font-family: monospace; font-size: 0.72rem; color: #94a3b8; white-space: nowrap; }
     .name-cell { color: #7dd3fc; }
+    .name-sub  { font-size: 0.68rem; color: #475569; margin-top: 0.1rem; }
+    .mfr-cell  { }
+    .mfr-model { font-size: 0.68rem; color: #64748b; margin-top: 0.1rem; }
+    /* Badges fabricant */
     .vendor-badge {
       font-size: 0.65rem;
       background: #1e3a5f;
@@ -103,6 +108,20 @@
       padding: 0.15rem 0.45rem;
       white-space: nowrap;
     }
+    /* Badge source de résolution */
+    .source-badge {
+      font-size: 0.58rem;
+      border-radius: 3px;
+      padding: 0.1rem 0.35rem;
+      margin-left: 0.3rem;
+      vertical-align: middle;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    .source-mdns { background: #064e3b; color: #34d399; }
+    .source-ptr  { background: #1e1a36; color: #a78bfa; }
+    .source-mac  { background: #1e293b; color: #64748b; }
+    /* Badges type/catégorie */
     .type-badge {
       font-size: 0.6rem;
       border-radius: 4px;
@@ -130,6 +149,8 @@
     .seen-cell { color: #94a3b8; white-space: nowrap; }
     .empty-msg { color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 1.5rem 0; }
     .scan-info { font-size: 0.75rem; color: #38bdf8; margin-bottom: 0.75rem; }
+    /* Valeur absente */
+    .none { color: #334155; }
   </style>
 </head>
 <body>
@@ -162,9 +183,9 @@
         <thead>
           <tr>
             <th>IP</th>
-            <th>Nom</th>
+            <th>Nom d'hôte</th>
             <th>Fabricant</th>
-            <th>Type</th>
+            <th>Catégorie</th>
             <th>MAC</th>
             <th>Vu il y a</th>
           </tr>
@@ -189,42 +210,92 @@
       return Math.floor(s / 3600) + 'h';
     }
 
+    // Génère la classe CSS pour le badge de catégorie
+    function categoryClass(cat) {
+      if (!cat) return '';
+      return 'type-' + cat.toLowerCase()
+        .replace(/[^a-z]/g, '')
+        .replace('smarthome',     'smarthome')
+        .replace('homeautomation','homeauto')
+        .replace('robotvacuum',   'robot');
+    }
+
+    // Génère le badge de source de résolution (mDNS / PTR / MAC)
+    function sourceBadge(source) {
+      if (!source || source === 'MAC') return '';
+      var cls = source === 'mDNS' ? 'source-mdns' : 'source-ptr';
+      return '<span class="source-badge ' + cls + '">' + source + '</span>';
+    }
+
     function renderDevices(devices) {
       var tbody = document.getElementById('devices-body');
       var meta  = document.getElementById('scan-meta');
+
       if (!devices || devices.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Aucun équipement détecté</td></tr>';
         meta.textContent = '0 équipement';
         return;
       }
-      meta.textContent = devices.length + ' équipement' + (devices.length > 1 ? 's' : '') + ' détecté' + (devices.length > 1 ? 's' : '');
-      // Tri par IP (4e octet)
+
+      meta.textContent = devices.length + ' équipement' + (devices.length > 1 ? 's' : '') +
+                         ' détecté' + (devices.length > 1 ? 's' : '');
+
+      // Tri par IP (octet par octet)
       devices.sort(function(a, b) {
         var pa = a.ip.split('.').map(Number);
         var pb = b.ip.split('.').map(Number);
         for (var i = 0; i < 4; i++) { if (pa[i] !== pb[i]) return pa[i] - pb[i]; }
         return 0;
       });
+
       tbody.innerHTML = devices.map(function(d) {
-        var name   = d.hostname || '<span style="color:#475569">—</span>';
-        var mfr    = d.manufacturer
-          ? '<span class="vendor-badge">' + d.manufacturer + '</span>'
-          : '<span style="color:#475569">—</span>';
-        var typeCls = d.type
-          ? 'type-' + d.type.toLowerCase().replace(/[^a-z]/g, '').replace('smarthome','smarthome').replace('homeautomation','homeauto').replace('robotvacuum','robot')
-          : '';
-        var typeCell = d.type
-          ? '<span class="type-badge ' + typeCls + '">' + d.type + '</span>'
-          : '<span style="color:#475569">—</span>';
+        // Colonne Nom d'hôte : hostname + badge source de résolution
+        var nameHtml;
+        if (d.hostname) {
+          nameHtml = '<div class="name-cell">' + esc(d.hostname) + sourceBadge(d.source) + '</div>';
+        } else {
+          nameHtml = '<span class="none">—</span>';
+        }
+
+        // Colonne Fabricant : manufacturer + modèle sur la ligne suivante
+        var mfrHtml;
+        if (d.manufacturer) {
+          mfrHtml = '<span class="vendor-badge">' + esc(d.manufacturer) + '</span>';
+          if (d.model) {
+            mfrHtml += '<div class="mfr-model">' + esc(d.model) + '</div>';
+          }
+        } else {
+          mfrHtml = '<span class="none">—</span>';
+        }
+
+        // Colonne Catégorie (d.category remplace d.type depuis v0.0.7)
+        var catHtml;
+        if (d.category) {
+          catHtml = '<span class="type-badge ' + categoryClass(d.category) + '">' +
+                    esc(d.category) + '</span>';
+        } else {
+          catHtml = '<span class="none">—</span>';
+        }
+
         return '<tr>' +
-          '<td class="ip-cell">' + d.ip + '</td>' +
-          '<td class="name-cell">' + name + '</td>' +
-          '<td>' + mfr + '</td>' +
-          '<td>' + typeCell + '</td>' +
-          '<td class="mac-cell">' + d.mac + '</td>' +
-          '<td class="seen-cell">' + fmtSeen(d.elapsedMs) + '</td>' +
+          '<td class="ip-cell">'  + esc(d.ip)  + '</td>' +
+          '<td>'                  + nameHtml    + '</td>' +
+          '<td class="mfr-cell">' + mfrHtml     + '</td>' +
+          '<td>'                  + catHtml     + '</td>' +
+          '<td class="mac-cell">' + esc(d.mac)  + '</td>' +
+          '<td class="seen-cell">'+ fmtSeen(d.elapsedMs) + '</td>' +
           '</tr>';
       }).join('');
+    }
+
+    // Échappe les caractères HTML pour éviter l'injection
+    function esc(s) {
+      if (!s) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
     function animateProgress() {
@@ -254,14 +325,14 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
           renderDevices(data.devices);
-          var btn    = document.getElementById('scan-btn');
-          var info   = document.getElementById('scan-info');
-          var sub    = document.getElementById('scan-subtitle');
+          var btn  = document.getElementById('scan-btn');
+          var info = document.getElementById('scan-info');
+          var sub  = document.getElementById('scan-subtitle');
           if (data.scanning) {
             btn.disabled = true;
             btn.textContent = 'Scan en cours…';
             info.style.display = 'block';
-            info.textContent = '⟳ Résolution des équipements en cours — les résultats s\'affichent progressivement';
+            info.textContent = '⟳ Scan + résolution des noms en cours — les résultats s\'affichent progressivement';
             sub.textContent = 'Scan en cours…';
             if (!pollTimer) pollTimer = setInterval(fetchDevices, 2000);
           } else {
@@ -285,9 +356,7 @@
         .then(function() { fetchDevices(); });
     }
 
-    // Chargement initial des résultats existants
     fetchDevices();
-    // Rafraîchissement léger toutes les 60 s si pas de scan en cours
     setInterval(function() { if (!pollTimer) fetchDevices(); }, 60000);
   </script>
 </body>
