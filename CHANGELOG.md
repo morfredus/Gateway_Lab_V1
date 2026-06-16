@@ -5,6 +5,160 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.1.2] - 2026-06-16
+
+### Ajoute
+
+- **`src/modules/netbios_scanner.h/.cpp`** - Decouverte de hostnames via NetBIOS Name Service (UDP 137)
+
+  Requete Node Status (RFC 1001/1002) sur les equipements encore sans hostname apres
+  mDNS/PTR DNS - tres efficace pour les PC Windows et serveurs Samba. Retourne le nom
+  de machine et le groupe de travail/domaine sans configuration prealable.
+
+- **`src/modules/device_enricher.h`** - Enrichissement par reconnaissance de patterns hostname
+
+  Complete `manufacturer`/`category`/`os` a partir de mots-cles trouves dans le hostname
+  resolu (~75 patterns : robots aspirateurs, domotique, routeurs, IoT, NAS, SBC, streaming,
+  enceintes, imprimantes, cameras, mobile, ordinateurs, consoles). Detection 100% locale,
+  appliquee uniquement sur les champs encore vides en derniere etape du scan.
+
+- **Scanner de ports etendu** (`port_scanner.h/.cpp`) :
+  - Banniere brute SSH/FTP (lue immediatement a la connexion, sans requete)
+  - Sondage des API HTTP propres aux equipements IoT connus : Shelly (`/shelly`),
+    Tasmota (`/cm?cmnd=Status%200`), FritzBox (`/jason_boxinfo.xml`) - identifie le
+    modele exact et la version de firmware sans configuration prealable
+  - Nouveaux champs `PortScanResult` : `sshBanner`, `ftpBanner`, `iotType`, `iotModel`, `iotFirmware`
+
+- **Scanner DNS-SD etendu** (`dns_sd_scanner.cpp`) : 9 nouveaux types de services
+  (`_pdl-datastream._tcp`, `_scanner._tcp`, `_workstation._tcp`, `_companion-link._tcp`,
+  `_privet._tcp`, `_matter._tcp`, `_sleep-proxy._tcp`), soit 31 types de services au total.
+
+- **Interface** : nouveau badge de source "NetBIOS" sur la page Equipements.
+
+### Notes
+
+- Toutes les nouvelles fonctionnalites s'ajoutent aux sources existantes (ARP, ICMP, mDNS,
+  PTR, SSDP, DNS-SD, scan de ports) sans en retirer aucune - la regle de non-ecrasement des
+  champs deja renseignes par une source plus fiable est preservee.
+
+---
+
+## [0.1.1] — 2026-06-16
+
+### Ajouté
+
+- **`src/modules/port_scanner.h/.cpp`** — Scanner TCP des ports communs
+
+  **Principe :** Sockets non-bloquants + `select()` pour sonder plusieurs ports simultanément
+  (lots de `MAX_BATCH = 8` pour rester dans les limites lwIP `CONFIG_LWIP_MAX_SOCKETS = 16`).
+
+  **14 ports sondés :**
+
+  | Port | Service |
+  |---|---|
+  | 21 | FTP |
+  | 22 | SSH |
+  | 23 | Telnet |
+  | 80 | HTTP |
+  | 443 | HTTPS |
+  | 445 | SMB |
+  | 554 | RTSP (caméras IP) |
+  | 1883 | MQTT |
+  | 3389 | RDP |
+  | 5000 | HTTP (Synology DSM / UPnP) |
+  | 8080 | HTTP alternatif |
+  | 8123 | Home Assistant |
+  | 8443 | HTTPS alternatif |
+  | 9100 | IPP (impression) |
+
+  **Banner grabbing HTTP :** `GET /` sur les ports HTTP ouverts (80, 8080, 8123, 5000) →
+  lecture de l'en-tête `Server:` pour enrichir `manufacturer`, `category`, `model`.
+
+  Heuristiques banner → fabricant : Synology, QNAP, Freebox, Philips, Ubiquiti, OpenWrt,
+  DD-WRT, Hikvision, Dahua, Axis, Cisco, MikroTik, GoAhead (caméra IP), Home Assistant.
+
+  **Temps de scan typique :** ≤ 500 ms/équipement (RST immédiat sur ports fermés).
+  Lot de 8 sockets × 2 iterations × ~5 ms = ≈ 80 ms si tous les ports sont fermés.
+  Timeout de 250 ms par lot si ports filtrés.
+
+- **`IcmpScanner::pingWithTtl()`** — Nouveau variant ICMP retournant la valeur TTL
+
+  L'en-tête IP (octet 8 = TTL, RFC 791) est extrait de chaque réponse echo reply.
+  `struct PingResult { String ip; uint8_t ttl; }` retourné pour chaque hôte répondant.
+
+- **Détection OS depuis TTL** (`NetworkScanner::_osFromTtl()`)
+
+  | TTL reçu | OS déduit |
+  |---|---|
+  | > 200 | Cisco / équipement réseau |
+  | > 100 | Windows (TTL initial 128) |
+  | > 50  | Linux / Android / iOS (TTL initial 64) |
+
+  Injecté dans `d.os` uniquement si vide (ne pas écraser les données SSDP/API).
+  Heuristiques complémentaires basées sur les ports : RDP ouvert → Windows certain,
+  RTSP ouvert → Camera/NVR.
+
+- **`NetworkDevice.openPorts`** — Nouveau champ `String` pipe-séparé
+
+  Stocke les noms courts des ports TCP ouverts (ex: `"HTTP|SSH|SMB"`).
+  Sérialisé en tableau JSON `["HTTP","SSH","SMB"]` dans `/api/devices`.
+  Persisté dans `LittleFS` (`/devices.json`).
+
+- **`NetworkScanner::_scanPorts()`** — Nouvelle phase de scan (phase 10)
+
+  Appelée après DNS-SD, avant la sauvegarde LittleFS.
+  Collecte les IPs online (excl. ESP32 lui-même), appelle `portScanner.scan()`,
+  fusionne les résultats dans `_results` sous mutex.
+
+- **UI — Badges ports TCP** (`web_src/scan.html`)
+
+  Badges colorés affichés dans la cellule Fabricant, sous les badges de services DNS-SD.
+  Tooltip `title="Port TCP ouvert : NOM"` sur chaque badge.
+  Fonction `portClass(p)` → 10 classes CSS selon le protocole.
+
+- **UI — `web_src/styles.css`**
+
+  Bloc `.port-list` + `.port-badge` + 10 classes de couleur :
+
+  | Classe | Couleur | Ports |
+  |---|---|---|
+  | `.port-http` | Bleu | HTTP, HTTPS, HTTP/8080… |
+  | `.port-ssh` | Jaune | SSH |
+  | `.port-smb` | Cyan | SMB |
+  | `.port-rdp` | Violet | RDP |
+  | `.port-rtsp` | Vert émeraude | RTSP |
+  | `.port-mqtt` | Turquoise | MQTT |
+  | `.port-print` | Vert pâle | IPP |
+  | `.port-ha` | Orange | Home Assistant |
+  | `.port-legacy` | Rouge pâle | FTP, Telnet |
+  | `.port-other` | Gris | autres |
+
+### Modifié
+
+- **`src/modules/icmp_scanner.h`** : ajout `struct PingResult`, déclaration `pingWithTtl()`
+- **`src/modules/icmp_scanner.cpp`** : `_pingOne()` retourne le TTL (uint8_t) ; `ping()` adapté ; `pingWithTtl()` implémenté
+- **`src/modules/network_scanner.h`** : champ `openPorts` ajouté à `NetworkDevice` ; déclarations `_scanPorts()`, `_osFromTtl()`
+- **`src/modules/network_scanner.cpp`** :
+  - Import de `port_scanner.h`
+  - ICMP sweep utilise `pingWithTtl()` → alimente `d.os` depuis TTL
+  - `_scanPorts()` implémentée, appelée dans `_run()` après `_mergeDnsSd()`
+  - `_osFromTtl()` implémentée
+  - `resultsToJson()` : champ `openPorts` sérialisé en tableau JSON
+- **`src/modules/device_store.cpp`** : lecture/écriture du champ `openPorts`
+- **`platformio.ini`** : `PROJECT_VERSION` → `0.1.1`
+
+### Technique
+
+- **Sockets non-bloquants** : `fcntl(F_SETFL, O_NONBLOCK)` + `connect()` → `EINPROGRESS` →
+  `select()` avec timeout — permet de sonder N ports en parallèle sans bloquer la tâche FreeRTOS
+- **Contrainte lwIP** : `CONFIG_LWIP_MAX_SOCKETS = 16` → `MAX_BATCH = 8` pour laisser 8 sockets
+  disponibles pour le Web Server et les autres modules réseau actifs
+- **TTL extraction** : `buf[8]` dans la réponse ICMP raw (octet TTL de l'en-tête IP, RFC 791)
+- **Heuristiques conservatrices** : OS depuis TTL n'écrase jamais les données issues de SSDP/API ;
+  les seuils TTL absorbent 1-2 sauts de routage (réseau domestique typique = 1 saut)
+
+---
+
 ## [0.1.0] — 2026-06-16
 
 ### Ajouté

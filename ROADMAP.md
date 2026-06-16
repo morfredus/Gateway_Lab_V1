@@ -4,9 +4,8 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ---
 
-## En cours / Prochaine version (v0.1.0)
+## En cours / Prochaine version (v0.1.x)
 
-* Scan de ports TCP (HTTP, HTTPS, SSH, MQTT, SMB…)
 * Détection des nouveaux équipements depuis le dernier scan
 * Endpoint `/api/export` (JSON complet)
 * Historique local des équipements (NVS)
@@ -26,9 +25,8 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * Export CSV
 
 ### v0.2.x — Découverte avancée
-* Identification automatique des services exposés (port scan + bannières)
-* Détection du système d'exploitation (heuristiques TTL, TCP/IP stack)
-* Corrélation multi-sources pour les champs encore vides
+* Fingerprinting TCP/IP stack avancé (TTL + TCP options + window size)
+* SNMP v1/v2c (community "public") pour équipements réseau (port UDP 161)
 
 ### v0.3.x — Intégrations domotiques
 
@@ -85,3 +83,6 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.0.7  | Résolution des noms d'hôtes (mDNS + PTR), détection des box FAI, modèle/source/catégorie, ESP32 visible dans sa propre liste, amélioration complète de l'interface |
 | v0.0.8  | Scanner SSDP/UPnP complet, parsing XML robuste, catégorisation automatique, APIs Hue Bridge / Synology DSM / Freebox, nouveaux badges source UI |
 | v0.0.9  | Scanner DNS-SD (RFC 6763) — 22 types de services, badges services HTTP/SSH/AirPlay/Cast/Sonos/HomeKit…, champ services dans NetworkDevice et API |
+| v0.1.0  | Persistance LittleFS, statistiques online/offline, UI barre de statistiques et colonne statut |
+| v0.1.1  | Scanner TCP 14 ports (sockets non-bloquants), banner HTTP, TTL → OS, badges ports TCP colorés dans l'UI |
+| v0.1.2  | Scanner NetBIOS (UDP 137), enrichissement par patterns hostname, bannières SSH/FTP, détection API IoT (Shelly/Tasmota/FritzBox), DNS-SD étendu à 31 types de services, badge source NetBIOS |

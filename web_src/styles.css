@@ -351,6 +351,7 @@ tr:hover td      { background: #ffffff06; }
 .source-hue     { background: #2a1a10; color: #fb923c; }
 .source-synology{ background: #10182a; color: #60a5fa; }
 .source-freebox { background: #1a102a; color: #c084fc; }
+.source-netbios { background: #102a1c; color: #34d399; }
 
 /* Catégorie (IoT, Mobile, Router…) */
 .type-badge {
@@ -412,6 +413,34 @@ tr:hover td      { background: #ffffff06; }
 .svc-iot    { background: #0c2218; color: #34d399; }
 .svc-print  { background: #102018; color: #86efac; }
 .svc-other  { background: #1e293b; color: #94a3b8; }
+
+/* Badges ports TCP ouverts */
+.port-list {
+  margin-top: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+}
+.port-badge {
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 3px;
+  padding: 0.08rem 0.28rem;
+  white-space: nowrap;
+  cursor: default;
+  border: 1px solid transparent;
+}
+.port-http   { background: #0a1a30; color: #93c5fd; border-color: #1e3a5f; }
+.port-ssh    { background: #1a1500; color: #fde68a; border-color: #3d2e00; }
+.port-smb    { background: #0d1f2d; color: #7dd3fc; border-color: #1e3a4f; }
+.port-rdp    { background: #200a2a; color: #d8b4fe; border-color: #4c1d6e; }
+.port-rtsp   { background: #0a1e18; color: #6ee7b7; border-color: #134e3a; }
+.port-mqtt   { background: #0a1818; color: #5eead4; border-color: #134040; }
+.port-print  { background: #0a1a10; color: #86efac; border-color: #14532d; }
+.port-ha     { background: #1a0f00; color: #fdba74; border-color: #431407; }
+.port-legacy { background: #1a1010; color: #fca5a5; border-color: #450a0a; }
+.port-other  { background: #111827; color: #6b7280; border-color: #1f2937; }
 
 /* ════════════════════════════════════════════════════
    13. PAGE ÉQUIPEMENTS — Barre de statistiques

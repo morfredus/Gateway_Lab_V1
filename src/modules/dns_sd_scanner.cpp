@@ -60,6 +60,15 @@ static const ServiceEntry SERVICE_TYPES[] = {
     // Impression
     { "_ipp._tcp",              "IPP",      "Printer"   },
     { "_printer._tcp",          "Print",    "Printer"   },
+    { "_pdl-datastream._tcp",   "PDL",      "Printer"   },
+    { "_scanner._tcp",          "Scanner",  "Printer"   },
+    // Ordinateurs / partage de fichiers
+    { "_workstation._tcp",      "Workst.",  "Computer"  },
+    { "_companion-link._tcp",   "Companion","Mobile"    },
+    // Domotique / IoT (suite)
+    { "_privet._tcp",           "Privet",   "IoT"       },
+    { "_matter._tcp",           "Matter",   "SmartHome" },
+    { "_sleep-proxy._tcp",      "SleepPxy", ""          },
     { nullptr, nullptr, nullptr }
 };
 

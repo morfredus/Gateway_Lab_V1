@@ -115,6 +115,19 @@
       return m[s] || 'other';
     }
 
+    function portClass(p) {
+      if (p === 'SSH')    return 'port-ssh';
+      if (p === 'FTP' || p === 'Telnet') return 'port-legacy';
+      if (p === 'SMB')    return 'port-smb';
+      if (p === 'RDP')    return 'port-rdp';
+      if (p === 'RTSP')   return 'port-rtsp';
+      if (p === 'MQTT')   return 'port-mqtt';
+      if (p === 'IPP')    return 'port-print';
+      if (p === 'HA')     return 'port-ha';
+      if (p.indexOf('HTTP') >= 0 || p.indexOf('HTTPS') >= 0) return 'port-http';
+      return 'port-other';
+    }
+
     function sourceBadge(source) {
       if (!source || source === 'MAC') return '';
       var cfg = {
@@ -124,7 +137,8 @@
         'SSDP':         { cls: 'source-ssdp',      label: 'UPnP',      title: 'Découverte UPnP/SSDP — descripteur XML du device' },
         'HueAPI':       { cls: 'source-hue',       label: 'Hue',       title: 'API Philips Hue Bridge (/api/config)' },
         'SynologyAPI':  { cls: 'source-synology',  label: 'DSM',       title: 'API Synology DSM (non authentifiée)' },
-        'FreeboxAPI':   { cls: 'source-freebox',   label: 'Freebox',   title: 'API Freebox (/api_version — non authentifiée)' }
+        'FreeboxAPI':   { cls: 'source-freebox',   label: 'Freebox',   title: 'API Freebox (/api_version — non authentifiée)' },
+        'NetBIOS':      { cls: 'source-netbios',   label: 'NetBIOS',   title: 'Nom resolu via NetBIOS Node Status (UDP 137) - PC Windows / Samba' }
       };
       var c = cfg[source];
       if (!c) return '';
@@ -175,12 +189,17 @@
               return '<span class="svc-badge svc-' + svcClass(s) + '" title="Service DNS-SD : ' + esc(s) + '">' + esc(s) + '</span>';
             }).join('') + '</div>'
           : '';
+        var portsHtml = (d.openPorts && d.openPorts.length)
+          ? '<div class="port-list">' + d.openPorts.map(function(p) {
+              return '<span class="port-badge ' + portClass(p) + '" title="Port TCP ouvert : ' + esc(p) + '">' + esc(p) + '</span>';
+            }).join('') + '</div>'
+          : '';
         var mfrHtml = d.manufacturer
           ? '<span class="vendor-badge">' + esc(d.manufacturer) + '</span>' +
             (d.model ? '<div class="mfr-model">' + esc(d.model) + '</div>' : '') +
             (d.os    ? '<div class="mfr-os">'    + esc(d.os)    + '</div>' : '') +
-            svcHtml
-          : (svcHtml || '<span class="none">—</span>');
+            svcHtml + portsHtml
+          : (svcHtml + portsHtml || '<span class="none">—</span>');
         var catHtml = d.category
           ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>'
           : '<span class="none">—</span>';
@@ -229,7 +248,7 @@
             btn.disabled = true;
             btn.textContent = 'Scan en cours…';
             info.style.display = 'block';
-            info.textContent = '⟳ Scan en cours : ARP → hostnames → UPnP/SSDP → DNS-SD — résultats progressifs';
+            info.textContent = '⟳ Scan en cours : ARP → hostnames → UPnP/SSDP → DNS-SD → Ports TCP — résultats progressifs';
             if (!pollTimer) pollTimer = setInterval(fetchDevices, 2000);
           } else {
             btn.disabled = false;
