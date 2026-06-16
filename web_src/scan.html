@@ -92,6 +92,20 @@
         .replace('smarthub',       'smarthub');
     }
 
+    function svcClass(s) {
+      var m = {
+        'HTTP':'web','HTTPS':'web',
+        'SSH':'ssh','SFTP':'ssh',
+        'SMB':'share','AFP':'share','NFS':'share','FTP':'share',
+        'AirPlay':'apple','HomeKit':'apple','iTunes':'apple','AppleInf':'apple',
+        'Cast':'google',
+        'Sonos':'music','Spotify':'music',
+        'Hue':'iot','ESPHome':'iot','HA':'iot','MQTT':'iot',
+        'IPP':'print','Print':'print'
+      };
+      return m[s] || 'other';
+    }
+
     function sourceBadge(source) {
       if (!source || source === 'MAC') return '';
       var cfg = {
@@ -133,11 +147,17 @@
         var nameHtml = d.hostname
           ? '<div class="name-cell">' + esc(d.hostname) + sourceBadge(d.source) + '</div>'
           : '<span class="none">—</span>';
+        var svcHtml = (d.services && d.services.length)
+          ? '<div class="svc-list">' + d.services.map(function(s) {
+              return '<span class="svc-badge svc-' + svcClass(s) + '" title="Service DNS-SD : ' + esc(s) + '">' + esc(s) + '</span>';
+            }).join('') + '</div>'
+          : '';
         var mfrHtml = d.manufacturer
           ? '<span class="vendor-badge">' + esc(d.manufacturer) + '</span>' +
             (d.model ? '<div class="mfr-model">' + esc(d.model) + '</div>' : '') +
-            (d.os    ? '<div class="mfr-os">'    + esc(d.os)    + '</div>' : '')
-          : '<span class="none">—</span>';
+            (d.os    ? '<div class="mfr-os">'    + esc(d.os)    + '</div>' : '') +
+            svcHtml
+          : (svcHtml || '<span class="none">—</span>');
         var catHtml = d.category
           ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>'
           : '<span class="none">—</span>';
@@ -181,7 +201,7 @@
             btn.disabled = true;
             btn.textContent = 'Scan en cours…';
             info.style.display = 'block';
-            info.textContent = '⟳ Scan + résolution des noms en cours — résultats progressifs';
+            info.textContent = '⟳ Scan en cours : ARP → hostnames → UPnP/SSDP → DNS-SD — résultats progressifs';
             if (!pollTimer) pollTimer = setInterval(fetchDevices, 2000);
           } else {
             btn.disabled = false;

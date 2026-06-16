@@ -5,6 +5,88 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.0.9] — 2026-06-16
+
+### Ajouté
+
+- **`src/modules/dns_sd_scanner.h/.cpp`** — scanner DNS-SD complet (RFC 6763 / RFC 6762)
+
+  **Principe :** DNS-SD utilise le même canal multicast que mDNS (`224.0.0.251:5353`)
+  mais interroge des *types de services* (`_http._tcp.local`, `_ssh._tcp.local`…).
+  Chaque device compatible répond avec ses instances de service + métadonnées TXT.
+
+  **22 types de services interrogés en un seul paquet mDNS multi-question :**
+
+  | Catégorie | Services |
+  |---|---|
+  | Web | `_http._tcp`, `_https._tcp` |
+  | Accès | `_ssh._tcp`, `_sftp-ssh._tcp`, `_smb._tcp`, `_afpovertcp._tcp`, `_nfs._tcp`, `_ftp._tcp` |
+  | Apple | `_airplay._tcp`, `_raop._tcp`, `_homekit._tcp`, `_daap._tcp`, `_device-info._tcp` |
+  | Google | `_googlecast._tcp` |
+  | Musique | `_sonos._tcp`, `_spotify-connect._tcp` |
+  | IoT | `_hue._tcp`, `_esphome._tcp`, `_home-assistant._tcp`, `_mqtt._tcp` |
+  | Impression | `_ipp._tcp`, `_printer._tcp` |
+
+  **Records DNS parsés :**
+  - `PTR` (12) : nom de l'instance → associé au type de service
+  - `SRV` (33) : port + hostname canonique de l'instance
+  - `TXT` (16) : métadonnées `md=`, `fn=`, `am=` → modèle device
+  - `A`   (1)  : hostname.local → IP (résolution inverse)
+
+  **Résultat :** map `IP → DnsSdInfo { services, model, hostname, category }`
+
+  **Déduction de catégorie** depuis les services (priorité décroissante) :
+  HomeKit→SmartHome, AirPlay→TV, Cast→Streaming, Sonos/Spotify→Speaker,
+  Hue→SmartHub, ESPHome/HA/MQTT→IoT, IPP/Print→Printer, SMB/AFP/NFS→NAS, SSH→Computer
+
+- **`NetworkDevice.services`** (nouveau champ) :
+  Labels des services DNS-SD séparés par `|` (ex: `"HTTP|SSH|SMB"`)
+  Sérialisé en tableau JSON `["HTTP","SSH","SMB"]` dans `/api/devices`
+
+- **`NetworkScanner::_mergeDnsSd()`** :
+  - Appelle `dnsSdScanner.scan(4000)` hors mutex (4 s d'écoute)
+  - Fusionne services, model, hostname, category sous mutex
+  - Accumule les services sans doublon (merge avec services déjà présents)
+  - Appelée après `_mergeSsdp()`, avant `_addSelfEntry()`
+
+- **UI — `web_src/scan.html`** :
+  - Badges de service dans la cellule Fabricant, sous l'OS
+  - 9 couleurs selon la famille : `web` (bleu), `ssh` (jaune), `share` (cyan),
+    `apple` (rose), `google` (vert), `music` (violet), `iot` (turquoise),
+    `print` (vert pâle), `other` (gris)
+  - Tooltip `title="Service DNS-SD : NOM"` sur chaque badge
+
+- **UI — `web_src/styles.css`** :
+  - `.svc-list` : conteneur flex-wrap pour les badges de service
+  - `.svc-badge` : style de base (très compact, 0.58 rem)
+  - 9 classes de couleur : `.svc-web`, `.svc-ssh`, `.svc-share`, `.svc-apple`,
+    `.svc-google`, `.svc-music`, `.svc-iot`, `.svc-print`, `.svc-other`
+
+### Modifié
+
+- **`src/modules/network_scanner.h`** : champ `services` ajouté à `NetworkDevice`
+- **`src/modules/network_scanner.cpp`** :
+  - Import `dns_sd_scanner.h`
+  - `_mergeDnsSd()` implémentée et appelée dans `_run()`
+  - `resultsToJson()` : services sérialisé en tableau JSON
+  - Stack FreeRTOS augmentée **20 → 24 Ko** (DNS-SD multicast + 3 std::map)
+- **`platformio.ini`** : `PROJECT_VERSION` → `0.0.9`
+
+### Technique
+
+- **Paquet mDNS multi-question** : toutes les requêtes DNS-SD dans un seul UDP
+  (≈ 650 octets pour 22 services) — évite 22 allers-retours réseau séparés
+- **QU bit** (class 0x8001) : signale la préférence pour des réponses unicast ;
+  réduit la charge multicast sur le réseau domestique
+- **Buffers heap** : les buffers de parsing (1 Ko) sont alloués sur le tas
+  (`malloc/free`) plutôt que sur la stack FreeRTOS — économise ~1 Ko de stack
+- **Déduplication instances** : clé composée `instanceName|serviceType` évite
+  les doublons quand un device répond plusieurs fois à la même requête
+- **Résolution IP à 3 niveaux** : `inst.ip` direct → `_hostToIp[hostname]` →
+  `_hostToIp[instanceName.toLowerCase()-sanitized.local]`
+
+---
+
 ## [0.0.8] — 2026-06-15
 
 ### Ajouté

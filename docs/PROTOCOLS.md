@@ -186,6 +186,87 @@ Gateway Lab fait un HTTP GET sur cette URL et parse le XML pour extraire ces inf
 
 ---
 
+## DNS-SD — DNS Service Discovery
+
+### C'est quoi ?
+
+DNS-SD (RFC 6763) est construit **au-dessus de mDNS**. Alors que mDNS résout des noms
+(`raspberrypi.local` → IP), DNS-SD répond à la question :
+**"Qui sur le réseau propose tel service ?"**
+
+Par exemple : "Qui offre AirPlay ? Qui a un serveur HTTP ? Qui est HomeKit ?"
+
+C'est le protocole utilisé par Bonjour (Apple), avahi (Linux), et la plupart des devices
+connectés modernes.
+
+### Comment ça marche ?
+
+DNS-SD utilise un type de record DNS particulier : `PTR` (pointeur).
+
+Pour trouver tous les appareils offrant SSH :
+
+```
+Requête : _ssh._tcp.local  (type PTR)
+Réponse : "MonNAS._ssh._tcp.local"
+          "raspberrypi._ssh._tcp.local"
+```
+
+Pour chaque instance trouvée, des records additionnels précisent :
+
+```
+SRV : MonNAS._ssh._tcp.local → port 22, hostname "nas.local"
+TXT : MonNAS._ssh._tcp.local → ["md=DS224+", "fn=Mon NAS Synology"]
+A   : nas.local → 192.168.1.10
+```
+
+Tout cela arrive souvent dans un **seul paquet mDNS** (section "Additional").
+
+### Exemples de services courants
+
+| Type DNS-SD | Ce qu'il identifie |
+|---|---|
+| `_http._tcp` | Tout appareil avec une interface web |
+| `_ssh._tcp` | Serveurs SSH (NAS, Raspberry Pi, Mac, Linux) |
+| `_smb._tcp` | Partages réseau Windows/Samba |
+| `_airplay._tcp` | Apple TV, HomePod, AirPlay 2 |
+| `_raop._tcp` | AirPlay audio (HomePod mini, Apple TV) |
+| `_homekit._tcp` | Tous les accessoires HomeKit |
+| `_googlecast._tcp` | Chromecast, Google Home, Android TV |
+| `_sonos._tcp` | Enceintes Sonos |
+| `_spotify-connect._tcp` | Enceintes Spotify Connect |
+| `_hue._tcp` | Philips Hue Bridge |
+| `_esphome._tcp` | Devices ESPHome (domotique DIY) |
+| `_home-assistant._tcp` | Home Assistant |
+| `_mqtt._tcp` | Brokers MQTT |
+| `_ipp._tcp` | Imprimantes (IPP) |
+
+### Comment Gateway Lab l'utilise ?
+
+```
+1. Un seul paquet mDNS avec N questions PTR (22 services)
+         ↓ → 224.0.0.251:5353
+2. Écoute pendant 4 secondes
+3. Pour chaque réponse reçue :
+   a. PTR → nom de l'instance + type de service
+   b. SRV → port + hostname
+   c. TXT → champs md=, fn= → modèle du device
+   d. A   → hostname.local → IP
+4. Résolution IP : A record → hostname map → fallback nom instance
+5. Résultat : IP → liste de services labels ["HTTP","SSH","SMB"]
+```
+
+### Différence avec SSDP
+
+| | SSDP/UPnP | DNS-SD |
+|---|---|---|
+| Protocole | HTTP over UDP multicast | DNS over UDP multicast |
+| Ce qu'on obtient | 1 identité par device (XML) | N services par device |
+| Métadonnées | friendlyName, manufacturer, modelName | TXT records (md=, fn=…) |
+| Devices compatibles | Box, NAS, TV, Smart Home (UPnP) | Apple, Google, Sonos, ESPHome, Linux… |
+| Complémentaires ? | ✅ Oui — sources différentes |
+
+---
+
 ## OUI — Organizationally Unique Identifier
 
 ### C'est quoi ?

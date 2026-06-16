@@ -51,7 +51,8 @@ Le projet privilégie :
 | API Philips Hue Bridge   | Modèle, firmware, sans authentification (`/api/config`)           |
 | API Synology DSM         | Confirmation NAS, modèle depuis XML UPnP                          |
 | API Freebox              | Modèle exact (Ultra/Pop/Révolution), version FreeboxOS            |
-| Inventaire réseau        | IP, nom, fabricant, modèle, catégorie, OS, MAC, source            |
+| Découverte DNS-SD        | 22 types de services, badges HTTP/SSH/AirPlay/Cast/Sonos/HomeKit  |
+| Inventaire réseau        | IP, nom, fabricant, modèle, catégorie, OS, services, MAC, source  |
 | Auto-détection ESP32     | Le Gateway apparaît dans sa propre liste                          |
 | Identification OUI       | Base externalisée générée automatiquement                         |
 | OTA Web                  | Upload firmware depuis le navigateur                              |
@@ -154,7 +155,8 @@ Gateway-Lab-V1/
 │   │   ├── network_scanner.*
 │   │   ├── hostname_resolver.*
 │   │   ├── isp_detector.h
-│   │   └── ssdp_scanner.*
+│   │   ├── ssdp_scanner.*
+│   │   └── dns_sd_scanner.*
 │   │
 │   └── utils/
 │       └── logger.h
