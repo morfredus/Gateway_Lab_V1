@@ -259,7 +259,7 @@ void NetworkScanner::_addSelfEntry() {
 //     sans réponse ARP — cas rare mais possible sur certains réseaux)
 // ---------------------------------------------------------------------------
 void NetworkScanner::_mergeSsdp() {
-    auto ssdpResults = ssdpScanner.scan(3000);
+    auto ssdpResults = ssdpScanner.scan(4000);
     if (ssdpResults.empty()) return;
 
     xSemaphoreTake(_mutex, portMAX_DELAY);

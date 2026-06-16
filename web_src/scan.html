@@ -201,7 +201,7 @@
             btn.disabled = true;
             btn.textContent = 'Scan en cours…';
             info.style.display = 'block';
-            info.textContent = '⟳ Scan + résolution des noms en cours — résultats progressifs';
+            info.textContent = '⟳ Scan en cours : ARP → hostnames → UPnP/SSDP → DNS-SD — résultats progressifs';
             if (!pollTimer) pollTimer = setInterval(fetchDevices, 2000);
           } else {
             btn.disabled = false;
