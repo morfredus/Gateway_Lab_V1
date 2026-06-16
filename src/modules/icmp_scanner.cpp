@@ -36,11 +36,13 @@ static uint16_t _checksum(const uint8_t* buf, size_t len) {
     return (uint16_t)(~sum);
 }
 
-bool IcmpScanner::_pingOne(const String& ip, uint32_t timeout_ms) {
+// Retourne le TTL de la réponse (> 0) ou 0 si pas de réponse / erreur.
+// buf[8] dans l'en-tête IP = champ TTL (RFC 791)
+uint8_t IcmpScanner::_pingOne(const String& ip, uint32_t timeout_ms) {
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (sock < 0) {
         Log::w(TAG, "socket() échoué — droits insuffisants ?");
-        return false;
+        return 0;
     }
 
     struct timeval tv;
@@ -70,7 +72,7 @@ bool IcmpScanner::_pingOne(const String& ip, uint32_t timeout_ms) {
                           (struct sockaddr*)&dst, sizeof(dst));
     if (sent < 0) {
         close(sock);
-        return false;
+        return 0;
     }
 
     // Attente de la réponse
@@ -81,9 +83,11 @@ bool IcmpScanner::_pingOne(const String& ip, uint32_t timeout_ms) {
                          (struct sockaddr*)&src, &srclen);
     close(sock);
 
-    // buf[0..19] = IP header (20 octets), buf[20] = type ICMP
+    // buf[0..19] = IP header (20 octets), buf[8] = TTL, buf[20] = type ICMP
     // Type 0 = echo reply — confirme que l'hôte est joignable
-    return (n >= 28 && buf[20] == 0);
+    if (n >= 28 && buf[20] == 0)
+        return buf[8];   // TTL depuis l'en-tête IP
+    return 0;
 }
 
 std::vector<String> IcmpScanner::ping(const std::vector<String>& ips,
@@ -92,15 +96,33 @@ std::vector<String> IcmpScanner::ping(const std::vector<String>& ips,
     alive.reserve(ips.size() / 4);
 
     for (const auto& ip : ips) {
-        if (_pingOne(ip, timeout_ms)) {
+        if (_pingOne(ip, timeout_ms) > 0) {
             alive.push_back(ip);
             Log::d(TAG, "Alive: %s", ip.c_str());
         }
-        // Petit délai pour ne pas saturer le stack lwIP
         vTaskDelay(pdMS_TO_TICKS(5));
     }
 
     Log::i(TAG, "ICMP: %u/%u IP(s) répondent au ping",
            (unsigned)alive.size(), (unsigned)ips.size());
     return alive;
+}
+
+std::vector<PingResult> IcmpScanner::pingWithTtl(const std::vector<String>& ips,
+                                                   uint32_t timeout_ms) {
+    std::vector<PingResult> results;
+    results.reserve(ips.size());
+
+    for (const auto& ip : ips) {
+        uint8_t ttl = _pingOne(ip, timeout_ms);
+        if (ttl > 0) {
+            results.push_back({ip, ttl});
+            Log::d(TAG, "Alive: %s (TTL=%u)", ip.c_str(), ttl);
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    Log::i(TAG, "ICMP+TTL: %u/%u IP(s) répondent au ping",
+           (unsigned)results.size(), (unsigned)ips.size());
+    return results;
 }

@@ -18,6 +18,7 @@
 #include "dns_sd_scanner.h"      // Découverte de services DNS-SD (RFC 6763)
 #include "device_store.h"        // Persistance LittleFS
 #include "icmp_scanner.h"        // Sonde ICMP pour IPs non trouvées par ARP
+#include "port_scanner.h"        // Scan TCP ports communs + banner HTTP
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
@@ -478,22 +479,24 @@ void NetworkScanner::_run() {
 
         // ICMP uniquement si la plage est raisonnable (évite les /16)
         if (!missingIps.empty() && missingIps.size() <= 100) {
-            auto alive = icmpScanner.ping(missingIps, 200);
-            if (!alive.empty()) {
+            // pingWithTtl retourne IP + TTL pour déduire l'OS
+            auto aliveWithTtl = icmpScanner.pingWithTtl(missingIps, 200);
+            if (!aliveWithTtl.empty()) {
                 xSemaphoreTake(_mutex, portMAX_DELAY);
-                for (const auto& ip : alive) {
+                for (const auto& pr : aliveWithTtl) {
                     bool exists = false;
                     for (const auto& d : _results) {
-                        if (d.ip == ip) { exists = true; break; }
+                        if (d.ip == pr.ip) { exists = true; break; }
                     }
                     if (!exists) {
                         NetworkDevice d;
-                        d.ip       = ip;
+                        d.ip       = pr.ip;
                         d.source   = "ICMP";
                         d.online   = true;
                         d.lastSeen = millis();
+                        if (pr.ttl > 0) d.os = _osFromTtl(pr.ttl);
                         _results.push_back(d);
-                        Log::i(TAG, "ICMP nouveau device : %s", ip.c_str());
+                        Log::i(TAG, "ICMP nouveau device : %s (TTL=%u)", pr.ip.c_str(), pr.ttl);
                     }
                 }
                 xSemaphoreGive(_mutex);
@@ -517,12 +520,161 @@ void NetworkScanner::_run() {
     // Scan DNS-SD — identifie les services exposés par chaque équipement
     _mergeDnsSd();
 
+    // Scan TCP des ports communs + banner HTTP
+    _scanPorts();
+
     // Sauvegarder en LittleFS pour le prochain boot
     _saveToStore();
 
     Log::i(TAG, "Scan complet — %u équipement(s) total", (unsigned)_results.size());
     _scanning   = false;
     _taskHandle = nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Déduction de l'OS depuis la valeur TTL ICMP
+//
+// Les systèmes d'exploitation utilisent des valeurs TTL initiales standards.
+// En réseau local (1 saut), la valeur reçue est quasiment égale à l'initiale.
+// Seuils conservateurs pour absorber quelques sauts supplémentaires.
+// ---------------------------------------------------------------------------
+String NetworkScanner::_osFromTtl(uint8_t ttl) {
+    if (ttl > 200) return "Cisco / Réseau";
+    if (ttl > 100) return "Windows";
+    if (ttl > 50)  return "Linux / Android / iOS";
+    return "";
+}
+
+// ---------------------------------------------------------------------------
+// Scan TCP des ports communs sur tous les équipements en ligne
+//
+// Pour chaque équipement online :
+//   1. Sonde 14 ports communs par lots de 8 (contrainte lwIP max sockets)
+//   2. Stocke les ports ouverts dans d.openPorts (pipe-séparés)
+//   3. Déduit l'OS depuis d.os si encore vide (TTL ICMP non disponible)
+//   4. Enrichit d.manufacturer depuis le banner HTTP si vide
+//
+// Port → service courants :
+//   22 SSH · 80 HTTP · 443 HTTPS · 445 SMB · 554 RTSP · 1883 MQTT
+//   3389 RDP · 8080 HTTP-Alt · 8123 HA · 9100 IPP
+// ---------------------------------------------------------------------------
+void NetworkScanner::_scanPorts() {
+    // Collecter les IPs online (excl. soi-même)
+    std::vector<String> ipsToScan;
+    String selfIp = WiFi.localIP().toString();
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (const auto& d : _results) {
+            if (d.online && d.ip != selfIp)
+                ipsToScan.push_back(d.ip);
+        }
+        xSemaphoreGive(_mutex);
+    }
+
+    if (ipsToScan.empty()) return;
+
+    auto scanResults = portScanner.scan(ipsToScan, 250);
+    if (scanResults.empty()) return;
+
+    // Noms courts des ports pour la liste pipe-séparée
+    auto portName = [](uint16_t p) -> String {
+        switch (p) {
+            case 21:   return "FTP";
+            case 22:   return "SSH";
+            case 23:   return "Telnet";
+            case 80:   return "HTTP";
+            case 443:  return "HTTPS";
+            case 445:  return "SMB";
+            case 554:  return "RTSP";
+            case 1883: return "MQTT";
+            case 3389: return "RDP";
+            case 5000: return "HTTP/5000";
+            case 8080: return "HTTP/8080";
+            case 8123: return "HA";
+            case 8443: return "HTTPS/8443";
+            case 9100: return "IPP";
+            default:   return String(p);
+        }
+    };
+
+    // Heuristiques banner HTTP → fabricant ou catégorie
+    auto bannerToMfr = [](const String& banner) -> String {
+        String b = banner;
+        b.toLowerCase();
+        if (b.indexOf("synology") >= 0)  return "Synology";
+        if (b.indexOf("qnap")     >= 0)  return "QNAP";
+        if (b.indexOf("freebox")  >= 0)  return "Freebox";
+        if (b.indexOf("philips")  >= 0)  return "Philips";
+        if (b.indexOf("ubiquiti") >= 0)  return "Ubiquiti";
+        if (b.indexOf("openwrt")  >= 0)  return "OpenWrt Router";
+        if (b.indexOf("dd-wrt")   >= 0)  return "DD-WRT Router";
+        if (b.indexOf("hikvision")>= 0)  return "Hikvision";
+        if (b.indexOf("dahua")    >= 0)  return "Dahua";
+        if (b.indexOf("axis")     >= 0)  return "Axis";
+        if (b.indexOf("cisco")    >= 0)  return "Cisco";
+        if (b.indexOf("mikrotik") >= 0)  return "MikroTik";
+        if (b.indexOf("goahead")  >= 0)  return "IP Camera";   // GoAhead = firmware caméra IP
+        if (b.indexOf("homeassistant") >= 0) return "Home Assistant";
+        return "";
+    };
+
+    auto bannerToCategory = [](const String& banner) -> String {
+        String b = banner;
+        b.toLowerCase();
+        if (b.indexOf("camera") >= 0 || b.indexOf("hikvision") >= 0 ||
+            b.indexOf("dahua")  >= 0 || b.indexOf("axis") >= 0 ||
+            b.indexOf("goahead")>= 0) return "Camera";
+        if (b.indexOf("synology") >= 0 || b.indexOf("qnap") >= 0)
+            return "NAS";
+        if (b.indexOf("homeassistant") >= 0) return "Smart Hub";
+        return "";
+    };
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        auto it = scanResults.find(d.ip);
+        if (it == scanResults.end()) continue;
+
+        const PortScanResult& pr = it->second;
+
+        // Construire la liste pipe-séparée des ports ouverts
+        if (!pr.openPorts.empty()) {
+            String portList;
+            for (size_t i = 0; i < pr.openPorts.size(); i++) {
+                if (i) portList += "|";
+                portList += portName(pr.openPorts[i]);
+            }
+            d.openPorts = portList;
+        }
+
+        // Enrichir depuis le banner HTTP
+        if (!pr.httpBanner.isEmpty()) {
+            if (d.manufacturer.isEmpty()) {
+                String mfr = bannerToMfr(pr.httpBanner);
+                if (!mfr.isEmpty()) d.manufacturer = mfr;
+            }
+            if (d.category.isEmpty() || d.category == "IoT") {
+                String cat = bannerToCategory(pr.httpBanner);
+                if (!cat.isEmpty()) d.category = cat;
+            }
+            // Stocker le banner dans model si vide (info utile)
+            if (d.model.isEmpty() && pr.httpBanner.length() < 40) {
+                d.model = pr.httpBanner;
+            }
+        }
+
+        // OS depuis TTL (si pas déjà rempli par SSDP/API)
+        if (d.os.isEmpty() && !pr.openPorts.empty()) {
+            // Port 3389 RDP → Windows certain
+            for (uint16_t p : pr.openPorts) {
+                if (p == 3389) { d.os = "Windows"; break; }
+                if (p == 554)  { d.os = "Camera/NVR"; break; }
+            }
+        }
+    }
+    xSemaphoreGive(_mutex);
+
+    Log::i(TAG, "Ports fusionnés — %u équipement(s) enrichis", (unsigned)scanResults.size());
 }
 
 // ---------------------------------------------------------------------------
@@ -633,6 +785,17 @@ String NetworkScanner::resultsToJson() const {
                 tmp = tmp.substring(idx + 1);
             }
             if (!tmp.isEmpty()) svcArr.add(tmp);
+        }
+        // openPorts : tableau JSON ["HTTP","SSH","SMB"] depuis la chaîne pipe-séparée
+        JsonArray portArr = obj["openPorts"].to<JsonArray>();
+        if (!d.openPorts.isEmpty()) {
+            String tmp = d.openPorts;
+            int idx;
+            while ((idx = tmp.indexOf('|')) >= 0) {
+                portArr.add(tmp.substring(0, idx));
+                tmp = tmp.substring(idx + 1);
+            }
+            if (!tmp.isEmpty()) portArr.add(tmp);
         }
     }
     String json;
