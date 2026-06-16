@@ -483,13 +483,13 @@ std::map<String, DnsSdInfo> DnsSdScanner::scan(uint32_t timeout_ms) {
     Log::i(TAG, "DNS-SD terminé — %d instance(s), %d IP(s) résolue(s)",
            (int)_instances.size(), (int)result.size());
 
-    if (Log::level() >= LOG_LEVEL_DEBUG) {
-        for (const auto& kv : result) {
-            Log::d(TAG, "  %s → [%s] model=%s cat=%s",
-                   kv.first.c_str(), kv.second.services.c_str(),
-                   kv.second.model.c_str(), kv.second.category.c_str());
-        }
+#if LOG_LEVEL >= 4
+    for (const auto& kv : result) {
+        Log::d(TAG, "  %s → [%s] model=%s cat=%s",
+               kv.first.c_str(), kv.second.services.c_str(),
+               kv.second.model.c_str(), kv.second.category.c_str());
     }
+#endif
 
     return result;
 }
