@@ -15,10 +15,14 @@
 #include "modules/ota_manager.h"       // Mise à jour firmware (réseau + web)
 #include "modules/web_server.h"        // Serveur HTTP et interface web
 #include "modules/network_scanner.h"   // Découverte des équipements LAN
+#include "modules/device_store.h"      // Persistance LittleFS
 
 void setup() {
     Serial.begin(115200);
     Log::i("Main", "=== %s v%s ===", PROJECT_NAME, PROJECT_VERSION);
+
+    // Montage LittleFS — doit être fait avant la connexion WiFi
+    deviceStore.begin();
 
     // Connexion WiFi — le callback est appelé une fois la connexion établie
     // (ou en cas d'échec après WIFI_CONNECT_TIMEOUT millisecondes)
@@ -41,6 +45,17 @@ void setup() {
             .isScanning  = [] { return netScanner.isScanRunning(); },
             .getJson     = [] { return netScanner.resultsToJson(); },
             .triggerScan = [] { netScanner.startScan(); },
+            .getStats    = [] {
+                auto s = netScanner.getStats();
+                String j = "{\"known\":";
+                j += s.known;
+                j += ",\"online\":";
+                j += s.online;
+                j += ",\"offline\":";
+                j += s.offline;
+                j += "}";
+                return j;
+            },
         });
         webSrv.begin(WEB_SERVER_PORT);
 #endif

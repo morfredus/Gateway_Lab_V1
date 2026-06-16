@@ -97,6 +97,10 @@ void WebServerModule::_handleApiStatus() {
 void WebServerModule::_handleApiDevices() {
     String json = "{\"scanning\":";
     json += (_hasScan && _scan.isScanning && _scan.isScanning()) ? "true" : "false";
+    if (_hasScan && _scan.getStats) {
+        json += ",\"stats\":";
+        json += _scan.getStats();
+    }
     json += ",\"devices\":";
     json += (_hasScan && _scan.getJson) ? _scan.getJson() : "[]";
     json += "}";

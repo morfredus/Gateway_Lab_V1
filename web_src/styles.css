@@ -414,7 +414,36 @@ tr:hover td      { background: #ffffff06; }
 .svc-other  { background: #1e293b; color: #94a3b8; }
 
 /* ════════════════════════════════════════════════════
-   13. PAGE OTA — Formulaire upload firmware
+   13. PAGE ÉQUIPEMENTS — Barre de statistiques
+   ════════════════════════════════════════════════════ */
+
+.stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.78rem;
+}
+.stat-sep     { color: #334155; font-weight: 300; }
+.stat-item    { font-weight: 600; letter-spacing: 0.02em; }
+.stat-known   { color: #94a3b8; }
+.stat-online  { color: #4ade80; }
+.stat-offline { color: #f87171; }
+
+/* Colonne statut en ligne / hors ligne */
+.status-cell    { text-align: center; width: 1.5rem; padding: 0 0.25rem; }
+.status-online  { color: #4ade80; font-size: 0.9rem; line-height: 1; cursor: default; }
+.status-offline { color: #475569; font-size: 0.9rem; line-height: 1; cursor: default; }
+
+/* Ligne de device hors ligne — atténuée */
+tr.row-offline td { opacity: 0.55; }
+
+/* ════════════════════════════════════════════════════
+   14. PAGE OTA — Formulaire upload firmware
    ════════════════════════════════════════════════════ */
 
 label {
