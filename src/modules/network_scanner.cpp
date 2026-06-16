@@ -15,6 +15,7 @@
 #include "hostname_resolver.h"   // mDNS passif + PTR DNS batch
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include "ssdp_scanner.h"        // Découverte UPnP/SSDP
+#include "dns_sd_scanner.h"      // Découverte de services DNS-SD (RFC 6763)
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
@@ -300,6 +301,73 @@ void NetworkScanner::_mergeSsdp() {
 }
 
 // ---------------------------------------------------------------------------
+// Fusion des résultats DNS-SD dans _results
+//
+// Le scan DNS-SD retourne un map IP → DnsSdInfo.
+// Pour chaque entrée :
+//   - services  : toujours injecté (labels pipe-séparés, ex: "HTTP|SSH|SMB")
+//   - model     : injecté si vide
+//   - hostname  : injecté si vide
+//   - category  : injecté si vide ou "IoT" (catégorie par défaut trop générique)
+// ---------------------------------------------------------------------------
+void NetworkScanner::_mergeDnsSd() {
+    auto dnssdResults = dnsSdScanner.scan(4000);
+    if (dnssdResults.empty()) return;
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (const auto& kv : dnssdResults) {
+        const String& ip      = kv.first;
+        const DnsSdInfo& info = kv.second;
+
+        bool found = false;
+        for (auto& d : _results) {
+            if (d.ip != ip) continue;
+            found = true;
+
+            // Services : on accumule (DNS-SD peut découvrir des services complémentaires)
+            if (d.services.isEmpty()) {
+                d.services = info.services;
+            } else {
+                // Ajouter uniquement les services absents
+                String remaining = info.services;
+                int idx;
+                while ((idx = remaining.indexOf('|')) >= 0) {
+                    String svc = remaining.substring(0, idx);
+                    remaining  = remaining.substring(idx + 1);
+                    if (!svc.isEmpty() && d.services.indexOf(svc) < 0) {
+                        d.services += "|"; d.services += svc;
+                    }
+                }
+                if (!remaining.isEmpty() && d.services.indexOf(remaining) < 0) {
+                    d.services += "|"; d.services += remaining;
+                }
+            }
+
+            // Modèle depuis DNS-SD TXT records (souvent plus précis que SSDP)
+            if (d.model.isEmpty() && !info.model.isEmpty())
+                d.model = info.model;
+
+            // Hostname depuis SRV record (nom canonique, souvent plus propre)
+            if (d.hostname.isEmpty() && !info.hostname.isEmpty())
+                d.hostname = info.hostname;
+
+            // Catégorie DNS-SD (plus fine que "IoT" par défaut)
+            if ((d.category.isEmpty() || d.category == "IoT") && !info.category.isEmpty())
+                d.category = info.category;
+
+            break;
+        }
+
+        if (!found) {
+            Log::d(TAG, "DNS-SD : IP %s non trouvée dans les résultats ARP", ip.c_str());
+        }
+    }
+    xSemaphoreGive(_mutex);
+
+    Log::i(TAG, "DNS-SD fusionné — %u résultat(s)", (unsigned)dnssdResults.size());
+}
+
+// ---------------------------------------------------------------------------
 // Tâche FreeRTOS — exécutée sur Core 0 (même core que lwIP / TCP stack)
 // Stack 20 Ko : lwIP + DNS + std::map + HTTP client SSDP + XML parsing
 // ---------------------------------------------------------------------------
@@ -339,6 +407,11 @@ void NetworkScanner::_run() {
     // pas aux ARP request mais annoncent leur présence via multicast SSDP).
     _mergeSsdp();
 
+    // Scan DNS-SD — identifie les services exposés par chaque équipement
+    // (HTTP, SSH, AirPlay, HomeKit, Chromecast, Sonos…) et enrichit les champs
+    // model / hostname / category quand ils sont encore vides.
+    _mergeDnsSd();
+
     Log::i(TAG, "Scan complet — %u équipement(s) enrichi(s)", (unsigned)_results.size());
     _scanning   = false;
     _taskHandle = nullptr;
@@ -359,8 +432,8 @@ void NetworkScanner::startScan() {
         return;
     }
     _scanning = true;
-    // Stack 20 Ko : lwIP + résolution DNS + std::map + HTTP client SSDP + XML
-    xTaskCreatePinnedToCore(_task, "net_scan", 20480, this, 1, &_taskHandle, 0);
+    // Stack 24 Ko : lwIP + DNS + std::map × 3 + HTTP SSDP + XML + DNS-SD multicast
+    xTaskCreatePinnedToCore(_task, "net_scan", 24576, this, 1, &_taskHandle, 0);
     Log::i(TAG, "Scan réseau lancé");
 }
 
@@ -384,12 +457,23 @@ String NetworkScanner::resultsToJson() const {
         obj["mac"]          = d.mac;
         obj["manufacturer"] = d.manufacturer;
         obj["hostname"]     = d.hostname;
-        obj["category"]     = d.category;   // remplace "type" (v0.0.7)
+        obj["category"]     = d.category;
         obj["model"]        = d.model;
         obj["os"]           = d.os;
         obj["source"]       = d.source;
         obj["elapsedMs"]    = now - d.lastSeen;
         obj["online"]       = d.online;
+        // services : tableau JSON ["HTTP","SSH","SMB"] depuis la chaîne pipe-séparée
+        JsonArray svcArr = obj["services"].to<JsonArray>();
+        if (!d.services.isEmpty()) {
+            String tmp = d.services;
+            int idx;
+            while ((idx = tmp.indexOf('|')) >= 0) {
+                svcArr.add(tmp.substring(0, idx));
+                tmp = tmp.substring(idx + 1);
+            }
+            if (!tmp.isEmpty()) svcArr.add(tmp);
+        }
     }
     xSemaphoreGive(_mutex);
     String json;

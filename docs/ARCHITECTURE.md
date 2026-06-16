@@ -32,7 +32,8 @@ et comment les différentes parties s'articulent entre elles.
 │  │  │ 4. ISP detection               │  │                    │
 │  │  │ 5. SSDP/UPnP (SsdpScanner)    │  │                    │
 │  │  │ 6. APIs Hue/Synology/Freebox   │  │                    │
-│  │  │ 7. Self entry (ESP32 lui-même) │  │                    │
+│  │  │ 7. DNS-SD (DnsSdScanner)       │  │                    │
+│  │  │ 8. Self entry (ESP32 lui-même) │  │                    │
 │  │  └────────────────────────────────┘  │                    │
 │  │                                      │                    │
 │  │  _results : vector<NetworkDevice>    │                    │
@@ -116,7 +117,12 @@ Phase 6 : Fusion SSDP
   → Enrichit les devices ARP existants avec les données UPnP
   → Ajoute les devices UPnP-only (non détectés par ARP)
 
-Phase 7 : Self entry
+Phase 7 : DNS-SD (DnsSdScanner)
+  → Envoie 22 requêtes PTR dans un seul paquet mDNS multicast
+  → Écoute 4 s : PTR → instance, SRV → port/hostname, TXT → modèle, A → IP
+  → Fusionne services, model, hostname, category dans chaque NetworkDevice
+
+Phase 8 : Self entry
   → Ajoute l'ESP32 lui-même (l'ARP ne peut pas découvrir sa propre adresse)
 ```
 
@@ -173,6 +179,21 @@ Fonctionnement :
 4. Parsing XML robuste (namespaces, attributs, malformations)
 5. Catégorisation automatique (Sonos, Hue, Freebox, Synology, Samsung TV…)
 6. APIs spécifiques pour les devices reconnus (Hue, Synology, Freebox)
+
+---
+
+### `src/modules/dns_sd_scanner.*` — Scanner DNS-SD
+
+**Rôle** : identifier les services exposés par chaque équipement du réseau.
+
+Voir `docs/PROTOCOLS.md` pour le détail du protocole DNS-SD.
+
+Fonctionnement :
+1. Construit un paquet mDNS avec 22 questions PTR (un par type de service)
+2. Envoie en multicast → `224.0.0.251:5353` (même canal que mDNS)
+3. Écoute pendant 4 s les réponses PTR + SRV + TXT + A
+4. Construit une map IP → {services, model, hostname, category}
+5. Fusionne dans les NetworkDevice existants
 
 ---
 
@@ -252,6 +273,7 @@ struct NetworkDevice {
     String   model;        // Source : ISP → SSDP modelName → API
     String   os;           // Source : API Hue/Synology/Freebox
     String   source;       // Méthode ayant fourni le hostname/enrichissement
+    String   services;     // Services DNS-SD : "HTTP|SSH|SMB" (pipe-séparé)
     uint32_t lastSeen;     // millis() du dernier scan
     bool     online;       // true si vu au dernier scan
 };
@@ -300,5 +322,6 @@ Le scan réseau est sur le Core 0 pour co-localiser les appels lwIP (ARP, DNS, s
 | Modifier les timeouts | `include/app_config.h` |
 | Ajouter une box FAI | `src/modules/isp_detector.h` |
 | Ajouter un device UPnP | `src/modules/ssdp_scanner.cpp` (`_categorize()` ou `_enrich*()`) |
+| Ajouter un type de service DNS-SD | `src/modules/dns_sd_scanner.cpp` (table `SERVICE_TYPES[]`) |
 | Modifier la version | `platformio.ini` (`PROJECT_VERSION`) — uniquement ici |
 | Ajouter un module entier | `src/modules/nouveau.*` + include dans `network_scanner.cpp` ou `main.cpp` |

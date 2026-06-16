@@ -383,7 +383,38 @@ tr:hover td      { background: #ffffff06; }
 
 
 /* ════════════════════════════════════════════════════
-   12. PAGE OTA — Formulaire upload firmware
+   12. PAGE ÉQUIPEMENTS — Badges de services DNS-SD
+   ════════════════════════════════════════════════════ */
+
+.svc-list {
+  margin-top: 0.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+}
+
+.svc-badge {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.svc-web    { background: #0c2240; color: #60a5fa; }
+.svc-ssh    { background: #2a2010; color: #fbbf24; }
+.svc-share  { background: #102030; color: #67e8f9; }
+.svc-apple  { background: #2a1010; color: #fb7185; }
+.svc-google { background: #102010; color: #4ade80; }
+.svc-music  { background: #1a1030; color: #c084fc; }
+.svc-iot    { background: #0c2218; color: #34d399; }
+.svc-print  { background: #102018; color: #86efac; }
+.svc-other  { background: #1e293b; color: #94a3b8; }
+
+/* ════════════════════════════════════════════════════
+   13. PAGE OTA — Formulaire upload firmware
    ════════════════════════════════════════════════════ */
 
 label {

@@ -4,7 +4,7 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ---
 
-## En cours / Prochaine version (v0.0.9)
+## En cours / Prochaine version (v0.1.0)
 
 * Scan de ports TCP (HTTP, HTTPS, SSH, MQTT, SMB…)
 * Détection des nouveaux équipements depuis le dernier scan
@@ -26,8 +26,6 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * Export CSV
 
 ### v0.2.x — Découverte avancée
-
-* DNS-SD (découverte de services via mDNS)
 * Identification automatique des services exposés (port scan + bannières)
 * Détection du système d'exploitation (heuristiques TTL, TCP/IP stack)
 * Corrélation multi-sources pour les champs encore vides
@@ -86,3 +84,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.0.6  | Corrections de robustesse, reconnexion WiFi, mDNS, OTA, JSON sécurisé, modules idempotents                                                                         |
 | v0.0.7  | Résolution des noms d'hôtes (mDNS + PTR), détection des box FAI, modèle/source/catégorie, ESP32 visible dans sa propre liste, amélioration complète de l'interface |
 | v0.0.8  | Scanner SSDP/UPnP complet, parsing XML robuste, catégorisation automatique, APIs Hue Bridge / Synology DSM / Freebox, nouveaux badges source UI |
+| v0.0.9  | Scanner DNS-SD (RFC 6763) — 22 types de services, badges services HTTP/SSH/AirPlay/Cast/Sonos/HomeKit…, champ services dans NetworkDevice et API |

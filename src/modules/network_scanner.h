@@ -45,6 +45,7 @@ struct NetworkDevice {
     String   model;         // Modèle détaillé si disponible (ex: "Freebox Ultra", "")
     String   os;            // Système d'exploitation — usage futur, vide en v0.0.7
     String   source;        // Source de résolution : "mDNS" | "PTR" | "MAC" | "Self" | ""
+    String   services;      // Services DNS-SD détectés, séparés par '|' (ex: "HTTP|SSH|SMB")
 
     uint32_t lastSeen;      // millis() du dernier scan — converti en elapsed côté client
     bool     online;        // true si détecté lors du dernier scan
@@ -92,6 +93,10 @@ private:
     // Fusionne les résultats du scan SSDP/UPnP dans _results
     // Enrichit les équipements existants et ajoute les nouveaux
     void _mergeSsdp();
+
+    // Fusionne les résultats du scan DNS-SD dans _results
+    // Renseigne services, model (si vide), hostname (si vide), category (si vide/IoT)
+    void _mergeDnsSd();
 
     SemaphoreHandle_t           _mutex      = nullptr;
     TaskHandle_t                _taskHandle = nullptr;
