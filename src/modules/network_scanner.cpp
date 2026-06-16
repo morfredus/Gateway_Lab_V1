@@ -16,6 +16,8 @@
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include "ssdp_scanner.h"        // Découverte UPnP/SSDP
 #include "dns_sd_scanner.h"      // Découverte de services DNS-SD (RFC 6763)
+#include "device_store.h"        // Persistance LittleFS
+#include "icmp_scanner.h"        // Sonde ICMP pour IPs non trouvées par ARP
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
@@ -95,18 +97,16 @@ void NetworkScanner::_readArpTable() {
 }
 
 // ---------------------------------------------------------------------------
-// Sweep ARP du sous-réseau
+// Sweep ARP du sous-réseau — 3 passes
 //
-// etharp_request() envoie un ARP Request broadcast (la bonne primitive pour
-// découvrir les équipements, contrairement au sweep UDP qui ne déclenche pas
-// de réponse ARP directe).
+// Passe 1 : sweep complet par lots de 5, 100 ms entre chaque lot.
+//   Capture les équipements actifs qui répondent rapidement.
 //
-// Stratégie par lots :
-//   - BATCH_SIZE requêtes ARP, puis attente BATCH_DELAY_MS pour les réponses
-//   - Lecture de la table ARP après chaque lot avant que la table (10 entrées)
-//     ne soit écrasée par le lot suivant
-//   - hostnameResolver.update() appelé après chaque lecture pour accumuler
-//     les annonces mDNS passives pendant le sweep
+// Passe 2 : re-sonde uniquement les IPs non encore trouvées, lots de 5,
+//   150 ms entre lots. Rattrape les équipements lents à répondre.
+//
+// Passe 3 : attente 500 ms puis dernière lecture ARP.
+//   Vide le buffer des réponses tardives avant de passer à la résolution.
 // ---------------------------------------------------------------------------
 void NetworkScanner::_sweepSubnet() {
     IPAddress local = WiFi.localIP();
@@ -118,13 +118,14 @@ void NetworkScanner::_sweepSubnet() {
         bcast[i] = net[i] | (~mask[i] & 0xFF);
     }
 
-    int h_start = (net[3]   == 0)   ? 1   : (int)net[3]   + 1;
-    int h_end   = (bcast[3] == 255) ? 254 : (int)bcast[3] - 1;
+    const int h_start = (net[3]   == 0)   ? 1   : (int)net[3]   + 1;
+    const int h_end   = (bcast[3] == 255) ? 254 : (int)bcast[3] - 1;
 
+    // ── Passe 1 : sweep complet ──────────────────────────────────────────────
     constexpr int BATCH_SIZE     = 5;
     constexpr int BATCH_DELAY_MS = 100;
 
-    Log::i(TAG, "Sweep ARP %d.%d.%d.%d – .%d (lots de %d, %d ms/lot)",
+    Log::i(TAG, "ARP passe 1 : %d.%d.%d.%d–.%d (lots %d, %d ms/lot)",
            net[0], net[1], net[2], h_start, h_end, BATCH_SIZE, BATCH_DELAY_MS);
 
     int inBatch = 0;
@@ -142,11 +143,10 @@ void NetworkScanner::_sweepSubnet() {
             xSemaphoreTake(_mutex, portMAX_DELAY);
             _readArpTable();
             xSemaphoreGive(_mutex);
-            hostnameResolver.update();   // Collecter les annonces mDNS reçues
+            hostnameResolver.update();
             inBatch = 0;
         }
     }
-
     if (inBatch > 0) {
         vTaskDelay(pdMS_TO_TICKS(BATCH_DELAY_MS));
         xSemaphoreTake(_mutex, portMAX_DELAY);
@@ -154,6 +154,59 @@ void NetworkScanner::_sweepSubnet() {
         xSemaphoreGive(_mutex);
         hostnameResolver.update();
     }
+
+    // ── Passe 2 : re-sonde les IP non trouvées ───────────────────────────────
+    // Collecte les IPs de la plage absentes de _results
+    std::vector<int> missing;
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (int h = h_start; h <= h_end; h++) {
+            char ipStr[16];
+            snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d",
+                     net[0], net[1], net[2], h);
+            IPAddress tgt(net[0], net[1], net[2], h);
+            if (tgt == local) continue;
+            bool found = false;
+            for (const auto& d : _results) {
+                if (d.ip == ipStr) { found = true; break; }
+            }
+            if (!found) missing.push_back(h);
+        }
+        xSemaphoreGive(_mutex);
+    }
+
+    Log::i(TAG, "ARP passe 2 : %u IP(s) non trouvées re-sondées", (unsigned)missing.size());
+    inBatch = 0;
+    for (int h : missing) {
+        ip4_addr_t ip4target;
+        IP4_ADDR(&ip4target, net[0], net[1], net[2], (uint8_t)h);
+        etharp_request(netif_default, &ip4target);
+        inBatch++;
+
+        if (inBatch >= BATCH_SIZE) {
+            vTaskDelay(pdMS_TO_TICKS(150));
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            _readArpTable();
+            xSemaphoreGive(_mutex);
+            hostnameResolver.update();
+            inBatch = 0;
+        }
+    }
+    if (inBatch > 0) {
+        vTaskDelay(pdMS_TO_TICKS(150));
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        _readArpTable();
+        xSemaphoreGive(_mutex);
+        hostnameResolver.update();
+    }
+
+    // ── Passe 3 : flush final après délai ────────────────────────────────────
+    Log::i(TAG, "ARP passe 3 : lecture finale après 500 ms");
+    vTaskDelay(pdMS_TO_TICKS(500));
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _readArpTable();
+    xSemaphoreGive(_mutex);
+    hostnameResolver.update();
 }
 
 // ---------------------------------------------------------------------------
@@ -377,21 +430,76 @@ void NetworkScanner::_task(void* self) {
 }
 
 void NetworkScanner::_run() {
+    // Charger les devices connus depuis LittleFS (injectés offline)
+    _mergePersistedDevices();
+
     // Démarrer l'écoute mDNS passive avant le sweep (capture les annonces
     // émises par les équipements qui deviennent actifs sur le réseau)
     hostnameResolver.clearCaches();
     hostnameResolver.begin();
 
+    // ARP sweep en 3 passes (implémenté dans _sweepSubnet)
     _sweepSubnet();
 
-    // Dernière lecture ARP après la fin du sweep
-    vTaskDelay(pdMS_TO_TICKS(200));
-    xSemaphoreTake(_mutex, portMAX_DELAY);
-    _readArpTable();
-    xSemaphoreGive(_mutex);
     hostnameResolver.update();   // Traiter les derniers paquets mDNS
 
-    Log::i(TAG, "Sweep ARP terminé — %u équipement(s) détecté(s)", (unsigned)_results.size());
+    Log::i(TAG, "ARP terminé — %u équipement(s) détecté(s)", (unsigned)_results.size());
+
+    // ── ICMP sweep sur les IP non trouvées par ARP ──────────────────────────
+    // Collecte les IPs de la plage encore absentes de _results
+    {
+        IPAddress local = WiFi.localIP();
+        IPAddress mask  = WiFi.subnetMask();
+        uint8_t net[4], bcast[4];
+        for (int i = 0; i < 4; i++) {
+            net[i]   = local[i] & mask[i];
+            bcast[i] = net[i] | (~mask[i] & 0xFF);
+        }
+        int h_start = (net[3] == 0)   ? 1   : (int)net[3]   + 1;
+        int h_end   = (bcast[3] == 255) ? 254 : (int)bcast[3] - 1;
+
+        std::vector<String> missingIps;
+        {
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (int h = h_start; h <= h_end; h++) {
+                char ipStr[16];
+                snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d",
+                         net[0], net[1], net[2], h);
+                IPAddress tgt(net[0], net[1], net[2], h);
+                if (tgt == local) continue;
+                bool found = false;
+                for (const auto& d : _results) {
+                    if (d.ip == ipStr && d.online) { found = true; break; }
+                }
+                if (!found) missingIps.push_back(String(ipStr));
+            }
+            xSemaphoreGive(_mutex);
+        }
+
+        // ICMP uniquement si la plage est raisonnable (évite les /16)
+        if (!missingIps.empty() && missingIps.size() <= 100) {
+            auto alive = icmpScanner.ping(missingIps, 200);
+            if (!alive.empty()) {
+                xSemaphoreTake(_mutex, portMAX_DELAY);
+                for (const auto& ip : alive) {
+                    bool exists = false;
+                    for (const auto& d : _results) {
+                        if (d.ip == ip) { exists = true; break; }
+                    }
+                    if (!exists) {
+                        NetworkDevice d;
+                        d.ip       = ip;
+                        d.source   = "ICMP";
+                        d.online   = true;
+                        d.lastSeen = millis();
+                        _results.push_back(d);
+                        Log::i(TAG, "ICMP nouveau device : %s", ip.c_str());
+                    }
+                }
+                xSemaphoreGive(_mutex);
+            }
+        }
+    }
 
     // Résolution des hostnames + détection ISP
     _resolveHostnames();
@@ -403,18 +511,65 @@ void NetworkScanner::_run() {
     _addSelfEntry();
 
     // Scan SSDP/UPnP — enrichit les équipements existants et ajoute les
-    // équipements UPnP non détectés par ARP (ex: périphériques qui ne répondent
-    // pas aux ARP request mais annoncent leur présence via multicast SSDP).
+    // équipements UPnP non détectés par ARP
     _mergeSsdp();
 
     // Scan DNS-SD — identifie les services exposés par chaque équipement
-    // (HTTP, SSH, AirPlay, HomeKit, Chromecast, Sonos…) et enrichit les champs
-    // model / hostname / category quand ils sont encore vides.
     _mergeDnsSd();
 
-    Log::i(TAG, "Scan complet — %u équipement(s) enrichi(s)", (unsigned)_results.size());
+    // Sauvegarder en LittleFS pour le prochain boot
+    _saveToStore();
+
+    Log::i(TAG, "Scan complet — %u équipement(s) total", (unsigned)_results.size());
     _scanning   = false;
     _taskHandle = nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Chargement des devices connus depuis LittleFS
+// Injectés avec online=false — seront mis à jour si découverts par ARP/ICMP
+// ---------------------------------------------------------------------------
+void NetworkScanner::_mergePersistedDevices() {
+    auto stored = deviceStore.load();
+    if (stored.empty()) return;
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (const auto& s : stored) {
+        bool found = false;
+        for (const auto& d : _results) {
+            if ((!s.mac.isEmpty() && d.mac == s.mac) ||
+                (!s.ip.isEmpty()  && d.ip  == s.ip)) {
+                found = true; break;
+            }
+        }
+        if (!found) _results.push_back(s);
+    }
+    xSemaphoreGive(_mutex);
+}
+
+// ---------------------------------------------------------------------------
+// Sauvegarde des résultats dans LittleFS
+// ---------------------------------------------------------------------------
+void NetworkScanner::_saveToStore() {
+    std::vector<NetworkDevice> copy;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    copy = _results;
+    xSemaphoreGive(_mutex);
+    deviceStore.save(copy);
+}
+
+// ---------------------------------------------------------------------------
+// Statistiques du scan pour l'UI
+// ---------------------------------------------------------------------------
+ScanStats NetworkScanner::getStats() const {
+    ScanStats s;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (const auto& d : _results) {
+        s.known++;
+        if (d.online) s.online++; else s.offline++;
+    }
+    xSemaphoreGive(_mutex);
+    return s;
 }
 
 // ---------------------------------------------------------------------------

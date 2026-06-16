@@ -1,38 +1,37 @@
 /**
  * NetworkScanner — Découverte des équipements connectés au réseau local
  *
- * Fonctionnement du scan (v0.0.7) :
- *   1. Envoi de requêtes ARP natives (etharp_request) sur tout le sous-réseau
- *   2. Lecture de la table ARP lwIP par lots pour capturer les réponses
- *      avant que la table (10 entrées max) ne soit écrasée
- *   3. Écoute mDNS multicast passive pendant le sweep (HostnameResolver)
- *   4. Déduplication par adresse MAC — un équipement garde son entrée
- *      même s'il change d'IP entre deux scans
- *   5. Identification du fabricant via les 3 premiers octets MAC (OUI)
- *   6. Résolution des noms d'hôtes par requêtes PTR DNS batch
- *   7. Détection des boxes FAI françaises (Free, Orange, SFR, Bouygues)
+ * Fonctionnement du scan (v0.1.0) :
+ *   1. Chargement des devices connus depuis LittleFS (DeviceStore)
+ *   2. ARP sweep en 3 passes :
+ *      - Passe 1 : sweep complet par lots de 5
+ *      - Passe 2 : re-sonde les IP non trouvées
+ *      - Passe 3 : lecture finale après 500 ms
+ *   3. ICMP sweep sur les IP manquantes (complément ARP)
+ *   4. Écoute mDNS passive pendant le sweep (HostnameResolver)
+ *   5. Résolution des noms par PTR DNS batch
+ *   6. Détection boxes FAI (Free, Orange, SFR, Bouygues)
+ *   7. SSDP/UPnP — descripteur XML + APIs Hue/Synology/Freebox
+ *   8. DNS-SD — 22 types de services (HTTP, SSH, AirPlay…)
+ *   9. Sauvegarde dans LittleFS
  *
  * Le scan s'exécute dans une tâche FreeRTOS sur le Core 0 (même core que
  * le stack TCP/IP) pour ne pas bloquer l'interface web pendant l'opération.
- *
- * Durée typique sur un réseau /24 : 5 à 20 secondes selon le nombre d'hôtes
- * et la disponibilité du DNS (PTR queries ajoutent ≤ 500 ms au total).
  */
 
 #pragma once
 #include <Arduino.h>
 #include <vector>
 
+// Statistiques du scan : équipements connus / en ligne / hors ligne
+struct ScanStats {
+    int known   = 0;  // Total dans _results (online + offline)
+    int online  = 0;  // Vus lors du dernier scan
+    int offline = 0;  // Connus mais absents lors du dernier scan
+};
+
 // ---------------------------------------------------------------------------
 // Informations collectées pour chaque équipement découvert
-//
-// Champs v0.0.7 :
-//   manufacturer  — Fabricant (OUI ou ISP override, ex: "Orange", "Free")
-//   hostname      — Meilleur nom disponible (mDNS > PTR DNS), ex: "raspberrypi"
-//   category      — Catégorie d'équipement (ex: "Router", "IoT", "Mobile")
-//   model         — Modèle précis si détecté (ex: "Livebox 6", "Freebox Pop")
-//   os            — Système d'exploitation (usage futur — vide en v0.0.7)
-//   source        — Méthode de résolution : "mDNS", "PTR", "MAC", ou ""
 // ---------------------------------------------------------------------------
 struct NetworkDevice {
     String   ip;            // Adresse IPv4 (ex: "192.168.1.10")
@@ -69,6 +68,9 @@ public:
     // Sérialisation JSON des résultats pour l'API /api/devices
     String resultsToJson() const;
 
+    // Statistiques pour l'UI (connus / en ligne / hors ligne)
+    ScanStats getStats() const;
+
 private:
     // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
     static void _task(void* self);
@@ -97,6 +99,12 @@ private:
     // Fusionne les résultats du scan DNS-SD dans _results
     // Renseigne services, model (si vide), hostname (si vide), category (si vide/IoT)
     void _mergeDnsSd();
+
+    // Charge les devices connus depuis DeviceStore et les injecte offline dans _results
+    void _mergePersistedDevices();
+
+    // Sauvegarde _results dans DeviceStore (fin de scan)
+    void _saveToStore();
 
     SemaphoreHandle_t           _mutex      = nullptr;
     TaskHandle_t                _taskHandle = nullptr;

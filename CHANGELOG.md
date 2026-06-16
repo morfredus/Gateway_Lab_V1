@@ -5,6 +5,51 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.1.0] — 2026-06-16
+
+### Ajouté
+
+- **ARP 3 passes** (`network_scanner.cpp`) :
+  - Passe 1 : sweep complet du sous-réseau, lots de 5 IPs, 100 ms/lot, lecture ARP après chaque lot
+  - Passe 2 : re-sonde uniquement les IPs non répondues, lots de 5, 150 ms/lot
+  - Passe 3 : attente 500 ms + lecture finale de la table ARP pour capturer les retardataires
+
+- **ICMP sweep** (`src/modules/icmp_scanner.h/.cpp`) :
+  - Après les 3 passes ARP, ping ICMP raw sur les IPs restantes (≤ 100)
+  - Timeout 150 ms par hôte, traitement séquentiel
+  - Les IPs répondantes sont injectées dans `_results` avec `source="ICMP"`
+
+- **Persistance LittleFS** (`src/modules/device_store.h/.cpp`) :
+  - `DeviceStore::begin()` monte LittleFS (format automatique si besoin)
+  - `load()` : désérialise `/devices.json` → vecteur de `NetworkDevice` (online=false)
+  - `save()` : sérialise tous les équipements non-vides dans `/devices.json`
+  - Au démarrage du scan, les équipements connus sont injectés comme offline
+  - En fin de scan, les résultats enrichis sont sauvegardés
+
+- **Statistiques online/offline** (`ScanStats`) :
+  - Nouveau struct `ScanStats { known, online, offline }` dans `network_scanner.h`
+  - `NetworkScanner::getStats()` : comptage thread-safe sous mutex
+  - `/api/devices` retourne `"stats":{"known":N,"online":N,"offline":N}`
+  - `ScanProvider::getStats` lambda dans `web_server.h`
+
+- **UI — barre de statistiques** (`web_src/scan.html`) :
+  - Bandeau `#stats-bar` au-dessus du tableau : connus · en ligne · hors ligne
+  - Colonne "Statut" dans le tableau : ● vert (online) / ○ gris (offline)
+  - `window._lastStats` extrait de la réponse `/api/devices` pour mise à jour du bandeau
+
+- **UI — styles** (`web_src/styles.css`) :
+  - `.stats-bar`, `.stat-sep`, `.stat-known`, `.stat-online`, `.stat-offline`
+  - `.status-cell`, `.status-online`, `.status-offline`
+
+### Modifié
+
+- **`src/modules/network_scanner.h`** : ajout `ScanStats`, `getStats()`, `_mergePersistedDevices()`, `_saveToStore()`
+- **`src/modules/network_scanner.cpp`** : imports `device_store.h` et `icmp_scanner.h`, sweep 3 passes, intégration ICMP, persistence
+- **`src/modules/web_server.h`** : `ScanProvider::getStats` lambda ajoutée
+- **`src/modules/web_server.cpp`** : `_handleApiDevices()` inclut `stats` dans la réponse JSON
+- **`src/main.cpp`** : `deviceStore.begin()` avant WiFi, lambda `getStats` dans `registerScanProvider`
+- **`platformio.ini`** : `PROJECT_VERSION` → `0.1.0`
+
 ## [0.0.9] — 2026-06-16
 
 ### Ajouté

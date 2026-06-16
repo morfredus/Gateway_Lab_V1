@@ -25,6 +25,7 @@ struct ScanProvider {
     std::function<bool()>   isScanning;   // Le scan est-il en cours ?
     std::function<String()> getJson;      // Résultats sérialisés en JSON
     std::function<void()>   triggerScan;  // Lancement d'un nouveau scan
+    std::function<String()> getStats;     // Stats JSON : {"known":X,"online":Y,"offline":Z}
 };
 
 class WebServerModule {
