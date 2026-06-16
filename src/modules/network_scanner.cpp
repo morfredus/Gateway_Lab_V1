@@ -18,7 +18,9 @@
 #include "dns_sd_scanner.h"      // Découverte de services DNS-SD (RFC 6763)
 #include "device_store.h"        // Persistance LittleFS
 #include "icmp_scanner.h"        // Sonde ICMP pour IPs non trouvées par ARP
-#include "port_scanner.h"        // Scan TCP ports communs + banner HTTP
+#include "port_scanner.h"        // Scan TCP ports communs + banner HTTP/SSH/FTP + API IoT
+#include "netbios_scanner.h"     // Node Status NetBIOS (UDP 137) - hostnames Windows/Samba
+#include "device_enricher.h"     // Enrichissement par pattern matching sur le hostname
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
@@ -520,8 +522,14 @@ void NetworkScanner::_run() {
     // Scan DNS-SD — identifie les services exposés par chaque équipement
     _mergeDnsSd();
 
-    // Scan TCP des ports communs + banner HTTP
+    // Scan TCP des ports communs + banner HTTP/SSH/FTP + API IoT
     _scanPorts();
+
+    // Requete NetBIOS sur les equipements encore sans hostname (PC Windows/Samba)
+    _scanNetBios();
+
+    // Enrichissement final par pattern matching sur le hostname
+    _enrichDevices();
 
     // Sauvegarder en LittleFS pour le prochain boot
     _saveToStore();
@@ -671,10 +679,81 @@ void NetworkScanner::_scanPorts() {
                 if (p == 554)  { d.os = "Camera/NVR"; break; }
             }
         }
+
+        // Banniere SSH -> OS probable (Linux/embarque) si encore vide
+        if (d.os.isEmpty() && !pr.sshBanner.isEmpty()) {
+            String sb = pr.sshBanner;
+            sb.toLowerCase();
+            if (sb.indexOf("openssh") >= 0) d.os = "Linux / Unix";
+        }
+
+        // API IoT identifiee precisement -> manufacturer/category/model/firmware
+        if (!pr.iotType.isEmpty()) {
+            if (d.manufacturer.isEmpty()) d.manufacturer = pr.iotType;
+            if (d.category.isEmpty() || d.category == "IoT") {
+                if (pr.iotType == "FritzBox") d.category = "Router";
+                else d.category = "IoT";
+            }
+            if (d.model.isEmpty() && !pr.iotModel.isEmpty()) d.model = pr.iotModel;
+            if (d.os.isEmpty() && !pr.iotFirmware.isEmpty()) d.os = pr.iotFirmware;
+        }
     }
     xSemaphoreGive(_mutex);
 
     Log::i(TAG, "Ports fusionnés — %u équipement(s) enrichis", (unsigned)scanResults.size());
+}
+
+// ---------------------------------------------------------------------------
+// Requete NetBIOS Node Status sur les equipements encore sans hostname
+//
+// Cible uniquement les IP online dont le hostname est vide - tres efficace
+// pour les PC Windows et serveurs Samba qui ne repondent pas a mDNS/PTR DNS.
+// ---------------------------------------------------------------------------
+void NetworkScanner::_scanNetBios() {
+    std::vector<String> ipsToScan;
+    String selfIp = WiFi.localIP().toString();
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (const auto& d : _results) {
+            if (d.online && d.ip != selfIp && d.hostname.isEmpty())
+                ipsToScan.push_back(d.ip);
+        }
+        xSemaphoreGive(_mutex);
+    }
+
+    if (ipsToScan.empty()) return;
+
+    auto nbResults = netBiosScanner.scan(ipsToScan, 250);
+    if (nbResults.empty()) return;
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        auto it = nbResults.find(d.ip);
+        if (it == nbResults.end()) continue;
+        if (!d.hostname.isEmpty()) continue;
+
+        d.hostname = it->second.hostname;
+        d.source   = "NetBIOS";
+        if (d.model.isEmpty() && !it->second.workgroup.isEmpty())
+            d.model = it->second.workgroup;
+    }
+    xSemaphoreGive(_mutex);
+
+    Log::i(TAG, "NetBIOS fusionne - %u equipement(s) enrichis", (unsigned)nbResults.size());
+}
+
+// ---------------------------------------------------------------------------
+// Enrichissement final : pattern matching sur le hostname resolu
+//
+// Derniere etape du scan - complete manufacturer/category/os encore vides
+// a partir de mots-cles trouves dans le hostname (cf. device_enricher.h).
+// ---------------------------------------------------------------------------
+void NetworkScanner::_enrichDevices() {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        applyDeviceEnrichment(d);
+    }
+    xSemaphoreGive(_mutex);
 }
 
 // ---------------------------------------------------------------------------

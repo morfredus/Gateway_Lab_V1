@@ -351,6 +351,7 @@ tr:hover td      { background: #ffffff06; }
 .source-hue     { background: #2a1a10; color: #fb923c; }
 .source-synology{ background: #10182a; color: #60a5fa; }
 .source-freebox { background: #1a102a; color: #c084fc; }
+.source-netbios { background: #102a1c; color: #34d399; }
 
 /* Catégorie (IoT, Mobile, Router…) */
 .type-badge {

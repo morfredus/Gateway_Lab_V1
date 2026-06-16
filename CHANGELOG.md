@@ -5,6 +5,44 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.1.2] - 2026-06-16
+
+### Ajoute
+
+- **`src/modules/netbios_scanner.h/.cpp`** - Decouverte de hostnames via NetBIOS Name Service (UDP 137)
+
+  Requete Node Status (RFC 1001/1002) sur les equipements encore sans hostname apres
+  mDNS/PTR DNS - tres efficace pour les PC Windows et serveurs Samba. Retourne le nom
+  de machine et le groupe de travail/domaine sans configuration prealable.
+
+- **`src/modules/device_enricher.h`** - Enrichissement par reconnaissance de patterns hostname
+
+  Complete `manufacturer`/`category`/`os` a partir de mots-cles trouves dans le hostname
+  resolu (~75 patterns : robots aspirateurs, domotique, routeurs, IoT, NAS, SBC, streaming,
+  enceintes, imprimantes, cameras, mobile, ordinateurs, consoles). Detection 100% locale,
+  appliquee uniquement sur les champs encore vides en derniere etape du scan.
+
+- **Scanner de ports etendu** (`port_scanner.h/.cpp`) :
+  - Banniere brute SSH/FTP (lue immediatement a la connexion, sans requete)
+  - Sondage des API HTTP propres aux equipements IoT connus : Shelly (`/shelly`),
+    Tasmota (`/cm?cmnd=Status%200`), FritzBox (`/jason_boxinfo.xml`) - identifie le
+    modele exact et la version de firmware sans configuration prealable
+  - Nouveaux champs `PortScanResult` : `sshBanner`, `ftpBanner`, `iotType`, `iotModel`, `iotFirmware`
+
+- **Scanner DNS-SD etendu** (`dns_sd_scanner.cpp`) : 9 nouveaux types de services
+  (`_pdl-datastream._tcp`, `_scanner._tcp`, `_workstation._tcp`, `_companion-link._tcp`,
+  `_privet._tcp`, `_matter._tcp`, `_sleep-proxy._tcp`), soit 31 types de services au total.
+
+- **Interface** : nouveau badge de source "NetBIOS" sur la page Equipements.
+
+### Notes
+
+- Toutes les nouvelles fonctionnalites s'ajoutent aux sources existantes (ARP, ICMP, mDNS,
+  PTR, SSDP, DNS-SD, scan de ports) sans en retirer aucune - la regle de non-ecrasement des
+  champs deja renseignes par une source plus fiable est preservee.
+
+---
+
 ## [0.1.1] — 2026-06-16
 
 ### Ajouté

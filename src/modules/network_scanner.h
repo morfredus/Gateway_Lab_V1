@@ -107,10 +107,16 @@ private:
     // Sauvegarde _results dans DeviceStore (fin de scan)
     void _saveToStore();
 
-    // Scan TCP des ports communs + banner HTTP → remplit openPorts, os, manufacturer
+    // Scan TCP des ports communs + banner HTTP -> remplit openPorts, os, manufacturer
     void _scanPorts();
 
-    // Déduit l'OS depuis la valeur TTL ICMP et l'injecte dans os (si vide)
+    // Requete NetBIOS Node Status sur les IP sans hostname -> renseigne hostname/source
+    void _scanNetBios();
+
+    // Enrichissement final : pattern matching sur le hostname (manufacturer/category/os)
+    void _enrichDevices();
+
+    // Deduit l'OS depuis la valeur TTL ICMP et l'injecte dans os (si vide)
     static String _osFromTtl(uint8_t ttl);
 
     SemaphoreHandle_t           _mutex      = nullptr;

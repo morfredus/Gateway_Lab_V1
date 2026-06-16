@@ -25,7 +25,6 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * Export CSV
 
 ### v0.2.x — Découverte avancée
-* Corrélation multi-sources pour les champs encore vides
 * Fingerprinting TCP/IP stack avancé (TTL + TCP options + window size)
 * SNMP v1/v2c (community "public") pour équipements réseau (port UDP 161)
 
@@ -86,3 +85,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.0.9  | Scanner DNS-SD (RFC 6763) — 22 types de services, badges services HTTP/SSH/AirPlay/Cast/Sonos/HomeKit…, champ services dans NetworkDevice et API |
 | v0.1.0  | Persistance LittleFS, statistiques online/offline, UI barre de statistiques et colonne statut |
 | v0.1.1  | Scanner TCP 14 ports (sockets non-bloquants), banner HTTP, TTL → OS, badges ports TCP colorés dans l'UI |
+| v0.1.2  | Scanner NetBIOS (UDP 137), enrichissement par patterns hostname, bannières SSH/FTP, détection API IoT (Shelly/Tasmota/FritzBox), DNS-SD étendu à 31 types de services, badge source NetBIOS |

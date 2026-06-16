@@ -1,19 +1,25 @@
 /**
- * PortScanner — Scan TCP des ports communs + banner grabbing HTTP
+ * PortScanner - Scan TCP des ports communs + banner grabbing HTTP/SSH/FTP
+ * + sondage des API HTTP propres aux equipements IoT courants.
  *
  * Utilise des sockets non-bloquants avec select() pour sonder plusieurs
- * ports en parallèle (par lots de MAX_BATCH) sur chaque équipement.
- * Les ports ouverts sont retournés ; pour HTTP/8080/8123/5000 un GET /
- * est effectué pour lire l'en-tête Server: (banner grabbing).
+ * ports en parallele (par lots de MAX_BATCH) sur chaque equipement.
+ * Les ports ouverts sont retournes ; pour HTTP/8080/8123/5000 un GET /
+ * est effectue pour lire l'en-tete Server: (banner grabbing). Pour
+ * SSH/FTP/Telnet, la banniere brute envoyee a la connexion est lue.
  *
- * Ports sondés (14) :
- *   21 FTP · 22 SSH · 23 Telnet · 80 HTTP · 443 HTTPS · 445 SMB
- *   554 RTSP · 1883 MQTT · 3389 RDP · 5000 DSM/UPnP
- *   8080 HTTP-Alt · 8123 HA · 8443 HTTPS-Alt · 9100 IPP
+ * Sondage IoT : une fois le port HTTP ouvert identifie, quelques requetes
+ * cibles (Shelly, Tasmota, FritzBox...) permettent de recuperer le modele
+ * exact et la version de firmware sans configuration prealable.
  *
- * Temps de scan typique (réseau /24, ports majoritairement fermés) :
- *   ≈ 0.5-2 s par équipement (RST immédiat sur ports fermés)
- *   ≤ 400 ms par lot si tous les ports sont filtrés (timeout)
+ * Ports sondes (14) :
+ *   21 FTP - 22 SSH - 23 Telnet - 80 HTTP - 443 HTTPS - 445 SMB
+ *   554 RTSP - 1883 MQTT - 3389 RDP - 5000 DSM/UPnP
+ *   8080 HTTP-Alt - 8123 HA - 8443 HTTPS-Alt - 9100 IPP
+ *
+ * Temps de scan typique (reseau /24, ports majoritairement fermes) :
+ *   ~ 0.5-2 s par equipement (RST immediat sur ports fermes)
+ *   <= 400 ms par lot si tous les ports sont filtres (timeout)
  */
 
 #pragma once
@@ -23,13 +29,18 @@
 
 struct PortScanResult {
     std::vector<uint16_t> openPorts;
-    String httpBanner;   // Valeur de l'en-tête Server: HTTP (port 80/8080…)
+    String httpBanner;    // Valeur de l'en-tete Server: HTTP (port 80/8080...)
+    String sshBanner;     // Banniere brute SSH (port 22, ex: "SSH-2.0-OpenSSH_8.4")
+    String ftpBanner;     // Banniere brute FTP (port 21)
+    String iotType;       // Type d'API IoT detectee (ex: "Shelly", "Tasmota", "FritzBox")
+    String iotModel;      // Modele rapporte par l'API IoT
+    String iotFirmware;   // Version de firmware rapportee par l'API IoT
 };
 
 class PortScanner {
 public:
     // Scan les ports communs sur chaque IP de la liste.
-    // timeout_ms : délai maximum par lot de sockets (recommandé : 200-300 ms)
+    // timeout_ms : delai maximum par lot de sockets (recommande : 200-300 ms)
     std::map<String, PortScanResult> scan(
         const std::vector<String>& ips,
         uint32_t timeout_ms = 250);
@@ -41,8 +52,15 @@ private:
                     uint32_t timeout_ms,
                     std::vector<uint16_t>& openPorts);
 
-    // GET HTTP simple pour récupérer Server: header
+    // GET HTTP simple pour recuperer Server: header
     String _httpBanner(const String& ip, uint16_t port, uint32_t timeout_ms);
+
+    // Lecture de la banniere brute envoyee a la connexion (SSH/FTP/Telnet)
+    String _tcpBanner(const String& ip, uint16_t port, uint32_t timeout_ms);
+
+    // Sondage des API HTTP propres aux equipements IoT connus
+    void _probeIoTApis(const String& ip, uint16_t httpPort, uint32_t timeout_ms,
+                        PortScanResult& res);
 };
 
 extern PortScanner portScanner;

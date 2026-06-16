@@ -1,18 +1,25 @@
 /**
- * PortScanner — Implémentation
+ * PortScanner - Implementation
  *
  * Technique : sockets non-bloquants + select()
- *   1. Pour chaque IP, ouvrir MAX_BATCH sockets simultanément
- *   2. connect() non-bloquant → EINPROGRESS immédiat
- *   3. select() avec timeout → collecte les sockets prêts (connectés)
- *   4. getsockopt(SO_ERROR) == 0 → port ouvert
- *   5. Répéter par lots jusqu'à épuisement des ports
+ *   1. Pour chaque IP, ouvrir MAX_BATCH sockets simultanement
+ *   2. connect() non-bloquant -> EINPROGRESS immediat
+ *   3. select() avec timeout -> collecte les sockets prets (connectes)
+ *   4. getsockopt(SO_ERROR) == 0 -> port ouvert
+ *   5. Repeter par lots jusqu'a epuisement des ports
  *
- * Contrainte lwIP : CONFIG_LWIP_MAX_SOCKETS = 16 par défaut sur ESP32.
- * Le Web Server occupe 1-2 sockets → MAX_BATCH = 8 pour rester sûr.
+ * Contrainte lwIP : CONFIG_LWIP_MAX_SOCKETS = 16 par defaut sur ESP32.
+ * Le Web Server occupe 1-2 sockets -> MAX_BATCH = 8 pour rester sur.
  *
  * Banner HTTP : WiFiClient bloquant avec timeout court (1 s).
  * Uniquement sur les ports HTTP ouverts (80, 8080, 8123, 5000).
+ *
+ * Banner SSH/FTP : ces services envoient leur banniere immediatement a
+ * la connexion (avant toute requete) - une simple lecture suffit.
+ *
+ * Sondage IoT : apres identification d'un port HTTP ouvert, quelques
+ * requetes GET ciblees permettent d'identifier precisement certains
+ * equipements (Shelly, Tasmota, FritzBox) sans configuration prealable.
  */
 
 #include "port_scanner.h"
@@ -162,6 +169,110 @@ String PortScanner::_httpBanner(const String& ip, uint16_t port, uint32_t timeou
 }
 
 // ---------------------------------------------------------------------------
+// Banniere brute (SSH/FTP/Telnet) : lue immediatement apres connexion
+// ---------------------------------------------------------------------------
+String PortScanner::_tcpBanner(const String& ip, uint16_t port, uint32_t timeout_ms) {
+    WiFiClient client;
+    client.setTimeout(1);
+    if (!client.connect(ip.c_str(), port)) return "";
+
+    String banner;
+    unsigned long start = millis();
+    while (client.connected() && millis() - start < timeout_ms) {
+        if (!client.available()) { delay(5); continue; }
+        banner = client.readStringUntil('\n');
+        banner.trim();
+        break;
+    }
+    client.stop();
+    return banner;
+}
+
+// ---------------------------------------------------------------------------
+// Sondage des API HTTP propres aux equipements IoT connus
+// ---------------------------------------------------------------------------
+static String _httpGet(const String& ip, uint16_t port, const String& path,
+                        uint32_t timeout_ms) {
+    WiFiClient client;
+    client.setTimeout(1);
+    if (!client.connect(ip.c_str(), port)) return "";
+
+    client.printf("GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLabV1\r\nConnection: close\r\n\r\n",
+                  path.c_str(), ip.c_str());
+
+    String body;
+    unsigned long start = millis();
+    bool inBody = false;
+    while (client.connected() && millis() - start < timeout_ms) {
+        if (!client.available()) { delay(5); continue; }
+        String line = client.readStringUntil('\n');
+        if (!inBody) {
+            String trimmed = line; trimmed.trim();
+            if (trimmed.isEmpty()) inBody = true;
+            continue;
+        }
+        body += line;
+        if (body.length() > 1024) break;   // suffisant pour identifier le modele
+    }
+    client.stop();
+    return body;
+}
+
+static String _extractJsonField(const String& body, const char* key) {
+    String needle = String("\"") + key + "\"";
+    int kpos = body.indexOf(needle);
+    if (kpos < 0) return "";
+    int colon = body.indexOf(':', kpos + needle.length());
+    if (colon < 0) return "";
+    int start = colon + 1;
+    while (start < (int)body.length() && (body[start] == ' ' || body[start] == '"')) start++;
+    int end = start;
+    while (end < (int)body.length() && body[end] != '"' && body[end] != ',' && body[end] != '}') end++;
+    String val = body.substring(start, end);
+    val.trim();
+    return val;
+}
+
+void PortScanner::_probeIoTApis(const String& ip, uint16_t httpPort, uint32_t timeout_ms,
+                                 PortScanResult& res) {
+    // Shelly : GET /shelly -> {"type":"SHSW-1","fw":"...","mac":"..."}
+    String body = _httpGet(ip, httpPort, "/shelly", timeout_ms);
+    if (body.indexOf("\"type\"") >= 0 && body.indexOf("\"mac\"") >= 0) {
+        res.iotType     = "Shelly";
+        res.iotModel    = _extractJsonField(body, "type");
+        res.iotFirmware = _extractJsonField(body, "fw");
+        return;
+    }
+
+    // Tasmota : GET /cm?cmnd=Status%200 -> JSON avec "Version" et "Module"
+    body = _httpGet(ip, httpPort, "/cm?cmnd=Status%200", timeout_ms);
+    if (body.indexOf("\"Version\"") >= 0) {
+        res.iotType     = "Tasmota";
+        res.iotModel    = _extractJsonField(body, "Module");
+        res.iotFirmware = _extractJsonField(body, "Version");
+        return;
+    }
+
+    // FritzBox : GET /jason_boxinfo.xml -> XML avec <j:Name> et <j:Version>
+    body = _httpGet(ip, httpPort, "/jason_boxinfo.xml", timeout_ms);
+    if (body.indexOf("<j:Name>") >= 0) {
+        res.iotType  = "FritzBox";
+        int s = body.indexOf("<j:Name>");
+        if (s >= 0) {
+            s += 8;
+            int e = body.indexOf("</j:Name>", s);
+            if (e > s) res.iotModel = body.substring(s, e);
+        }
+        s = body.indexOf("<j:Version>");
+        if (s >= 0) {
+            s += 11;
+            int e = body.indexOf("</j:Version>", s);
+            if (e > s) res.iotFirmware = body.substring(s, e);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Scan principal : tous les ports sur chaque IP
 // ---------------------------------------------------------------------------
 std::map<String, PortScanResult> PortScanner::scan(
@@ -186,27 +297,40 @@ std::map<String, PortScanResult> PortScanner::scan(
             vTaskDelay(pdMS_TO_TICKS(10));
         }
 
-        // Banner HTTP sur les ports HTTP ouverts (premier trouvé)
+        // Banner HTTP + sondage API IoT sur le premier port HTTP ouvert
         for (uint16_t p : res.openPorts) {
             if (isHttpPort(p)) {
                 res.httpBanner = _httpBanner(ip, p, 1000);
-                if (!res.httpBanner.isEmpty()) break;
+                _probeIoTApis(ip, p, 800, res);
+                break;
             }
         }
 
-        if (!res.openPorts.empty() || !res.httpBanner.isEmpty()) {
+        // Banniere brute SSH (port 22)
+        for (uint16_t p : res.openPorts) {
+            if (p == 22) { res.sshBanner = _tcpBanner(ip, p, 500); break; }
+        }
+
+        // Banniere brute FTP (port 21)
+        for (uint16_t p : res.openPorts) {
+            if (p == 21) { res.ftpBanner = _tcpBanner(ip, p, 500); break; }
+        }
+
+        bool hasInfo = !res.openPorts.empty() || !res.httpBanner.isEmpty() ||
+                       !res.sshBanner.isEmpty() || !res.ftpBanner.isEmpty();
+        if (hasInfo) {
             String portList;
             for (size_t i = 0; i < res.openPorts.size(); i++) {
                 if (i) portList += "|";
                 portList += String(res.openPorts[i]);
             }
-            Log::i(TAG, "%s — ports ouverts: [%s] banner: \"%s\"",
-                   ip.c_str(), portList.c_str(), res.httpBanner.c_str());
+            Log::i(TAG, "%s - ports ouverts: [%s] banner: \"%s\" iot: \"%s\"",
+                   ip.c_str(), portList.c_str(), res.httpBanner.c_str(), res.iotType.c_str());
             results[ip] = res;
         }
     }
 
-    Log::i(TAG, "Port scan terminé — %u équipement(s) avec ports ouverts",
+    Log::i(TAG, "Port scan termine - %u equipement(s) avec ports ouverts",
            (unsigned)results.size());
     return results;
 }
