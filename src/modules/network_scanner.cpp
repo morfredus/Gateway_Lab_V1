@@ -572,6 +572,66 @@ String NetworkScanner::_osFromTtl(uint8_t ttl) {
 }
 
 // ---------------------------------------------------------------------------
+// Niveau de confiance de l'identification - explique a l'utilisateur d'ou
+// vient la deduction manufacturer/category affichee dans l'UI.
+//
+// Ponderation par fiabilite decroissante de la source ayant produit
+// l'identification (la plus forte deja appliquee gagne) :
+//   Box FAI (DHCP local)         : 100 - hostname confirme par le routeur lui-meme
+//   API specifique (Hue/DSM/...) : 95  - reponse authentifiee de l'equipement
+//   mDNS                         : 90  - annonce .local active de l'equipement
+//   SSDP/UPnP                    : 80  - descripteur XML fourni par l'equipement
+//   PTR DNS                      : 70  - resolution DNS inverse via le routeur
+//   NetBIOS                      : 65  - Node Status (UDP 137)
+//   OUI (adresse MAC)            : 60  - fabricant deduit, pas le modele exact
+//   Heuristiques                 : 40  - pattern matching hostname/ports/services
+//   Aucun signal                 : 20  - aucune source fiable n'a contribue
+// ---------------------------------------------------------------------------
+int NetworkScanner::_confidenceFor(const NetworkDevice& d, String& label) {
+    if (d.source == "Self") {
+        label = "Equipement local (ESP32)";
+        return 100;
+    }
+    bool ispBox = (d.category == "Router") &&
+                  (d.manufacturer == "Free" || d.manufacturer == "Orange" ||
+                   d.manufacturer == "SFR"  || d.manufacturer == "Bouygues Telecom");
+    if (ispBox) {
+        label = "Box FAI (DHCP)";
+        return 100;
+    }
+    if (d.source == "HueAPI" || d.source == "SynologyAPI" || d.source == "FreeboxAPI") {
+        label = "API " + d.source;
+        return 95;
+    }
+    if (d.source == "mDNS") {
+        label = "mDNS";
+        return 90;
+    }
+    if (d.source.indexOf("SSDP") >= 0) {
+        label = "SSDP";
+        return 80;
+    }
+    if (d.source == "PTR") {
+        label = "PTR DNS";
+        return 70;
+    }
+    if (d.source == "NetBIOS") {
+        label = "NetBIOS";
+        return 65;
+    }
+    if (!d.manufacturer.isEmpty()) {
+        label = "OUI";
+        return 60;
+    }
+    if (!d.category.isEmpty()) {
+        label = "Heuristiques";
+        return 40;
+    }
+    label = "Aucun signal";
+    return 20;
+}
+
+// ---------------------------------------------------------------------------
 // Scan TCP des ports communs sur tous les équipements en ligne
 //
 // Pour chaque équipement online :
@@ -995,6 +1055,9 @@ String NetworkScanner::resultsToJson() const {
         obj["firstSeen"]    = d.firstSeenEpoch;
         obj["lastSeenAt"]   = d.lastSeenEpoch;
         obj["seenCount"]    = d.seenCount;
+        String confLabel;
+        obj["confidence"]      = _confidenceFor(d, confLabel);
+        obj["confidenceLabel"] = confLabel;
         // services : tableau JSON ["HTTP","SSH","SMB"] depuis la chaîne pipe-séparée
         JsonArray svcArr = obj["services"].to<JsonArray>();
         if (!d.services.isEmpty()) {

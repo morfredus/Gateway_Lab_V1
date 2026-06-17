@@ -571,3 +571,21 @@ input[type=file] {
   color: #64748b;
   margin-top: 0.1rem;
 }
+
+/* ════════════════════════════════════════════════════
+   17. PAGE ÉQUIPEMENTS - Niveau de confiance
+   ════════════════════════════════════════════════════ */
+
+.conf-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.6rem;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+  cursor: help;
+}
+.conf-high   { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.conf-medium { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+.conf-low    { background: rgba(248, 113, 113, 0.15); color: #f87171; }
