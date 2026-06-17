@@ -7,8 +7,10 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 ## En cours / Prochaine version
 
 * Équipements favoris
-* Notes utilisateur sur un équipement
 * Export CSV
+* Authentification du portail de configuration WiFi et de l'API `/api/wifi`
+* Reconnexion automatique vers le portail si tous les réseaux enregistrés
+  échouent durablement (actuellement uniquement au tout premier démarrage)
 
 ---
 
@@ -28,8 +30,12 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * Fingerprinting TCP/IP stack avancé (TTL + TCP options + window size)
 * SNMP v1/v2c (community "public") pour équipements réseau (port UDP 161)
 
-### v0.3.x — Intégrations domotiques
+### v0.3.x — Configuration WiFi sans recompilation (terminé en v0.3.0)
 
+* ~~Portail de configuration WiFi (point d'accès + page captive)~~
+* ~~Persistance NVS multi-réseaux (`Preferences`)~~
+* ~~Page Paramètres → Réseau WiFi (liste, ajout, suppression)~~
+* Authentification du portail / de l'API `/api/wifi`
 * Tado (thermostats)
 * X-Sense (capteurs)
 * Détection des caméras Xiaomi
@@ -89,3 +95,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.2.0  | Historique des équipements (NTP, firstSeen/lastSeen/seenCount), alias utilisateur, classification intelligente multi-signaux, vue chronologique (/history), détection des changements, sauvegarde/restauration JSON |
 | v0.2.1  | Niveau de confiance de l'identification (score 0-100%, badge couleur, libellé de source au survol) |
 | v0.2.2  | Séparation HTML/CSS/JS dans `web_src/` (scripts extraits dans `*.js`, minifiés et injectés inline par `minify_web.py`), correction du lien Historique manquant sur la page OTA |
+| v0.3.0  | Portail de configuration WiFi (point d'accès + page captive), persistance NVS multi-réseaux, page Paramètres → Réseau WiFi (`/wifi`), API `/api/wifi` |

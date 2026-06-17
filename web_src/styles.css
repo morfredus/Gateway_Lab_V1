@@ -589,3 +589,16 @@ input[type=file] {
 .conf-high   { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
 .conf-medium { background: rgba(250, 204, 21, 0.15); color: #facc15; }
 .conf-low    { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+
+/* ════════════════════════════════════════════════════
+   18. PAGE PARAMÈTRES — Réseau WiFi (/wifi)
+   ════════════════════════════════════════════════════ */
+
+#wifi-list .alias-edit {
+  font-size: 0.78rem;
+  color: #f87171;
+}
+#wifi-list .alias-edit:hover { color: #ef4444; }
+
+#wifi-form input { margin-bottom: 0.9rem; }
+#wifi-msg { margin-top: 0.75rem; font-size: 0.85rem; color: #94a3b8; min-height: 1.1rem; }
