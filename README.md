@@ -1,5 +1,11 @@
 # Gateway Lab V1
 
+![Version](https://img.shields.io/badge/version-0.2.2-blue)
+![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
+![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-en%20développement-yellow)
+
 Passerelle intelligente ESP32-S3 pour la découverte, l'inventaire et l'exploration des équipements connectés au réseau local domestique.
 
 ---
@@ -200,12 +206,17 @@ Gateway-Lab-V1/
 │   └── web_interface_history.h  # Généré depuis web_src/history.html
 │
 ├── web_src/
-│   ├── index.html                # Page d'accueil (source)
-│   ├── scan.html                 # Page équipements (source)
-│   ├── ota.html                  # Page OTA (source)
-│   ├── history.html              # Page historique (source)
+│   ├── index.html                # Page d'accueil — HTML uniquement (source)
+│   ├── index.js                  # Script de la page d'accueil (source)
+│   ├── scan.html                 # Page équipements — HTML uniquement (source)
+│   ├── scan.js                   # Script de la page équipements (source)
+│   ├── ota.html                  # Page OTA — HTML uniquement (source)
+│   ├── ota.js                    # Script de la page OTA (source)
+│   ├── history.html              # Page historique — HTML uniquement (source)
+│   ├── history.js                # Script de la page historique (source)
 │   ├── styles.css                # Feuille de style unique (injectée inline par minify_web.py)
 │   ├── template.html             # Gabarit de référence (documentation)
+│   ├── extracted/                # Sortie de extract_web_sources.py (non versionné)
 │   └── README.md                 # Guide développeur web_src/
 │
 ├── data/
@@ -213,7 +224,11 @@ Gateway-Lab-V1/
 │   └── index.html
 │
 ├── docs/
-│   └── WARNINGS.md
+│   ├── GETTING_STARTED.md
+│   ├── ARCHITECTURE.md
+│   ├── PROTOCOLS.md
+│   ├── WARNINGS.md
+│   └── pictures/
 │
 ├── tools/
 │   ├── minify_web.py
@@ -244,6 +259,7 @@ Ils sont reconstruits à partir de :
 ```text
 data/oui.json
 web_src/*.html
+web_src/*.js
 ```
 
 via :
@@ -256,26 +272,29 @@ python tools/minify_web.py
 
 ## Workflow de développement web
 
+Chaque page web est découpée en trois sources, qui ont chacune un rôle unique :
+
+* `web_src/styles.css` → **tout** le CSS commun (une seule feuille pour les 4 pages)
+* `web_src/*.html` → uniquement du HTML/markup (aucun style, aucun script inline)
+* `web_src/*.js` → uniquement le JavaScript de la page correspondante
+
 ```text
-web_src/*.html
-        │
-        ├─────► tools/minify_web.py
-        │
-data/oui.json
-        │
-        ▼
-include/*.h générés
-        │
-        ▼
-pio run
-```
-web_src/styles.css  ──┐
-web_src/*.html      ──┼─ python tools/minify_web.py ──► include/*.h ──► pio run
-data/oui.json       ──┘
+web_src/styles.css     ──┐
+web_src/index.html     ──┤
+web_src/index.js       ──┤
+web_src/scan.html      ──┤
+web_src/scan.js        ──┼── python tools/minify_web.py ──► include/*.h ──► pio run
+web_src/ota.html       ──┤
+web_src/ota.js         ──┤
+web_src/history.html   ──┤
+web_src/history.js     ──┘
 ```
 
-`styles.css` contient **tout le CSS** des trois pages (organisé par sections).
-`minify_web.py` l'injecte inline dans chaque page — l'ESP32 sert du HTML auto-contenu.
+`minify_web.py` minifie le CSS et le JS, puis les injecte **inline** dans chaque
+page (à la place du `<link rel="stylesheet">` et du `<script src="...">`) avant
+de générer le header C++ correspondant. Résultat : l'ESP32 sert chaque page comme
+un seul fichier HTML auto-contenu depuis la mémoire flash (PROGMEM), sans serveur
+de fichiers statiques.
 
 Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO requis.
 
@@ -284,9 +303,9 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 | Outil | Usage |
 |---|---|
 | `python tools/minify_web.py` | Génère les headers PROGMEM depuis `web_src/` et `data/oui.json` |
-| `python tools/validate_html.py` | Valide la structure HTML des 3 pages + gabarit |
-| `python tools/extract_web_sources.py` | Prévisualise l'extraction des headers → `web_src/` (dry-run) |
-| `python tools/extract_web_sources.py --force` | Récupération d'urgence : écrase `web_src/*.html` depuis les headers |
+| `python tools/validate_html.py` | Valide la structure HTML des 4 pages + gabarit |
+| `python tools/extract_web_sources.py` | Prévisualise l'extraction des headers → `web_src/extracted/` (dry-run) |
+| `python tools/extract_web_sources.py --force` | Récupération d'urgence : écrit le HTML/JS extrait des headers dans `web_src/extracted/` (sans jamais toucher aux sources originales de `web_src/`) |
 
 ---
 
@@ -411,7 +430,8 @@ Pour les fonctionnalités prévues, consulter `ROADMAP.md`.
 - `include/board_config.h` — ne pas modifier
 - `include/secrets.h` — ne jamais committer
 - CSS modifiable uniquement dans `web_src/styles.css`
-- HTML modifiable uniquement dans `web_src/*.html`
+- HTML modifiable uniquement dans `web_src/*.html` (jamais de `<style>` ou `<script>` inline)
+- JavaScript modifiable uniquement dans `web_src/*.js`
 - Versioning uniquement dans `platformio.ini` via `PROJECT_VERSION`
 - Après toute modification de `web_src/` ou `data/oui.json` → relancer `python tools/minify_web.py`
 
