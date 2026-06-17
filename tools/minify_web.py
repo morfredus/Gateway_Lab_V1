@@ -235,7 +235,7 @@ def process_oui(ok: bool) -> bool:
 # ---------------------------------------------------------------------------
 def run():
     print("=" * 55)
-    print("Gateway Lab V1 — Minification assets")
+    print("Gateway Lab V1 - Minification assets")
     print("=" * 55)
 
     INCLUDE_DIR.mkdir(parents=True, exist_ok=True)

@@ -7,6 +7,11 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ## [0.3.0] - 2026-06-17
 
+### Développement
+
+- Ajout d'un hook PlatformIO optionnel permettant la génération automatique des assets web avant compilation.
+- Préparation de l'automatisation du pipeline web (HTML, CSS, JavaScript → headers C++).
+
 ### Ajoute
 
 - **Portail de configuration WiFi** : si aucun réseau n'est enregistré,
