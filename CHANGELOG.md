@@ -5,6 +5,59 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.3.0] - 2026-06-17
+
+### Ajoute
+
+- **Portail de configuration WiFi** : si aucun réseau n'est enregistré,
+  l'ESP32 démarre désormais un point d'accès `GatewayLab-Setup` avec une
+  page de configuration captive (`src/modules/wifi_manager.cpp`,
+  `web_src/wifi.html`). L'utilisateur choisit son réseau (liste détectée ou
+  saisie manuelle) et son mot de passe depuis un navigateur, sans
+  installation ni recompilation.
+- **Persistance NVS multi-réseaux** : les identifiants WiFi sont désormais
+  enregistrés dans la mémoire `Preferences` de l'ESP32 (namespace `"wifi"`)
+  et survivent aux redémarrages et coupures de courant. Plusieurs réseaux
+  peuvent être enregistrés simultanément (ex : domicile + atelier) ; l'ESP32
+  se connecte automatiquement au premier disponible (signal le plus fort).
+- **Nouvelle page `Paramètres → Réseau WiFi`** (`/wifi`) : affiche l'état de
+  connexion (SSID, IP, RSSI), liste les réseaux enregistrés, permet d'en
+  ajouter ou d'en supprimer — sans jamais exposer les mots de passe au
+  navigateur.
+- **Nouvelles routes API** : `GET /api/wifi` (état + liste des SSID
+  enregistrés), `POST /api/wifi` (ajoute/met à jour un réseau), `DELETE
+  /api/wifi` (supprime un réseau).
+- **Nouveau guide** `docs/WIFI_SETUP.md` : explique pas à pas, pour un
+  débutant, comment connecter la carte à son WiFi via le portail, gérer
+  plusieurs réseaux et réinitialiser la configuration.
+
+### Modifie
+
+- `include/secrets_example.h` / `include/secrets.h` ne sont plus la méthode
+  officielle de configuration WiFi : ils ne définissent plus qu'un réseau de
+  **développement** (`DEFAULT_WIFI_SSID` / `DEFAULT_WIFI_PASSWORD`), utilisé
+  uniquement si aucun réseau n'est encore enregistré en NVS. `secrets.h` est
+  désormais optionnel (inclusion conditionnelle via `__has_include`).
+- `WiFiManager` (`src/modules/wifi_manager.*`) réécrit pour exposer la
+  hiérarchie de configuration : NVS (priorité 1) → `secrets.h` (priorité 2,
+  dev) → portail de configuration (priorité 3).
+- Menu de navigation : ajout du lien **Paramètres** sur les 5 pages
+  (Accueil, Équipements, Historique, OTA, Paramètres).
+- `tools/minify_web.py`, `tools/extract_web_sources.py` et
+  `tools/validate_html.py` mis à jour pour inclure `wifi.html` / `wifi.js`.
+
+### Notes
+
+- Aucune authentification n'est requise pour le portail de configuration ni
+  pour l'API `/api/wifi` — voir `docs/WARNINGS.md` (section mots de passe
+  WiFi en mémoire NVS) pour les implications de sécurité sur un réseau non
+  fiable.
+- Compatible avec une distribution future du firmware sous forme de fichier
+  `.bin` unique : aucune modification de code source n'est requise pour
+  configurer le WiFi.
+
+---
+
 ## [0.2.2] - 2026-06-17
 
 ### Modifie

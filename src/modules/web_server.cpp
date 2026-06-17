@@ -9,6 +9,7 @@
 
 #include "web_server.h"
 #include "ota_manager.h"         // Enregistrement des routes /update
+#include "wifi_manager.h"        // Gestion des reseaux WiFi enregistres (NVS)
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
@@ -16,6 +17,7 @@
 #include "../../include/web_interface.h"      // INDEX_HTML (page d'accueil en PROGMEM)
 #include "../../include/web_interface_scan.h" // SCAN_PAGE (page équipements en PROGMEM)
 #include "../../include/web_interface_history.h" // HISTORY_PAGE (vue chronologique en PROGMEM)
+#include "../../include/web_interface_wifi.h" // WIFI_PAGE (parametres reseau WiFi en PROGMEM)
 #include "../utils/logger.h"
 
 static const char* TAG = "WebSrv";
@@ -47,6 +49,10 @@ void WebServerModule::begin(uint16_t port) {
     _server.on("/api/history",HTTP_GET,  [this]() { _handleApiHistory(); });
     _server.on("/api/backup", HTTP_GET,  [this]() { _handleApiBackup(); });
     _server.on("/api/restore",HTTP_POST, [this]() { _handleApiRestore(); });
+    _server.on("/wifi",       HTTP_GET,  [this]() { _server.send_P(200, "text/html", WIFI_PAGE); });
+    _server.on("/api/wifi",   HTTP_GET,  [this]() { _handleApiWifiGet(); });
+    _server.on("/api/wifi",   HTTP_POST, [this]() { _handleApiWifiPost(); });
+    _server.on("/api/wifi",   HTTP_DELETE, [this]() { _handleApiWifiDelete(); });
     _server.onNotFound(       [this]()  { _handleNotFound(); });
 
     // Délégation des routes OTA à OtaManager (/update GET + POST)
@@ -192,6 +198,64 @@ void WebServerModule::_handleApiRestore() {
     bool ok = _scan.restoreFromJson(body);
     _server.send(ok ? 200 : 400, "application/json",
                  ok ? "{\"status\":\"ok\"}" : "{\"error\":\"JSON invalide\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : etat WiFi + liste des reseaux enregistres (sans mots de passe)
+// Exemple de reponse :
+//   {"connected":true,"ssid":"Livebox","ip":"192.168.1.42","rssi":-55,
+//    "networks":[{"ssid":"Livebox"},{"ssid":"Atelier"}]}
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiWifiGet() {
+    JsonDocument doc;
+    doc["connected"] = wifiMgr.isConnected();
+    doc["ssid"]       = wifiMgr.ssid();
+    doc["ip"]         = wifiMgr.localIP();
+    doc["rssi"]       = wifiMgr.rssi();
+    JsonArray arr = doc["networks"].to<JsonArray>();
+    for (const auto& c : wifiMgr.savedNetworks()) {
+        JsonObject o = arr.add<JsonObject>();
+        o["ssid"] = c.ssid;   // le mot de passe n'est jamais renvoye au navigateur
+    }
+
+    String json;
+    serializeJson(doc, json);
+    _server.sendHeader("Cache-Control", "no-cache");
+    _server.send(200, "application/json", json);
+}
+
+// ---------------------------------------------------------------------------
+// Handler : ajoute ou met a jour un reseau enregistre
+// Parametres attendus (form-urlencoded) : ssid + password
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiWifiPost() {
+    String ssid     = _server.arg("ssid");
+    String password = _server.arg("password");
+
+    if (ssid.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"ssid requis\"}");
+        return;
+    }
+
+    bool ok = wifiMgr.addNetwork(ssid, password);
+    _server.send(ok ? 200 : 500, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"echec de l'enregistrement\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : supprime un reseau enregistre
+// Parametre attendu : ssid
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiWifiDelete() {
+    String ssid = _server.arg("ssid");
+    if (ssid.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"ssid requis\"}");
+        return;
+    }
+
+    bool ok = wifiMgr.removeNetwork(ssid);
+    _server.send(ok ? 200 : 404, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"reseau introuvable\"}");
 }
 
 // ---------------------------------------------------------------------------

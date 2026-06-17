@@ -62,6 +62,13 @@ PAGES = [
         "HISTORY_PAGE",
         None,
     ),
+    (
+        WEB_SRC_DIR / "wifi.html",
+        WEB_SRC_DIR / "wifi.js",
+        INCLUDE_DIR / "web_interface_wifi.h",
+        "WIFI_PAGE",
+        None,
+    ),
 ]
 
 # ---------------------------------------------------------------------------

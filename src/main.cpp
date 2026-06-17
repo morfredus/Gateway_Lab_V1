@@ -12,7 +12,7 @@
 #include "app_config.h"       // Paramètres globaux (port, timeouts, features)
 #include "board_config.h"     // Brochage de la carte (GPIO, SPI, I2C...)
 #include "utils/logger.h"     // Journalisation série (Log::i, Log::w, Log::e)
-#include "modules/wifi_manager.h"      // Connexion WiFi multi-réseaux
+#include "modules/wifi_manager.h"      // Connexion WiFi multi-réseaux, NVS et portail de configuration
 #include "modules/ota_manager.h"       // Mise à jour firmware (réseau + web)
 #include "modules/web_server.h"        // Serveur HTTP et interface web
 #include "modules/network_scanner.h"   // Découverte des équipements LAN

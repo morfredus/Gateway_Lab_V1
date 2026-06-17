@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.2.2-blue)
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -46,9 +46,11 @@ Le projet privilégie :
 
 | Fonctionnalité           | Détail                                                            |
 | ------------------------ | ----------------------------------------------------------------- |
-| WiFi multi-réseaux       | Connexion automatique au meilleur réseau disponible (`secrets.h`) |
+| WiFi multi-réseaux       | Connexion automatique au réseau enregistré au meilleur signal     |
+| Portail de configuration | Point d'accès `GatewayLab-Setup` + page web si aucun réseau n'est connu |
+| Persistance NVS          | Réseaux WiFi enregistrés survivant aux redémarrages/coupures      |
 | mDNS                     | Accessible via `gateway-lab-v1.local`                             |
-| Interface web            | Pages Accueil / Équipements / OTA                                 |
+| Interface web            | Pages Accueil / Équipements / Historique / OTA / Paramètres       |
 | Scan réseau LAN          | Sweep ARP du sous-réseau local                                    |
 | Tâche FreeRTOS dédiée    | Scan asynchrone sur Core 0                                        |
 | Résolution hostnames     | mDNS passif + DNS inverse PTR                                     |
@@ -72,7 +74,7 @@ Le projet privilégie :
 | Sauvegarde / restauration | Export et import JSON complet de l'inventaire et de l'historique |
 | OTA Web                  | Upload firmware depuis le navigateur                              |
 | ArduinoOTA               | Mise à jour réseau depuis PlatformIO                              |
-| API REST                 | `/api/status`, `/api/devices`, `/api/scan`, `/api/alias`, `/api/history`, `/api/backup`, `/api/restore` |
+| API REST                 | `/api/status`, `/api/devices`, `/api/scan`, `/api/alias`, `/api/history`, `/api/backup`, `/api/restore`, `/api/wifi` |
 
 ---
 
@@ -111,13 +113,26 @@ Le projet privilégie :
 
 ![OTA](<docs/pictures/Gateway_Lab_V1_OTA.png>)
 
+### Paramètres — Réseau WiFi
+
+* État de la connexion (SSID, IP, signal)
+* Liste des réseaux enregistrés
+* Ajout / suppression de réseaux WiFi
+* Portail de configuration automatique au premier démarrage (point d'accès `GatewayLab-Setup`)
+
 ---
 
 ## Démarrage rapide
 
-### 1. Configurer les identifiants WiFi
+### 1. Configurer le WiFi
 
-Copier :
+**Utilisateur final** (firmware déjà flashé, `gateway-lab-v1.bin`) : aucune
+étape requise — connectez-vous au point d'accès `GatewayLab-Setup` au premier
+démarrage et suivez le portail de configuration. Détail complet dans
+`docs/WIFI_SETUP.md`.
+
+**Développeur** (build local, pour éviter de ressaisir le WiFi à chaque
+flash) : copier
 
 ```text
 include/secrets_example.h
@@ -129,14 +144,15 @@ vers :
 include/secrets.h
 ```
 
-Puis renseigner les réseaux :
+Puis renseigner un réseau de développement :
 
 ```cpp
-static const char* WIFI_NETWORKS[][2] = {
-    {"MonSSID", "MotDePasse"},
-    {"Hotspot", "AutreMotDePasse"}
-};
+#define DEFAULT_WIFI_SSID     "MonSSID"
+#define DEFAULT_WIFI_PASSWORD "MotDePasse"
 ```
+
+Ce réseau n'est utilisé que si aucun réseau n'est encore enregistré en
+mémoire NVS de l'ESP32 (priorité à la configuration utilisateur).
 
 ⚠️ `include/secrets.h` est ignoré par Git et ne doit jamais être commité.
 
@@ -164,7 +180,7 @@ pio run --target upload
 http://gateway-lab-v1.local
 ```
 
-ou via l'adresse IP affichée sur la page d'accueil.
+ou via l'adresse IP affichée sur la page d'accueil ou la page Paramètres.
 
 ---
 
@@ -203,7 +219,8 @@ Gateway-Lab-V1/
 │   ├── web_interface.h          # Généré depuis web_src/index.html
 │   ├── web_interface_scan.h     # Généré depuis web_src/scan.html
 │   ├── web_interface_ota.h      # Généré depuis web_src/ota.html
-│   └── web_interface_history.h  # Généré depuis web_src/history.html
+│   ├── web_interface_history.h  # Généré depuis web_src/history.html
+│   └── web_interface_wifi.h     # Généré depuis web_src/wifi.html
 │
 ├── web_src/
 │   ├── index.html                # Page d'accueil — HTML uniquement (source)
@@ -214,6 +231,8 @@ Gateway-Lab-V1/
 │   ├── ota.js                    # Script de la page OTA (source)
 │   ├── history.html              # Page historique — HTML uniquement (source)
 │   ├── history.js                # Script de la page historique (source)
+│   ├── wifi.html                 # Page Paramètres WiFi — HTML uniquement (source)
+│   ├── wifi.js                   # Script de la page Paramètres WiFi (source)
 │   ├── styles.css                # Feuille de style unique (injectée inline par minify_web.py)
 │   ├── template.html             # Gabarit de référence (documentation)
 │   ├── extracted/                # Sortie de extract_web_sources.py (non versionné)
@@ -225,6 +244,7 @@ Gateway-Lab-V1/
 │
 ├── docs/
 │   ├── GETTING_STARTED.md
+│   ├── WIFI_SETUP.md
 │   ├── ARCHITECTURE.md
 │   ├── PROTOCOLS.md
 │   ├── WARNINGS.md
@@ -252,6 +272,7 @@ include/web_interface.h
 include/web_interface_scan.h
 include/web_interface_ota.h
 include/web_interface_history.h
+include/web_interface_wifi.h
 ```
 
 Ils sont reconstruits à partir de :
@@ -274,7 +295,7 @@ python tools/minify_web.py
 
 Chaque page web est découpée en trois sources, qui ont chacune un rôle unique :
 
-* `web_src/styles.css` → **tout** le CSS commun (une seule feuille pour les 4 pages)
+* `web_src/styles.css` → **tout** le CSS commun (une seule feuille pour les 5 pages)
 * `web_src/*.html` → uniquement du HTML/markup (aucun style, aucun script inline)
 * `web_src/*.js` → uniquement le JavaScript de la page correspondante
 
@@ -283,11 +304,13 @@ web_src/styles.css     ──┐
 web_src/index.html     ──┤
 web_src/index.js       ──┤
 web_src/scan.html      ──┤
-web_src/scan.js        ──┼── python tools/minify_web.py ──► include/*.h ──► pio run
-web_src/ota.html       ──┤
+web_src/scan.js        ──┤
+web_src/ota.html       ──┼── python tools/minify_web.py ──► include/*.h ──► pio run
 web_src/ota.js         ──┤
 web_src/history.html   ──┤
-web_src/history.js     ──┘
+web_src/history.js     ──┤
+web_src/wifi.html      ──┤
+web_src/wifi.js        ──┘
 ```
 
 `minify_web.py` minifie le CSS et le JS, puis les injecte **inline** dans chaque
@@ -296,6 +319,12 @@ de générer le header C++ correspondant. Résultat : l'ESP32 sert chaque page c
 un seul fichier HTML auto-contenu depuis la mémoire flash (PROGMEM), sans serveur
 de fichiers statiques.
 
+Note : la page du **portail de configuration WiFi** (`GatewayLab-Setup`,
+servie uniquement en mode point d'accès) est une exception volontaire : son
+HTML est défini directement dans `src/modules/wifi_manager.cpp`, car elle
+doit pouvoir s'afficher avant toute connexion réseau, indépendamment du
+pipeline `web_src/`.
+
 Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO requis.
 
 ### Outils disponibles
@@ -303,7 +332,7 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 | Outil | Usage |
 |---|---|
 | `python tools/minify_web.py` | Génère les headers PROGMEM depuis `web_src/` et `data/oui.json` |
-| `python tools/validate_html.py` | Valide la structure HTML des 4 pages + gabarit |
+| `python tools/validate_html.py` | Valide la structure HTML des 5 pages + gabarit |
 | `python tools/extract_web_sources.py` | Prévisualise l'extraction des headers → `web_src/extracted/` (dry-run) |
 | `python tools/extract_web_sources.py --force` | Récupération d'urgence : écrit le HTML/JS extrait des headers dans `web_src/extracted/` (sans jamais toucher aux sources originales de `web_src/`) |
 
@@ -326,6 +355,10 @@ Interface OTA
 ### GET /history
 
 Vue chronologique des événements détectés
+
+### GET /wifi
+
+Page Paramètres → Réseau WiFi (état de connexion, réseaux enregistrés)
 
 ### GET /api/status
 
@@ -378,6 +411,30 @@ Restaure l'inventaire depuis un export JSON précédemment généré par `/api/b
 
 Upload d'un firmware `.bin`.
 
+### GET /api/wifi
+
+Retourne :
+
+```json
+{
+  "connected": true,
+  "ssid": "...",
+  "ip": "...",
+  "rssi": -42,
+  "networks": [{"ssid": "Maison"}, {"ssid": "Atelier"}]
+}
+```
+
+Les mots de passe enregistrés ne sont jamais renvoyés au navigateur.
+
+### POST /api/wifi
+
+Ajoute ou met à jour un réseau enregistré (paramètres `ssid` et `password`).
+
+### DELETE /api/wifi
+
+Supprime un réseau enregistré (paramètre `ssid`).
+
 ---
 
 ## Sources d'identification
@@ -405,6 +462,7 @@ Les informations affichées peuvent provenir de plusieurs mécanismes :
 | CHANGELOG.md               | Historique détaillé des versions                              |
 | ROADMAP.md                 | Fonctionnalités planifiées                                    |
 | docs/GETTING_STARTED.md    | Guide de démarrage complet pour débutants                     |
+| docs/WIFI_SETUP.md         | Configurer le WiFi via le portail, sans recompiler (débutants) |
 | docs/ARCHITECTURE.md       | Explique comment le projet est construit et les choix faits   |
 | docs/PROTOCOLS.md          | ARP, mDNS, SSDP/UPnP, PTR DNS — expliqués simplement         |
 | docs/WARNINGS.md           | Limitations connues et points de vigilance                    |

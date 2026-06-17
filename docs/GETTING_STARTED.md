@@ -71,25 +71,28 @@ git clone https://github.com/morfredus/Gateway_Lab_V1.git
 cd Gateway_Lab_V1
 ```
 
-### Étape 2 — Configurer vos identifiants WiFi
+### Étape 2 — Configurer le WiFi (optionnel pour le développement)
 
-Le fichier `include/secrets.h` contient vos mots de passe WiFi.
-Il n'est **jamais** envoyé sur Internet (listé dans `.gitignore`).
+Depuis la v0.3.0, **il n'est plus nécessaire de modifier le code pour configurer
+le WiFi** : un portail de configuration web s'en charge automatiquement au
+premier démarrage. Voir `docs/WIFI_SETUP.md` pour le détail complet.
 
-Copier le modèle :
+Pour le développement uniquement, si vous préférez ne pas ressaisir vos
+identifiants WiFi à chaque flash, vous pouvez créer `include/secrets.h` :
 
 ```bash
 cp include/secrets_example.h include/secrets.h
 ```
 
-Ouvrir `include/secrets.h` et renseigner vos réseaux :
+Puis renseigner un réseau de développement :
 
 ```cpp
-static const char* WIFI_NETWORKS[][2] = {
-    {"NomDuReseau1",  "MotDePasse1"},
-    {"NomDuReseau2",  "MotDePasse2"},   // Optionnel : hotspot de secours
-};
+#define DEFAULT_WIFI_SSID     "NomDuReseau"
+#define DEFAULT_WIFI_PASSWORD "MotDePasse"
 ```
+
+Ce fichier est ignoré par Git (`.gitignore`) et n'est utilisé que si aucun
+réseau n'est encore enregistré dans la mémoire de l'ESP32 (NVS).
 
 > **Important** : Ne jamais commiter `secrets.h`. Ne jamais partager ce fichier.
 
@@ -114,6 +117,7 @@ sortie comme :
 [scan.html + scan.js]    → include/web_interface_scan.h
 [ota.html + ota.js]      → include/web_interface_ota.h
 [history.html + history.js] → include/web_interface_history.h
+[wifi.html + wifi.js]    → include/web_interface_wifi.h
 [oui.json]    → include/oui_table.h
 OK
 ```
@@ -139,12 +143,24 @@ pio device monitor
 Vous devriez voir dans le terminal :
 
 ```
-=== GatewayLabV1 v0.0.8 ===
+=== GatewayLabV1 v0.3.0 ===
 [WiFi] Connexion en cours...
 [WiFi] Connecté : 192.168.1.42
 [Scanner] Module initialisé
 [WebSrv] Serveur démarré sur le port 80
 ```
+
+Si aucun réseau n'est encore configuré (premier démarrage, sans `secrets.h`),
+vous verrez à la place :
+
+```
+=== GatewayLabV1 v0.3.0 ===
+[WiFi] Aucun réseau disponible — démarrage du portail de configuration
+[WiFi] Portail de configuration actif — SSID "GatewayLab-Setup" — http://192.168.4.1
+```
+
+Dans ce cas, suivez `docs/WIFI_SETUP.md` pour connecter l'ESP32 à votre WiFi
+depuis un téléphone ou un ordinateur, sans rien recompiler.
 
 ### Étape 6 — Accéder à l'interface web
 
@@ -214,6 +230,17 @@ Permet de mettre à jour le firmware sans rebrancher la carte :
 1. Compiler le firmware : `pio run`
 2. Trouver le fichier `.bin` dans `.pio/build/esp32s3_n16r8/firmware.bin`
 3. Le sélectionner sur la page OTA et cliquer **Mettre à jour**
+
+### Page Paramètres (`/wifi`)
+
+Permet de gérer les réseaux WiFi enregistrés sans recompiler ni reflasher :
+
+- Affiche l'état de la connexion (SSID, adresse IP, signal)
+- Liste les réseaux enregistrés en mémoire (NVS)
+- Ajoute un nouveau réseau (SSID + mot de passe)
+- Supprime un réseau enregistré
+
+Voir `docs/WIFI_SETUP.md` pour le détail complet de la configuration WiFi.
 
 ---
 
