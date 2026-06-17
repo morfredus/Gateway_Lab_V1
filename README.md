@@ -32,6 +32,19 @@ Le projet privilégie :
 
 ---
 
+## Installation rapide
+
+1. Télécharger le firmware depuis la dernière release GitHub
+2. Flasher l'ESP32-S3
+3. Se connecter au réseau WiFi `GatewayLab-Setup`
+4. Configurer le WiFi depuis le navigateur
+5. Accéder à Gateway Lab via `http://gateway-lab-v1.local`
+
+Guide détaillé : voir INSTALLATION.md
+Guide développeur : voir docs/DEVELOPMENT.md
+
+---
+
 ## Matériel cible
 
 **ESP32-S3 DevKitC-1 N16R8**
@@ -128,8 +141,8 @@ Le projet privilégie :
 
 **Utilisateur final** (firmware déjà flashé, `gateway-lab-v1.bin`) : aucune
 étape requise — connectez-vous au point d'accès `GatewayLab-Setup` au premier
-démarrage et suivez le portail de configuration. Détail complet dans
-`docs/WIFI_SETUP.md`.
+démarrage et suivez le portail de configuration. Détail complet dans INSTALLATION.md
+Fonctionnement avancé : docs/WIFI_SETUP.md
 
 **Développeur** (build local, pour éviter de ressaisir le WiFi à chaque
 flash) : copier
@@ -243,11 +256,11 @@ Gateway-Lab-V1/
 │   └── index.html
 │
 ├── docs/
-│   ├── GETTING_STARTED.md
-│   ├── WIFI_SETUP.md
 │   ├── ARCHITECTURE.md
+│   ├── DEVELOPMENT.md
 │   ├── PROTOCOLS.md
 │   ├── WARNINGS.md
+│   ├── WIFI_SETUP.md
 │   └── pictures/
 │
 ├── tools/
@@ -258,6 +271,9 @@ Gateway-Lab-V1/
 ├── test/
 │
 ├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── INSTALLATION.md
+├── LICENSE
 ├── ROADMAP.md
 ├── README.md
 └── platformio.ini
@@ -457,15 +473,16 @@ Les informations affichées peuvent provenir de plusieurs mécanismes :
 
 ## Documentation
 
-| Fichier                    | Description                                                   |
-| -------------------------- | ------------------------------------------------------------- |
-| CHANGELOG.md               | Historique détaillé des versions                              |
-| ROADMAP.md                 | Fonctionnalités planifiées                                    |
-| docs/GETTING_STARTED.md    | Guide de démarrage complet pour débutants                     |
-| docs/WIFI_SETUP.md         | Configurer le WiFi via le portail, sans recompiler (débutants) |
-| docs/ARCHITECTURE.md       | Explique comment le projet est construit et les choix faits   |
-| docs/PROTOCOLS.md          | ARP, mDNS, SSDP/UPnP, PTR DNS — expliqués simplement         |
-| docs/WARNINGS.md           | Limitations connues et points de vigilance                    |
+| Fichier | Description |
+|----------|-------------|
+| INSTALLATION.md | Installation et première configuration |
+| docs/DEVELOPMENT.md | Compilation, flash et développement |
+| docs/WIFI_SETUP.md | Fonctionnement détaillé du portail WiFi |
+| docs/ARCHITECTURE.md | Architecture interne du projet |
+| docs/PROTOCOLS.md | Protocoles réseau utilisés |
+| docs/WARNINGS.md | Limitations connues |
+| CHANGELOG.md | Historique des versions |
+| ROADMAP.md | Évolutions prévues |
 
 ---
 
