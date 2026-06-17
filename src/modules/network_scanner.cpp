@@ -37,10 +37,23 @@ static const char* TAG = "Scanner";
 // Instance globale exportée
 NetworkScanner netScanner;
 
+// Détecte une adresse MAC privée/aléatoire (randomized MAC), utilisée par les
+// smartphones récents (iOS 14+, Android 10+) pour se connecter au Wi-Fi sans
+// exposer leur OUI matériel réel. La norme IEEE impose que le bit "locally
+// administered" (2ème bit du 1er octet) soit à 1 sur ces adresses générées,
+// ce qui se traduit par un 2ème nibble de l'octet valant 2, 6, A ou E.
+static bool isRandomizedMac(const String& mac) {
+    if (mac.length() < 2) return false;
+    char nibble = toupper(mac[1]);
+    return nibble == '2' || nibble == '6' || nibble == 'A' || nibble == 'E';
+}
+
 // Recherche de l'entrée OUI à partir des 3 premiers octets de l'adresse MAC.
-// Retourne nullptr si l'OUI n'est pas dans la table.
+// Retourne nullptr si l'OUI n'est pas dans la table ou si la MAC est aléatoire
+// (dans ce cas, l'OUI ne correspond à aucun fabricant réel).
 static const OuiEntry* lookupOui(const String& mac) {
     if (mac.length() < 8) return nullptr;
+    if (isRandomizedMac(mac)) return nullptr;
     String prefix = mac.substring(0, 8);
     prefix.toUpperCase();
     for (const auto& e : OUI_TABLE) {
@@ -91,10 +104,15 @@ void NetworkScanner::_readArpTable() {
             h.mac      = macStr;
             h.lastSeen = millis();
             h.online   = true;
-            const OuiEntry* oui = lookupOui(macStr);
-            if (oui) {
-                h.manufacturer = oui->manufacturer;
-                h.category     = oui->category;   // "Router", "IoT", "SBC"…
+            if (isRandomizedMac(macStr)) {
+                h.manufacturer = "Unknown (Privacy Mode)";
+                h.category     = "Mobile/Aléatoire";
+            } else {
+                const OuiEntry* oui = lookupOui(macStr);
+                if (oui) {
+                    h.manufacturer = oui->manufacturer;
+                    h.category     = oui->category;   // "Router", "IoT", "SBC"…
+                }
             }
             _results.push_back(h);
         }
@@ -298,7 +316,9 @@ void NetworkScanner::_addSelfEntry() {
     self.lastSeen = millis();
     self.online   = true;
 
-    // Fabricant depuis l'OUI (Espressif Systems pour les ESP32)
+    // Fabricant depuis l'OUI (Espressif Systems pour les ESP32) — la MAC de
+    // l'ESP32 lui-même n'est jamais aléatoire, mais on reste cohérent avec
+    // lookupOui() qui ignore déjà ce cas.
     const OuiEntry* oui = lookupOui(mac);
     if (oui) self.manufacturer = oui->manufacturer;
 

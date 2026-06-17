@@ -5,12 +5,21 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.4.0] - 2026-06-17
+
+### Ajoute
+
+- **Détection des adresses MAC privées/aléatoires** (`src/modules/network_scanner.cpp`) :
+  les smartphones récents (iOS 14+, Android 10+) se connectent au Wi-Fi avec
+  une adresse MAC générée aléatoirement pour préserver la confidentialité de
+  l'utilisateur, plutôt que leur adresse MAC matérielle réelle. Le scanner
+  détecte désormais ce cas via le bit "locally administered" de l'adresse
+  (2ème caractère hexadécimal du 1er octet valant `2`, `6`, `A` ou `E`) et
+  classe automatiquement l'équipement en catégorie `Mobile/Aléatoire` avec
+  le fabricant `Unknown (Privacy Mode)`, sans consulter inutilement la table
+  OUI (qui ne contiendrait de toute façon aucune correspondance pertinente).
+
 ## [0.3.0] - 2026-06-17
-
-### Développement
-
-- Ajout d'un hook PlatformIO optionnel permettant la génération automatique des assets web avant compilation.
-- Préparation de l'automatisation du pipeline web (HTML, CSS, JavaScript → headers C++).
 
 ### Ajoute
 
