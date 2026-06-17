@@ -96,3 +96,5 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.2.1  | Niveau de confiance de l'identification (score 0-100%, badge couleur, libellé de source au survol) |
 | v0.2.2  | Séparation HTML/CSS/JS dans `web_src/` (scripts extraits dans `*.js`, minifiés et injectés inline par `minify_web.py`), correction du lien Historique manquant sur la page OTA |
 | v0.3.0  | Portail de configuration WiFi (point d'accès + page captive), persistance NVS multi-réseaux, page Paramètres → Réseau WiFi (`/wifi`), API `/api/wifi` |
+| v0.4.0  | Détection des adresses MAC privées/aléatoires (catégorie `Mobile/Aléatoire`) |
+| v0.5.0  | Réinitialisation de l'inventaire avec options de conservation (alias, fabricant), réinterrogation ciblée d'un équipement sans scan complet, filtrage et effacement (avec sauvegarde) de l'historique |

@@ -46,7 +46,10 @@ void WebServerModule::begin(uint16_t port) {
     _server.on("/api/devices",HTTP_GET,  [this]() { _handleApiDevices(); });
     _server.on("/api/scan",   HTTP_POST, [this]() { _handleApiScanTrigger(); });
     _server.on("/api/alias",  HTTP_POST, [this]() { _handleApiSetAlias(); });
+    _server.on("/api/devices/reset", HTTP_POST, [this]() { _handleApiDevicesReset(); });
+    _server.on("/api/devices/rescan", HTTP_POST, [this]() { _handleApiDeviceRescan(); });
     _server.on("/api/history",HTTP_GET,  [this]() { _handleApiHistory(); });
+    _server.on("/api/history",HTTP_DELETE, [this]() { _handleApiHistoryClear(); });
     _server.on("/api/backup", HTTP_GET,  [this]() { _handleApiBackup(); });
     _server.on("/api/restore",HTTP_POST, [this]() { _handleApiRestore(); });
     _server.on("/wifi",       HTTP_GET,  [this]() { _server.send_P(200, "text/html", WIFI_PAGE); });
@@ -159,12 +162,66 @@ void WebServerModule::_handleApiSetAlias() {
 }
 
 // ---------------------------------------------------------------------------
+// Handler : RAZ des equipements connus pour repartir sur une base vide
+// Parametres (form-urlencoded) : keepAlias=1, keepManufacturer=1 (optionnels)
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiDevicesReset() {
+    if (!_hasScan || !_scan.resetDevices) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    bool keepAlias        = _server.arg("keepAlias")        == "1";
+    bool keepManufacturer = _server.arg("keepManufacturer") == "1";
+
+    int removed = _scan.resetDevices(keepAlias, keepManufacturer);
+
+    String json = "{\"status\":\"ok\",\"removed\":";
+    json += removed;
+    json += "}";
+    _server.send(200, "application/json", json);
+}
+
+// ---------------------------------------------------------------------------
+// Handler : rafraichissement cible d'un seul equipement (sans scan complet)
+// Parametre (form-urlencoded) : ip
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiDeviceRescan() {
+    if (!_hasScan || !_scan.rescanDevice) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String ip = _server.arg("ip");
+    if (ip.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"ip requise\"}");
+        return;
+    }
+
+    bool ok = _scan.rescanDevice(ip);
+    _server.send(ok ? 200 : 409, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement inconnu ou scan en cours\"}");
+}
+
+// ---------------------------------------------------------------------------
 // Handler : journal chronologique des evenements (nouveaux/changements)
 // ---------------------------------------------------------------------------
 void WebServerModule::_handleApiHistory() {
     String json = (_hasScan && _scan.getHistoryJson) ? _scan.getHistoryJson() : "[]";
     _server.sendHeader("Cache-Control", "no-cache");
     _server.send(200, "application/json", json);
+}
+
+// ---------------------------------------------------------------------------
+// Handler : vide le journal chronologique
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiHistoryClear() {
+    if (!_hasScan || !_scan.clearHistory) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+    _scan.clearHistory();
+    _server.send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
 // ---------------------------------------------------------------------------

@@ -33,7 +33,18 @@
         <p class="card-title">Équipements détectés</p>
         <p class="card-meta" id="scan-meta">Aucun scan effectué</p>
       </div>
-      <button class="scan-btn" id="scan-btn" onclick="triggerScan()">Scanner</button>
+      <div class="header-actions">
+        <button class="scan-btn" id="scan-btn" onclick="triggerScan()">Scanner</button>
+        <div class="reset-menu">
+          <button class="reset-btn" id="reset-btn" onclick="toggleResetMenu()">Réinitialiser ▾</button>
+          <div class="reset-menu-list" id="reset-menu-list">
+            <button onclick="resetDevices(false, false)">Tout effacer</button>
+            <button onclick="resetDevices(true, false)">Conserver les alias</button>
+            <button onclick="resetDevices(false, true)">Conserver les fabricants connus</button>
+            <button onclick="resetDevices(true, true)">Conserver les deux</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="stats-bar" id="stats-bar" style="display:none">

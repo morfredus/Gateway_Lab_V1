@@ -5,6 +5,28 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.5.0] - 2026-06-17
+
+### Ajoute
+
+- **Réinitialisation de l'inventaire** (`POST /api/devices/reset`,
+  `src/modules/network_scanner.cpp`) : nouveau menu « Réinitialiser » sur la
+  page Équipements, avec quatre options — tout effacer, conserver les
+  équipements ayant un alias, conserver ceux dont le fabricant est connu, ou
+  les deux. Permet de repartir sur une base propre sans perdre les
+  équipements identifiés manuellement ou automatiquement.
+- **Réinterrogation ciblée d'un équipement** (`POST /api/devices/rescan`,
+  `NetworkScanner::rescanDevice()`) : bouton ⟲ sur chaque ligne de la page
+  Équipements pour rafraîchir un seul équipement (sonde ARP/ICMP ciblée puis
+  résolution de nom, scan de ports et NetBIOS) sans relancer un scan complet
+  du sous-réseau.
+- **Filtrage de l'historique** (`web_src/history.html`, `web_src/history.js`) :
+  cases à cocher pour n'afficher que certains types d'événements (nouveaux
+  équipements, reconnexions, déconnexions, changements de champs).
+- **Effacement de l'historique** (`DELETE /api/history`) : bouton « Vider
+  l'historique » sur la page Historique. Télécharge automatiquement une
+  sauvegarde JSON du journal avant de le vider côté serveur.
+
 ## [0.4.0] - 2026-06-17
 
 ### Ajoute

@@ -30,11 +30,18 @@
   <div class="card">
     <div class="card-header">
       <p class="card-title">Vue chronologique</p>
+      <button class="reset-btn" id="clear-history-btn" onclick="clearHistory()">Vider l'historique</button>
     </div>
     <p class="info-label" style="margin-bottom:0.9rem">
       Journal des nouveaux équipements, reconnexions, déconnexions et changements
       de champs détectés entre deux scans (100 derniers événements).
     </p>
+    <div class="hist-filters" id="hist-filters">
+      <label><input type="checkbox" class="hist-filter" value="new"     checked> Nouveaux équipements</label>
+      <label><input type="checkbox" class="hist-filter" value="online"  checked> Reconnexions</label>
+      <label><input type="checkbox" class="hist-filter" value="offline" checked> Déconnexions</label>
+      <label><input type="checkbox" class="hist-filter" value="changed" checked> Changements de champs</label>
+    </div>
     <div id="history-list"></div>
     <p class="empty-msg" id="history-empty" style="display:none">Aucun événement enregistré pour le moment.</p>
   </div>

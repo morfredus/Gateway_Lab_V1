@@ -7,6 +7,9 @@
  *   GET  /api/devices  — Liste des équipements découverts + état du scan
  *   POST /api/scan     — Déclenchement d'un scan réseau
  *   POST /api/alias    — Definit l'alias utilisateur d'un equipement
+ *   POST /api/devices/reset — RAZ des equipements connus (base vide)
+ *   POST /api/devices/rescan — Rafraichit un seul equipement (parametre ip)
+ *   DELETE /api/history — Vide le journal chronologique
  *   GET  /history       — Page vue chronologique (HTML embarque en PROGMEM)
  *   GET  /api/history   — Journal chronologique des evenements en JSON
  *   GET  /api/backup    — Telechargement de la sauvegarde complete (JSON)
@@ -37,7 +40,10 @@ struct ScanProvider {
     std::function<String()> getStats;     // Stats JSON : {"known":X,"online":Y,"offline":Z}
 
     std::function<bool(const String& macOrIp, const String& alias)> setAlias;  // Alias utilisateur
+    std::function<int(bool keepAlias, bool keepManufacturer)> resetDevices;    // RAZ des equipements connus
+    std::function<bool(const String& ip)> rescanDevice;   // Rafraichit un seul equipement (sans scan complet)
     std::function<String()> getHistoryJson;   // Journal chronologique (evenements) en JSON
+    std::function<void()>   clearHistory;     // Vide le journal d'historique
     std::function<String()> getBackupJson;    // Sauvegarde complete en JSON
     std::function<bool(const String& json)>   restoreFromJson;   // Restauration depuis JSON
 };
@@ -59,7 +65,10 @@ private:
     void _handleApiDevices();       // Retourne la liste des équipements en JSON
     void _handleApiScanTrigger();   // Démarre un scan réseau
     void _handleApiSetAlias();      // Definit l'alias utilisateur d'un equipement
+    void _handleApiDevicesReset();  // RAZ des equipements connus (base vide)
+    void _handleApiDeviceRescan();  // Rafraichit un seul equipement (sans scan complet)
     void _handleApiHistory();       // Retourne le journal chronologique en JSON
+    void _handleApiHistoryClear();  // Vide le journal chronologique
     void _handleApiBackup();        // Retourne la sauvegarde complete en JSON
     void _handleApiRestore();       // Restaure depuis une sauvegarde JSON envoyee
     void _handleApiWifiGet();       // Retourne l'etat WiFi + reseaux enregistres

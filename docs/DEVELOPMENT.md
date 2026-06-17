@@ -213,6 +213,14 @@ C'est la page principale.
 2. Attendre la fin du scan (10 à 30 secondes selon la taille du réseau)
 3. La liste des équipements s'affiche automatiquement
 
+Pour rafraîchir un seul équipement sans relancer un scan complet, cliquer
+sur le bouton ⟲ dans sa cellule IP (sonde ARP/ICMP ciblée, puis résolution
+de nom, scan de ports et NetBIOS).
+
+Le menu **Réinitialiser** permet de vider l'inventaire avec quatre options :
+tout effacer, conserver les équipements ayant un alias, conserver ceux dont
+le fabricant est connu, ou les deux.
+
 **Colonnes du tableau :**
 
 | Colonne | Description |
@@ -242,6 +250,10 @@ Affiche une liste chronologique des événements détectés entre deux scans :
 nouvel équipement, reconnexion, déconnexion, ou changement d'un champ
 (IP, fabricant, catégorie...). Les horodatages utilisent l'heure réelle
 (synchronisée par NTP au démarrage).
+
+Des cases à cocher permettent de filtrer l'affichage par type d'événement.
+Le bouton **Vider l'historique** télécharge automatiquement une sauvegarde
+JSON du journal avant de le vider côté serveur.
 
 ### Page OTA (`/update`)
 

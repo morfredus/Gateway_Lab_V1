@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.4.0-blue)
+![Version](https://img.shields.io/badge/version-0.5.0-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -85,9 +85,13 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Niveau de confiance      | Score 0-100% expliquant la fiabilité de l'identification, par source |
 | Détection des changements | Comparaison automatique entre deux scans (IP, fabricant, catégorie, ports...) |
 | Sauvegarde / restauration | Export et import JSON complet de l'inventaire et de l'historique |
+| Réinitialisation des équipements | RAZ de l'inventaire, avec options de conservation (alias, fabricant connu) |
+| Réinterrogation ciblée   | Rafraîchit un seul équipement (IP) sans relancer un scan complet  |
+| Filtrage de l'historique | Filtres par type d'événement (nouveau, reconnexion, déconnexion, changement) |
+| Effacement de l'historique | Vide le journal après téléchargement automatique d'une sauvegarde JSON |
 | OTA Web                  | Upload firmware depuis le navigateur                              |
 | ArduinoOTA               | Mise à jour réseau depuis PlatformIO                              |
-| API REST                 | `/api/status`, `/api/devices`, `/api/scan`, `/api/alias`, `/api/history`, `/api/backup`, `/api/restore`, `/api/wifi` |
+| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/scan`, `/api/alias`, `/api/history`, `/api/backup`, `/api/restore`, `/api/wifi` |
 
 ---
 
@@ -109,13 +113,17 @@ Guide développeur : voir docs/DEVELOPMENT.md
 * Catégorie
 * Modèle
 * Temps depuis la dernière détection / nombre de détections
+* Réinterrogation ciblée d'un équipement (bouton ⟲ par ligne, sans relancer un scan complet)
+* Réinitialisation de l'inventaire (bouton « Réinitialiser », avec options de conservation des alias et/ou des fabricants connus)
 
 ![Equipement](<docs/pictures/Gateway_Lab_V1_Equipement.png>)
 
 ### Historique
 
 * Vue chronologique des événements (nouvel équipement, reconnexion, déconnexion, changement)
+* Filtres par type d'événement
 * Horodatage réel via synchronisation NTP
+* Bouton « Vider l'historique » : télécharge une sauvegarde JSON puis vide le journal
 
 ![Historique](<docs/pictures/Gateway_Lab_V1_Historique.png>)
 
@@ -411,9 +419,27 @@ Déclenche un scan réseau asynchrone.
 
 Définit ou efface l'alias d'un équipement (paramètres `mac` et `alias`).
 
+### POST /api/devices/reset
+
+RAZ de l'inventaire des équipements connus. Paramètres optionnels
+`keepAlias` et `keepManufacturer` (`1`/`0`) pour conserver les équipements
+disposant d'un alias et/ou d'un fabricant identifié.
+
+### POST /api/devices/rescan
+
+Réinterroge un seul équipement (paramètre `ip`) sans relancer un scan
+complet : sonde ARP/ICMP ciblée, puis résolution de nom, scan de ports et
+NetBIOS si l'équipement répond. Retourne une erreur 409 si un scan complet
+est déjà en cours, ou 400 si l'IP est inconnue.
+
 ### GET /api/history
 
 Retourne le journal chronologique des événements (les plus récents en premier).
+
+### DELETE /api/history
+
+Vide le journal chronologique. L'interface web télécharge une sauvegarde
+JSON du journal avant d'appeler cette route.
 
 ### GET /api/backup
 
