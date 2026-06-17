@@ -71,6 +71,22 @@ Le projet privilégie :
 
 ## Captures d'écran
 
+- Accueil 
+
+![Accueil](<docs/pictures/Gateway Lab V1 - Accueil.png>)
+
+- Equipement
+
+![Equipement](<docs/pictures/Gateway Lab V1 - Equipement.png>)
+
+- Historique
+
+![Historique](<docs/pictures/Gateway Lab V1 - Historique.png>)
+
+- OTA
+
+![OTA](<docs/pictures/Gateway Lab V1 - OTA.png>)
+
 ### Accueil
 
 * Informations réseau
