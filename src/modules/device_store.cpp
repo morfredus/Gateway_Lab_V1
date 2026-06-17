@@ -64,6 +64,10 @@ std::vector<NetworkDevice> DeviceStore::load() {
         d.source       = obj["source"]       | "";
         d.services     = obj["services"]     | "";
         d.openPorts    = obj["openPorts"]    | "";
+        d.alias            = obj["alias"]        | "";
+        d.firstSeenEpoch   = obj["firstSeen"]     | 0;
+        d.lastSeenEpoch    = obj["lastSeenAt"]    | 0;
+        d.seenCount        = obj["seenCount"]     | 0;
         d.online       = false;
         d.lastSeen     = 0;   // Inconnu — sera affiché comme "hors ligne"
         if (!d.ip.isEmpty() || !d.mac.isEmpty())
@@ -98,6 +102,10 @@ void DeviceStore::save(const std::vector<NetworkDevice>& devices) {
         obj["source"]       = d.source;
         obj["services"]     = d.services;
         obj["openPorts"]    = d.openPorts;
+        obj["alias"]        = d.alias;
+        obj["firstSeen"]    = d.firstSeenEpoch;
+        obj["lastSeenAt"]   = d.lastSeenEpoch;
+        obj["seenCount"]    = d.seenCount;
         obj["online"]       = d.online;
     }
 

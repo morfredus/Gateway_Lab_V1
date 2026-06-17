@@ -21,6 +21,8 @@
 #include "port_scanner.h"        // Scan TCP ports communs + banner HTTP/SSH/FTP + API IoT
 #include "netbios_scanner.h"     // Node Status NetBIOS (UDP 137) - hostnames Windows/Samba
 #include "device_enricher.h"     // Enrichissement par pattern matching sur le hostname
+#include "device_history.h"      // Journal chronologique des evenements (nouveaux/changements)
+#include "time_sync.h"           // Epoch NTP pour firstSeen/lastSeen
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
@@ -436,6 +438,15 @@ void NetworkScanner::_run() {
     // Charger les devices connus depuis LittleFS (injectés offline)
     _mergePersistedDevices();
 
+    // Etat de reference avant ce scan - utilise par _updateHistory() en fin
+    // de scan pour detecter les nouveautes et les changements de champs
+    std::vector<NetworkDevice> previousState;
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        previousState = _results;
+        xSemaphoreGive(_mutex);
+    }
+
     // Démarrer l'écoute mDNS passive avant le sweep (capture les annonces
     // émises par les équipements qui deviennent actifs sur le réseau)
     hostnameResolver.clearCaches();
@@ -530,6 +541,13 @@ void NetworkScanner::_run() {
 
     // Enrichissement final par pattern matching sur le hostname
     _enrichDevices();
+
+    // Classification intelligente : affine la categorie en combinant tous
+    // les signaux disponibles (manufacturer, services, ports, hostname)
+    _classifyDevices();
+
+    // Historique : firstSeen/lastSeen/seenCount + journal des changements
+    _updateHistory(previousState);
 
     // Sauvegarder en LittleFS pour le prochain boot
     _saveToStore();
@@ -757,6 +775,125 @@ void NetworkScanner::_enrichDevices() {
 }
 
 // ---------------------------------------------------------------------------
+// Classification intelligente
+//
+// Combine plusieurs signaux deja collectes (services DNS-SD, ports ouverts,
+// manufacturer, hostname) pour affiner la categorie quand elle est encore
+// vide ou trop generique ("IoT" par defaut). N'ecrase jamais une categorie
+// specifique deja deduite par une source plus fiable (SSDP, API, enricher).
+// ---------------------------------------------------------------------------
+void NetworkScanner::_classifyDevices() {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        bool generic = d.category.isEmpty() || d.category == "IoT";
+        if (!generic) continue;
+
+        bool hasHttp  = d.openPorts.indexOf("HTTP") >= 0 || d.services.indexOf("HTTP") >= 0;
+        bool hasSsh   = d.openPorts.indexOf("SSH")  >= 0 || d.services.indexOf("SSH")  >= 0;
+        bool hasSmb   = d.openPorts.indexOf("SMB")  >= 0 || d.services.indexOf("SMB")  >= 0;
+        bool hasRtsp  = d.openPorts.indexOf("RTSP") >= 0;
+        bool hasMqtt  = d.openPorts.indexOf("MQTT") >= 0 || d.services.indexOf("MQTT") >= 0;
+        bool hasHa    = d.openPorts.indexOf("HA")   >= 0 || d.services.indexOf("HA")   >= 0;
+        bool hasPrint = d.openPorts.indexOf("IPP")  >= 0 || d.services.indexOf("Print") >= 0;
+        bool hasAirplay = d.services.indexOf("AirPlay") >= 0;
+
+        // Combinaisons de signaux les plus specifiques d'abord
+        if (hasRtsp) {
+            d.category = "Camera";
+        } else if (hasHa) {
+            d.category = "Smart Hub";
+        } else if (hasSmb && (hasSsh || hasHttp)) {
+            d.category = "NAS";
+        } else if (hasPrint) {
+            d.category = "Printer";
+        } else if (hasAirplay) {
+            d.category = "Speaker";
+        } else if (hasMqtt && !hasSsh) {
+            d.category = "IoT";   // confirme la categorie generique avec un signal fort
+        } else if (hasSsh && !hasHttp && d.os.indexOf("Windows") < 0) {
+            d.category = "Computer";
+        } else if (d.category.isEmpty()) {
+            d.category = "IoT";   // valeur par defaut conservee si aucun signal specifique
+        }
+    }
+    xSemaphoreGive(_mutex);
+}
+
+// ---------------------------------------------------------------------------
+// Historique : firstSeen/lastSeen/seenCount + journal des evenements
+//
+// Compare l'etat courant a l'etat precedent (avant ce scan) pour detecter :
+//   - les nouveaux equipements ("new")
+//   - les reapparitions apres une absence ("online")
+//   - les passages hors ligne ("offline")
+//   - les changements de champs significatifs ("changed" : ip/manufacturer/
+//     category/hostname/openPorts)
+// Met egalement a jour firstSeenEpoch/lastSeenEpoch/seenCount pour chaque
+// equipement vu en ligne lors de ce scan.
+// ---------------------------------------------------------------------------
+void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous) {
+    uint32_t epoch = timeSync.nowEpoch();
+
+    auto findPrev = [&](const NetworkDevice& d) -> const NetworkDevice* {
+        for (const auto& p : previous) {
+            if ((!d.mac.isEmpty() && p.mac == d.mac) ||
+                (d.mac.isEmpty() && p.ip == d.ip))
+                return &p;
+        }
+        return nullptr;
+    };
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        const NetworkDevice* prev = findPrev(d);
+        String label = !d.alias.isEmpty() ? d.alias :
+                       (!d.hostname.isEmpty() ? d.hostname : d.ip);
+
+        if (!prev) {
+            // Equipement jamais vu auparavant
+            if (d.online) {
+                if (epoch > 0) d.firstSeenEpoch = epoch;
+                d.lastSeenEpoch = epoch;
+                d.seenCount     = 1;
+                deviceHistory.addEvent(d.mac, d.ip, label, "new");
+            }
+            continue;
+        }
+
+        // Reporter l'historique deja connu (l'enricher/merge a pu creer une
+        // nouvelle entree distincte sans recopier ces champs)
+        if (d.firstSeenEpoch == 0) d.firstSeenEpoch = prev->firstSeenEpoch;
+        d.seenCount = prev->seenCount;
+
+        if (d.online) {
+            if (!prev->online)
+                deviceHistory.addEvent(d.mac, d.ip, label, "online");
+            if (epoch > 0) d.lastSeenEpoch = epoch;
+            else d.lastSeenEpoch = prev->lastSeenEpoch;
+            d.seenCount = prev->seenCount + 1;
+            if (d.firstSeenEpoch == 0 && epoch > 0) d.firstSeenEpoch = epoch;
+
+            // Detection des changements de champs significatifs
+            auto checkChange = [&](const char* field, const String& oldV, const String& newV) {
+                if (!oldV.isEmpty() && !newV.isEmpty() && oldV != newV)
+                    deviceHistory.addEvent(d.mac, d.ip, label, "changed", field, oldV, newV);
+            };
+            checkChange("ip",           prev->ip,           d.ip);
+            checkChange("manufacturer", prev->manufacturer, d.manufacturer);
+            checkChange("category",     prev->category,     d.category);
+            checkChange("hostname",     prev->hostname,      d.hostname);
+            checkChange("openPorts",    prev->openPorts,     d.openPorts);
+        } else if (prev->online) {
+            deviceHistory.addEvent(d.mac, d.ip, label, "offline");
+            d.lastSeenEpoch = prev->lastSeenEpoch;
+        } else {
+            d.lastSeenEpoch = prev->lastSeenEpoch;
+        }
+    }
+    xSemaphoreGive(_mutex);
+}
+
+// ---------------------------------------------------------------------------
 // Chargement des devices connus depuis LittleFS
 // Injectés avec online=false — seront mis à jour si découverts par ARP/ICMP
 // ---------------------------------------------------------------------------
@@ -854,6 +991,10 @@ String NetworkScanner::resultsToJson() const {
         obj["source"]       = d.source;
         obj["elapsedMs"]    = now - d.lastSeen;
         obj["online"]       = d.online;
+        obj["alias"]        = d.alias;
+        obj["firstSeen"]    = d.firstSeenEpoch;
+        obj["lastSeenAt"]   = d.lastSeenEpoch;
+        obj["seenCount"]    = d.seenCount;
         // services : tableau JSON ["HTTP","SSH","SMB"] depuis la chaîne pipe-séparée
         JsonArray svcArr = obj["services"].to<JsonArray>();
         if (!d.services.isEmpty()) {
@@ -880,4 +1021,105 @@ String NetworkScanner::resultsToJson() const {
     String json;
     serializeJson(doc, json);
     return json;
+}
+
+// ---------------------------------------------------------------------------
+// Alias utilisateur : identifie l'equipement par MAC (priorite) ou IP
+// ---------------------------------------------------------------------------
+bool NetworkScanner::setAlias(const String& macOrIp, const String& alias) {
+    bool found = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+            d.alias = alias;
+            found = true;
+            break;
+        }
+    }
+    xSemaphoreGive(_mutex);
+    if (found) _saveToStore();
+    return found;
+}
+
+// ---------------------------------------------------------------------------
+// Sauvegarde / restauration complete - utilisee par /api/backup et /api/restore
+// ---------------------------------------------------------------------------
+String NetworkScanner::backupToJson() const {
+    std::vector<NetworkDevice> copy;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    copy = _results;
+    xSemaphoreGive(_mutex);
+
+    JsonDocument doc;
+    doc["version"] = PROJECT_VERSION;
+    JsonArray arr = doc["devices"].to<JsonArray>();
+    for (const auto& d : copy) {
+        if (d.ip.isEmpty() && d.mac.isEmpty()) continue;
+        JsonObject obj = arr.add<JsonObject>();
+        obj["ip"]           = d.ip;
+        obj["mac"]          = d.mac;
+        obj["manufacturer"] = d.manufacturer;
+        obj["hostname"]     = d.hostname;
+        obj["category"]     = d.category;
+        obj["model"]        = d.model;
+        obj["os"]           = d.os;
+        obj["source"]       = d.source;
+        obj["services"]     = d.services;
+        obj["openPorts"]    = d.openPorts;
+        obj["alias"]        = d.alias;
+        obj["firstSeen"]    = d.firstSeenEpoch;
+        obj["lastSeenAt"]   = d.lastSeenEpoch;
+        obj["seenCount"]    = d.seenCount;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    return json;
+}
+
+bool NetworkScanner::restoreFromJson(const String& json) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, json);
+    if (err) {
+        Log::w(TAG, "Restauration : JSON invalide (%s)", err.c_str());
+        return false;
+    }
+
+    JsonArray arr = doc["devices"].as<JsonArray>();
+    if (arr.isNull()) {
+        Log::w(TAG, "Restauration : champ 'devices' absent");
+        return false;
+    }
+
+    std::vector<NetworkDevice> restored;
+    for (JsonObject obj : arr) {
+        NetworkDevice d;
+        d.ip            = obj["ip"]           | "";
+        d.mac           = obj["mac"]          | "";
+        d.manufacturer  = obj["manufacturer"] | "";
+        d.hostname      = obj["hostname"]     | "";
+        d.category      = obj["category"]     | "";
+        d.model         = obj["model"]        | "";
+        d.os            = obj["os"]           | "";
+        d.source        = obj["source"]       | "";
+        d.services      = obj["services"]     | "";
+        d.openPorts     = obj["openPorts"]    | "";
+        d.alias         = obj["alias"]        | "";
+        d.firstSeenEpoch= obj["firstSeen"]    | 0;
+        d.lastSeenEpoch = obj["lastSeenAt"]   | 0;
+        d.seenCount     = obj["seenCount"]    | 0;
+        d.online        = false;
+        d.lastSeen      = 0;
+        if (!d.ip.isEmpty() || !d.mac.isEmpty())
+            restored.push_back(d);
+    }
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _results = restored;
+    xSemaphoreGive(_mutex);
+    _saveToStore();
+    deviceHistory.clear();
+
+    Log::i(TAG, "Restauration : %u équipement(s) importés", (unsigned)restored.size());
+    return true;
 }

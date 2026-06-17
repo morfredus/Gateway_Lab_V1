@@ -523,3 +523,51 @@ input[type=file] {
 
 /* OTA — titre dans la carte (margin spécifique) */
 .card-center .card-title { margin-bottom: 1.25rem; }
+
+/* ════════════════════════════════════════════════════
+   15. PAGE HISTORIQUE — Vue chronologique
+   ════════════════════════════════════════════════════ */
+
+.hist-entry {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #ffffff0a;
+}
+.hist-entry:last-child { border-bottom: none; }
+.hist-icon { font-size: 1.1rem; line-height: 1.4; }
+.hist-body { flex: 1; }
+.hist-title { font-size: 0.9rem; font-weight: 600; color: #e2e8f0; }
+.hist-detail { font-size: 0.8rem; color: #94a3b8; margin-top: 0.15rem; }
+.hist-old     { color: #f87171; text-decoration: line-through; }
+.hist-new-val { color: #4ade80; }
+.hist-time { font-size: 0.72rem; color: #64748b; margin-top: 0.2rem; }
+.hist-new     .hist-title { color: #7dd3fc; }
+.hist-online  .hist-title { color: #4ade80; }
+.hist-offline .hist-title { color: #f87171; }
+.hist-changed .hist-title { color: #facc15; }
+
+/* ════════════════════════════════════════════════════
+   16. PAGE ÉQUIPEMENTS — Alias utilisateur
+   ════════════════════════════════════════════════════ */
+
+.alias-edit {
+  font-size: 0.7rem;
+  color: #64748b;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  vertical-align: middle;
+}
+.alias-edit:hover { color: #38bdf8; }
+.alias-tag {
+  font-size: 0.75rem;
+  color: #facc15;
+  font-style: italic;
+}
+.seen-count {
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 0.1rem;
+}

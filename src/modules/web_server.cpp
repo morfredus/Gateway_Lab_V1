@@ -15,6 +15,7 @@
 #include "app_config.h"          // MDNS_HOSTNAME, PROJECT_VERSION
 #include "../../include/web_interface.h"      // INDEX_HTML (page d'accueil en PROGMEM)
 #include "../../include/web_interface_scan.h" // SCAN_PAGE (page équipements en PROGMEM)
+#include "../../include/web_interface_history.h" // HISTORY_PAGE (vue chronologique en PROGMEM)
 #include "../utils/logger.h"
 
 static const char* TAG = "WebSrv";
@@ -38,9 +39,14 @@ void WebServerModule::begin(uint16_t port) {
     // HTTP_POST = le navigateur envoie des données (formulaire, upload...)
     _server.on("/",           HTTP_GET,  [this]() { _handleRoot(); });
     _server.on("/scan",       HTTP_GET,  [this]() { _server.send_P(200, "text/html", SCAN_PAGE); });
+    _server.on("/history",    HTTP_GET,  [this]() { _server.send_P(200, "text/html", HISTORY_PAGE); });
     _server.on("/api/status", HTTP_GET,  [this]() { _handleApiStatus(); });
     _server.on("/api/devices",HTTP_GET,  [this]() { _handleApiDevices(); });
     _server.on("/api/scan",   HTTP_POST, [this]() { _handleApiScanTrigger(); });
+    _server.on("/api/alias",  HTTP_POST, [this]() { _handleApiSetAlias(); });
+    _server.on("/api/history",HTTP_GET,  [this]() { _handleApiHistory(); });
+    _server.on("/api/backup", HTTP_GET,  [this]() { _handleApiBackup(); });
+    _server.on("/api/restore",HTTP_POST, [this]() { _handleApiRestore(); });
     _server.onNotFound(       [this]()  { _handleNotFound(); });
 
     // Délégation des routes OTA à OtaManager (/update GET + POST)
@@ -120,6 +126,72 @@ void WebServerModule::_handleApiScanTrigger() {
     } else {
         _server.send(503, "application/json", "{\"error\":\"scanner unavailable\"}");
     }
+}
+
+// ---------------------------------------------------------------------------
+// Handler : definit l'alias utilisateur d'un equipement
+// Corps attendu (form-urlencoded ou JSON simple) : mac (ou ip) + alias
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiSetAlias() {
+    if (!_hasScan || !_scan.setAlias) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String key   = _server.arg("mac");
+    if (key.isEmpty()) key = _server.arg("ip");
+    String alias = _server.arg("alias");
+
+    if (key.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"mac ou ip requis\"}");
+        return;
+    }
+
+    bool ok = _scan.setAlias(key, alias);
+    _server.send(ok ? 200 : 404, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : journal chronologique des evenements (nouveaux/changements)
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiHistory() {
+    String json = (_hasScan && _scan.getHistoryJson) ? _scan.getHistoryJson() : "[]";
+    _server.sendHeader("Cache-Control", "no-cache");
+    _server.send(200, "application/json", json);
+}
+
+// ---------------------------------------------------------------------------
+// Handler : telechargement de la sauvegarde complete (devices + historique)
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiBackup() {
+    if (!_hasScan || !_scan.getBackupJson) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+    String json = _scan.getBackupJson();
+    _server.sendHeader("Content-Disposition", "attachment; filename=\"gateway-lab-backup.json\"");
+    _server.send(200, "application/json", json);
+}
+
+// ---------------------------------------------------------------------------
+// Handler : restauration depuis une sauvegarde JSON (corps brut de la requete)
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiRestore() {
+    if (!_hasScan || !_scan.restoreFromJson) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String body = _server.arg("plain");
+    if (body.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"corps JSON requis\"}");
+        return;
+    }
+
+    bool ok = _scan.restoreFromJson(body);
+    _server.send(ok ? 200 : 400, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"JSON invalide\"}");
 }
 
 // ---------------------------------------------------------------------------

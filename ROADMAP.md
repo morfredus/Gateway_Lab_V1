@@ -4,24 +4,24 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ---
 
-## En cours / Prochaine version (v0.1.x)
+## En cours / Prochaine version
 
-* Détection des nouveaux équipements depuis le dernier scan
-* Endpoint `/api/export` (JSON complet)
-* Historique local des équipements (NVS)
+* Équipements favoris
+* Notes utilisateur sur un équipement
+* Export CSV
 
 ---
 
 ## Roadmap produit
 
-### v0.1.x — Inventaire enrichi
+### v0.1.x — Inventaire enrichi (terminé en v0.2.0)
 
-* Historique persistant des équipements (NVS)
-* Première apparition / dernière apparition
-* Compteur de détections
+* ~~Historique persistant des équipements~~
+* ~~Première apparition / dernière apparition~~
+* ~~Compteur de détections~~
 * Équipements favoris
-* Notes utilisateur sur un équipement
-* Export JSON complet
+* ~~Notes utilisateur sur un équipement~~ (alias)
+* ~~Export JSON complet~~ (sauvegarde/restauration)
 * Export CSV
 
 ### v0.2.x — Découverte avancée
@@ -86,3 +86,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.1.0  | Persistance LittleFS, statistiques online/offline, UI barre de statistiques et colonne statut |
 | v0.1.1  | Scanner TCP 14 ports (sockets non-bloquants), banner HTTP, TTL → OS, badges ports TCP colorés dans l'UI |
 | v0.1.2  | Scanner NetBIOS (UDP 137), enrichissement par patterns hostname, bannières SSH/FTP, détection API IoT (Shelly/Tasmota/FritzBox), DNS-SD étendu à 31 types de services, badge source NetBIOS |
+| v0.2.0  | Historique des équipements (NTP, firstSeen/lastSeen/seenCount), alias utilisateur, classification intelligente multi-signaux, vue chronologique (/history), détection des changements, sauvegarde/restauration JSON |

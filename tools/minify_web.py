@@ -52,6 +52,12 @@ PAGES = [
         "SCAN_PAGE",
         None,
     ),
+    (
+        WEB_SRC_DIR / "history.html",
+        INCLUDE_DIR / "web_interface_history.h",
+        "HISTORY_PAGE",
+        None,
+    ),
 ]
 
 # ---------------------------------------------------------------------------
