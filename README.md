@@ -51,13 +51,21 @@ Le projet privilégie :
 | API Philips Hue Bridge   | Modèle, firmware, sans authentification (`/api/config`)           |
 | API Synology DSM         | Confirmation NAS, modèle depuis XML UPnP                          |
 | API Freebox              | Modèle exact (Ultra/Pop/Révolution), version FreeboxOS            |
-| Découverte DNS-SD        | 22 types de services, badges HTTP/SSH/AirPlay/Cast/Sonos/HomeKit  |
-| Inventaire réseau        | IP, nom, fabricant, modèle, catégorie, OS, services, MAC, source  |
+| Découverte DNS-SD        | 31 types de services, badges HTTP/SSH/AirPlay/Cast/Sonos/HomeKit  |
+| Découverte NetBIOS       | Node Status (UDP 137) - hostnames PC Windows / Samba              |
+| Scan de ports TCP        | 14 ports, bannières HTTP/SSH/FTP, détection API IoT (Shelly/Tasmota/FritzBox) |
+| Inventaire réseau        | IP, nom, fabricant, modèle, catégorie, OS, services, ports, MAC, source |
 | Auto-détection ESP32     | Le Gateway apparaît dans sa propre liste                          |
 | Identification OUI       | Base externalisée générée automatiquement                         |
+| Persistance LittleFS     | Statistiques online/offline, état conservé entre redémarrages     |
+| Historique des équipements | Synchronisation NTP, firstSeen/lastSeen/seenCount, journal chronologique (`/history`) |
+| Alias utilisateur        | Renommage manuel d'un équipement, prioritaire sur le hostname     |
+| Classification intelligente | Affine la catégorie d'un équipement à partir de plusieurs signaux |
+| Détection des changements | Comparaison automatique entre deux scans (IP, fabricant, catégorie, ports...) |
+| Sauvegarde / restauration | Export et import JSON complet de l'inventaire et de l'historique |
 | OTA Web                  | Upload firmware depuis le navigateur                              |
 | ArduinoOTA               | Mise à jour réseau depuis PlatformIO                              |
-| API REST                 | `/api/status`, `/api/devices`, `/api/scan`                        |
+| API REST                 | `/api/status`, `/api/devices`, `/api/scan`, `/api/alias`, `/api/history`, `/api/backup`, `/api/restore` |
 
 ---
 
@@ -74,10 +82,16 @@ Le projet privilégie :
 
 * Inventaire des appareils détectés
 * Résolution des noms d'hôtes
+* Alias utilisateur personnalisable
 * Fabricant
 * Catégorie
 * Modèle
-* Temps depuis la dernière détection
+* Temps depuis la dernière détection / nombre de détections
+
+### Historique
+
+* Vue chronologique des événements (nouvel équipement, reconnexion, déconnexion, changement)
+* Horodatage réel via synchronisation NTP
 
 ### OTA
 
@@ -156,7 +170,13 @@ Gateway-Lab-V1/
 │   │   ├── hostname_resolver.*
 │   │   ├── isp_detector.h
 │   │   ├── ssdp_scanner.*
-│   │   └── dns_sd_scanner.*
+│   │   ├── dns_sd_scanner.*
+│   │   ├── netbios_scanner.*
+│   │   ├── port_scanner.*
+│   │   ├── device_enricher.h
+│   │   ├── device_store.*
+│   │   ├── device_history.*
+│   │   └── time_sync.*
 │   │
 │   └── utils/
 │       └── logger.h
@@ -169,12 +189,14 @@ Gateway-Lab-V1/
 │   ├── oui_table.h              # Généré depuis data/oui.json
 │   ├── web_interface.h          # Généré depuis web_src/index.html
 │   ├── web_interface_scan.h     # Généré depuis web_src/scan.html
-│   └── web_interface_ota.h      # Généré depuis web_src/ota.html
+│   ├── web_interface_ota.h      # Généré depuis web_src/ota.html
+│   └── web_interface_history.h  # Généré depuis web_src/history.html
 │
 ├── web_src/
 │   ├── index.html                # Page d'accueil (source)
 │   ├── scan.html                 # Page équipements (source)
 │   ├── ota.html                  # Page OTA (source)
+│   ├── history.html              # Page historique (source)
 │   ├── styles.css                # Feuille de style unique (injectée inline par minify_web.py)
 │   ├── template.html             # Gabarit de référence (documentation)
 │   └── README.md                 # Guide développeur web_src/
@@ -207,6 +229,7 @@ include/oui_table.h
 include/web_interface.h
 include/web_interface_scan.h
 include/web_interface_ota.h
+include/web_interface_history.h
 ```
 
 Ils sont reconstruits à partir de :
@@ -274,6 +297,10 @@ Inventaire réseau
 
 Interface OTA
 
+### GET /history
+
+Vue chronologique des événements détectés
+
 ### GET /api/status
 
 Retourne :
@@ -305,6 +332,22 @@ Retourne :
 
 Déclenche un scan réseau asynchrone.
 
+### POST /api/alias
+
+Définit ou efface l'alias d'un équipement (paramètres `mac` et `alias`).
+
+### GET /api/history
+
+Retourne le journal chronologique des événements (les plus récents en premier).
+
+### GET /api/backup
+
+Télécharge un export JSON complet de l'inventaire, des alias et de l'historique.
+
+### POST /api/restore
+
+Restaure l'inventaire depuis un export JSON précédemment généré par `/api/backup`.
+
 ### POST /update
 
 Upload d'un firmware `.bin`.
@@ -324,6 +367,7 @@ Les informations affichées peuvent provenir de plusieurs mécanismes :
 | HueAPI       | `Hue`     | API Philips Hue Bridge `/api/config`                            |
 | SynologyAPI  | `DSM`     | API Synology DSM `/webapi/query.cgi`                            |
 | FreeboxAPI   | `Freebox` | API Freebox `/api_version`                                      |
+| NetBIOS      | `NetBIOS` | Node Status NetBIOS (UDP 137) - PC Windows / Samba              |
 | Self         | `ESP32`   | Informations de l'ESP32 lui-même                                |
 
 ---
