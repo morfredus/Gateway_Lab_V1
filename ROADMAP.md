@@ -88,3 +88,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.1.2  | Scanner NetBIOS (UDP 137), enrichissement par patterns hostname, bannières SSH/FTP, détection API IoT (Shelly/Tasmota/FritzBox), DNS-SD étendu à 31 types de services, badge source NetBIOS |
 | v0.2.0  | Historique des équipements (NTP, firstSeen/lastSeen/seenCount), alias utilisateur, classification intelligente multi-signaux, vue chronologique (/history), détection des changements, sauvegarde/restauration JSON |
 | v0.2.1  | Niveau de confiance de l'identification (score 0-100%, badge couleur, libellé de source au survol) |
+| v0.2.2  | Séparation HTML/CSS/JS dans `web_src/` (scripts extraits dans `*.js`, minifiés et injectés inline par `minify_web.py`), correction du lien Historique manquant sur la page OTA |
