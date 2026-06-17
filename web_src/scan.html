@@ -116,6 +116,18 @@
       return m[s] || 'other';
     }
 
+    function confClass(score) {
+      if (score >= 90) return 'conf-high';
+      if (score >= 60) return 'conf-medium';
+      return 'conf-low';
+    }
+
+    function confBadge(d) {
+      if (d.confidence === undefined || d.confidence === null) return '';
+      var title = 'Niveau de confiance : ' + d.confidence + '% (source : ' + esc(d.confidenceLabel) + ')';
+      return '<span class="conf-badge ' + confClass(d.confidence) + '" title="' + title + '">' + d.confidence + '%</span>';
+    }
+
     function portClass(p) {
       if (p === 'SSH')    return 'port-ssh';
       if (p === 'FTP' || p === 'Telnet') return 'port-legacy';
@@ -210,8 +222,8 @@
             svcHtml + portsHtml
           : (svcHtml + portsHtml || '<span class="none">—</span>');
         var catHtml = d.category
-          ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>'
-          : '<span class="none">—</span>';
+          ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>' + confBadge(d)
+          : '<span class="none">—</span>' + confBadge(d);
         var seenHtml = d.online
           ? fmtSeen(d.elapsedMs)
           : '<span class="none" title="Non vu lors du dernier scan">hors ligne</span>';

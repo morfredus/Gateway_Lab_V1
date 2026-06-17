@@ -5,6 +5,34 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.1] - 2026-06-17
+
+### Ajoute
+
+- **Niveau de confiance** (`network_scanner.cpp` - `_confidenceFor()`) :
+  chaque equipement affiche desormais un score 0-100% expliquant la fiabilite
+  de son identification (manufacturer/category), avec un libelle de source
+  au survol. Ponderation par source :
+  - Box FAI (DHCP local) : 100%
+  - API specifique (Hue/DSM/Freebox) : 95%
+  - mDNS : 90%
+  - SSDP/UPnP : 80%
+  - PTR DNS : 70%
+  - NetBIOS : 65%
+  - OUI (adresse MAC) : 60%
+  - Heuristiques (pattern matching hostname/ports/services) : 40%
+  - Aucun signal fiable : 20%
+  - Nouveaux champs JSON `confidence` et `confidenceLabel` sur `GET /api/devices`
+  - Badge couleur (vert/jaune/rouge) dans la colonne Categorie de la page Equipements
+
+### Notes
+
+- Aucune fonctionnalite existante n'a ete retiree - le score est calcule a la
+  volee a partir des signaux deja collectes (source, manufacturer, category),
+  sans modifier le pipeline de scan ni la persistance.
+
+---
+
 ## [0.2.0] - 2026-06-16
 
 ### Ajoute
