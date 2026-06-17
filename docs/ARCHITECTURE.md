@@ -310,6 +310,15 @@ PTR DNS
 OUI table (MAC prefix)             (moins précis)
 ```
 
+**MAC aléatoire (privacy mode)** : avant toute recherche dans la table OUI,
+`isRandomizedMac()` (`src/modules/network_scanner.cpp`) vérifie le bit
+"locally administered" de l'adresse (2ème caractère hexadécimal du 1er
+octet = `2`, `6`, `A` ou `E`). Si l'adresse est aléatoire (cas fréquent des
+smartphones iOS/Android récents), la table OUI n'est pas consultée et
+l'équipement est classé `manufacturer="Unknown (Privacy Mode)"`,
+`category="Mobile/Aléatoire"` — ces champs restent ensuite enrichissables
+par les sources plus précises (mDNS, SSDP, etc.) ci-dessus.
+
 ---
 
 ## Concurrence FreeRTOS
