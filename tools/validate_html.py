@@ -34,6 +34,8 @@ PAGES = [
     (WEB_SRC_DIR / "index.html",   True),
     (WEB_SRC_DIR / "scan.html",    True),
     (WEB_SRC_DIR / "ota.html",     True),
+    (WEB_SRC_DIR / "history.html", True),
+    (WEB_SRC_DIR / "wifi.html",    True),
     (WEB_SRC_DIR / "template.html", False),
 ]
 

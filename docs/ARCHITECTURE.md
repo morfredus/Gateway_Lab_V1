@@ -72,16 +72,32 @@ logique dans `main.cpp`.
 
 ### `src/modules/wifi_manager.*` — Gestion WiFi
 
-**Rôle** : connexion WiFi multi-réseaux et reconnexion automatique.
+**Rôle** : connexion WiFi multi-réseaux, persistance NVS et portail de configuration.
+
+Hiérarchie de configuration (priorité décroissante) :
+1. Réseaux enregistrés en NVS (`Preferences`, namespace `"wifi"`) — configurés
+   via le portail web ou la page `/wifi`
+2. `DEFAULT_WIFI_SSID` / `DEFAULT_WIFI_PASSWORD` dans `include/secrets.h`
+   (développement uniquement, optionnel — fichier inclus via `__has_include`)
+3. Portail de configuration : point d'accès `GatewayLab-Setup` + `DNSServer`
+   (captif) + `WebServer` dédié sur le port 80, actif uniquement quand aucun
+   réseau ne répond
 
 Fonctionnement :
-- Essaie chaque réseau de `secrets.h` par ordre de signal
+- Essaie chaque réseau connu (NVS puis fallback dev) par ordre de signal via `WiFiMulti`
+- Si aucun ne répond avant `WIFI_CONNECT_TIMEOUT`, démarre le portail de
+  configuration et **ne revient pas** tant qu'aucun réseau n'a été enregistré
+  (l'ESP32 redémarre après la saisie utilisateur, via `ESP.restart()`)
 - Une fois connecté, appelle un callback applicatif (défini dans `main.cpp`)
 - Détecte la déconnexion dans `loop()` et rappelle automatiquement `_multi.run()`
 - Relance le mDNS après chaque reconnexion
+- Expose `savedNetworks()` / `addNetwork()` / `removeNetwork()` pour la gestion
+  multi-réseaux depuis l'API web (`/api/wifi`)
 
 **Particularité** : tous les services réseau (OTA, web server, scanner) sont initialisés
 dans le callback, pas dans `setup()`. Cela garantit qu'ils ne démarrent que si le WiFi est actif.
+En mode portail (point d'accès), aucun de ces services ne démarre : seul le
+portail de configuration tourne, jusqu'au redémarrage suivant la connexion.
 
 ---
 

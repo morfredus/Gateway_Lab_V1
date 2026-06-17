@@ -254,13 +254,18 @@ Impact :
 
 ## 🔴 secrets.h
 
+Depuis la v0.3.0, `secrets.h` n'est plus la méthode officielle de
+configuration WiFi (voir `docs/WIFI_SETUP.md`) : elle reste utile uniquement
+en développement, pour éviter de repasser par le portail à chaque flash.
+
 Ne jamais committer :
 
 ```text
 include/secrets.h
 ```
 
-Le fichier contient les identifiants Wi-Fi.
+S'il existe, le fichier contient des identifiants Wi-Fi de développement
+(`DEFAULT_WIFI_SSID` / `DEFAULT_WIFI_PASSWORD`).
 
 Utiliser :
 
@@ -275,6 +280,24 @@ Vérification avant tout push :
 ```bash
 git status
 ```
+
+---
+
+## 🟡 Mots de passe WiFi en mémoire NVS
+
+Les réseaux enregistrés via le portail de configuration ou la page
+`/wifi` sont stockés **en clair** dans la mémoire NVS de l'ESP32
+(`Preferences`, namespace `"wifi"`). Cette mémoire n'est pas chiffrée par
+défaut.
+
+* risque limité à un accès physique à la carte (lecture flash) ou à un accès
+  réseau local pouvant joindre l'API `/api/wifi`
+* l'API REST `/api/wifi` ne renvoie jamais les mots de passe enregistrés
+  (uniquement les SSID), mais l'ajout/suppression de réseaux n'est protégé
+  par aucune authentification — limiter l'accès au réseau local de confiance
+* le portail de configuration (`GatewayLab-Setup`) est lui aussi sans mot de
+  passe par conception (accessibilité du premier démarrage) : il n'est actif
+  que tant qu'aucun réseau n'est enregistré
 
 ---
 

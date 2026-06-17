@@ -11,6 +11,10 @@
  *   GET  /api/history   — Journal chronologique des evenements en JSON
  *   GET  /api/backup    — Telechargement de la sauvegarde complete (JSON)
  *   POST /api/restore   — Restauration depuis une sauvegarde JSON
+ *   GET  /wifi          — Page Parametres > Reseau WiFi (HTML embarque en PROGMEM)
+ *   GET  /api/wifi      — Etat de connexion + reseaux enregistres (sans mots de passe)
+ *   POST /api/wifi      — Ajoute ou met a jour un reseau (ssid + password)
+ *   DELETE /api/wifi    — Supprime un reseau enregistre (parametre ssid)
  *   GET  /update       — Page de mise à jour OTA (formulaire upload)
  *   POST /update       — Réception et installation d'un firmware .bin
  *
@@ -58,6 +62,9 @@ private:
     void _handleApiHistory();       // Retourne le journal chronologique en JSON
     void _handleApiBackup();        // Retourne la sauvegarde complete en JSON
     void _handleApiRestore();       // Restaure depuis une sauvegarde JSON envoyee
+    void _handleApiWifiGet();       // Retourne l'etat WiFi + reseaux enregistres
+    void _handleApiWifiPost();      // Ajoute ou met a jour un reseau enregistre
+    void _handleApiWifiDelete();    // Supprime un reseau enregistre
     void _handleNotFound();         // Réponse 404 pour les routes inconnues
 
     ScanProvider _scan;
