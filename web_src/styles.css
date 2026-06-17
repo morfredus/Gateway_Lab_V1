@@ -541,7 +541,7 @@ input[type=file] {
 .hist-detail { font-size: 0.8rem; color: #94a3b8; margin-top: 0.15rem; }
 .hist-old     { color: #f87171; text-decoration: line-through; }
 .hist-new-val { color: #4ade80; }
-.hist-time { font-size: 0.72rem; color: #64748b; margin-top: 0.2rem; }
+.hist-time { font-size: 0.72rem; color: #aeb9c9; margin-top: 0.2rem; }
 .hist-new     .hist-title { color: #7dd3fc; }
 .hist-online  .hist-title { color: #4ade80; }
 .hist-offline .hist-title { color: #f87171; }
@@ -571,3 +571,21 @@ input[type=file] {
   color: #64748b;
   margin-top: 0.1rem;
 }
+
+/* ════════════════════════════════════════════════════
+   17. PAGE ÉQUIPEMENTS - Niveau de confiance
+   ════════════════════════════════════════════════════ */
+
+.conf-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.6rem;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+  cursor: help;
+}
+.conf-high   { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.conf-medium { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+.conf-low    { background: rgba(248, 113, 113, 0.15); color: #f87171; }

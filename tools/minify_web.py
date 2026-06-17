@@ -31,29 +31,33 @@ INCLUDE_DIR  = PROJECT_ROOT / "include"
 STYLES_CSS   = WEB_SRC_DIR / "styles.css"
 
 # ---------------------------------------------------------------------------
-# Pages HTML à traiter : (source, header_dest, const_name, data_copy|None)
+# Pages HTML à traiter : (html_src, js_src, header_dest, const_name, data_copy|None)
 # ---------------------------------------------------------------------------
 PAGES = [
     (
         WEB_SRC_DIR / "index.html",
+        WEB_SRC_DIR / "index.js",
         INCLUDE_DIR / "web_interface.h",
         "INDEX_HTML",
         DATA_DIR   / "index.html",
     ),
     (
         WEB_SRC_DIR / "ota.html",
+        WEB_SRC_DIR / "ota.js",
         INCLUDE_DIR / "web_interface_ota.h",
         "OTA_PAGE",
         None,
     ),
     (
         WEB_SRC_DIR / "scan.html",
+        WEB_SRC_DIR / "scan.js",
         INCLUDE_DIR / "web_interface_scan.h",
         "SCAN_PAGE",
         None,
     ),
     (
         WEB_SRC_DIR / "history.html",
+        WEB_SRC_DIR / "history.js",
         INCLUDE_DIR / "web_interface_history.h",
         "HISTORY_PAGE",
         None,
@@ -101,7 +105,7 @@ def _load_shared_css() -> str:
     return ''
 
 
-def minify_html(html: str) -> str:
+def minify_html(html: str, js_path: Path | None) -> str:
     html = re.sub(r'<!--(?!\[if).*?-->', '', html, flags=re.DOTALL)
     # Inline styles.css in place of <link rel="stylesheet" href="styles.css">
     shared_css = _load_shared_css()
@@ -110,6 +114,15 @@ def minify_html(html: str) -> str:
         html = re.sub(
             r'<link\s[^>]*href=["\']styles\.css["\'][^>]*>',
             inlined,
+            html,
+        )
+    # Inline the page's *.js in place of <script src="page.js"></script>
+    if js_path is not None and js_path.exists():
+        js_raw = js_path.read_text(encoding='utf-8')
+        inlined_js = '<script>' + _minify_js_block(js_raw) + '</script>'
+        html = re.sub(
+            r'<script\s[^>]*src=["\'][^"\']+\.js["\'][^>]*></script>',
+            inlined_js,
             html,
         )
     def _repl_style(m):
@@ -234,24 +247,29 @@ def run():
     ok = True
 
     # --- Pages HTML ---
-    for src, header_dst, const_name, data_dst in PAGES:
+    for src, js_src, header_dst, const_name, data_dst in PAGES:
         if not src.exists():
             print(f"  ERREUR : {src.relative_to(PROJECT_ROOT)} introuvable — ignoré")
             ok = False
             continue
+        if not js_src.exists():
+            print(f"  ERREUR : {js_src.relative_to(PROJECT_ROOT)} introuvable — ignoré")
+            ok = False
+            continue
 
         raw = src.read_text(encoding='utf-8')
-        minified = minify_html(raw)
-        # Taille de référence = source HTML + CSS commun (non minifié)
+        js_raw = js_src.read_text(encoding='utf-8')
+        minified = minify_html(raw, js_src)
+        # Taille de référence = source HTML + CSS commun + JS (non minifiés)
         css_raw_len = len(STYLES_CSS.read_text(encoding='utf-8')) if STYLES_CSS.exists() else 0
-        total_src = len(raw) + css_raw_len
+        total_src = len(raw) + css_raw_len + len(js_raw)
         ratio = 100 * (1 - len(minified) / total_src) if total_src else 0
 
         header = generate_html_header(src, const_name, minified)
         header_dst.write_text(header, encoding='utf-8')
 
-        print(f"\n  [{src.name}]")
-        print(f"    Source  : {len(raw):,} o  +  styles.css {css_raw_len:,} o  =  {total_src:,} o")
+        print(f"\n  [{src.name} + {js_src.name}]")
+        print(f"    Source  : {len(raw):,} o (html) + {css_raw_len:,} o (css) + {len(js_raw):,} o (js)  =  {total_src:,} o")
         print(f"    Minifié : {len(minified):,} octets  (gain {ratio:.1f}%)")
         print(f"    Header  : {header_dst.relative_to(PROJECT_ROOT)}")
 

@@ -11,11 +11,20 @@ L'ESP32-S3 sert chaque page en HTML auto-contenu depuis la mémoire flash (PROGM
 Il n'existe pas de serveur de fichiers statiques : le CSS et le JavaScript sont
 **injectés inline** dans chaque page par le script de minification.
 
+Les fichiers `*.html` ne contiennent que du HTML (+ une référence
+`<script src="page.js">`), le CSS commun vit entièrement dans `styles.css`,
+et chaque page a son propre fichier `*.js`.
+
 ```
 web_src/styles.css     ──┐
 web_src/index.html     ──┤
-web_src/scan.html      ──┼── python tools/minify_web.py ──► include/*.h ──► pio run
+web_src/index.js       ──┤
+web_src/scan.html      ──┤
+web_src/scan.js         ──┼── python tools/minify_web.py ──► include/*.h ──► pio run
 web_src/ota.html       ──┤
+web_src/ota.js          ──┤
+web_src/history.html   ──┤
+web_src/history.js      ──┤
 data/oui.json          ──┘
 ```
 
@@ -25,11 +34,13 @@ data/oui.json          ──┘
 
 | Fichier | Rôle | Traité par minify ? |
 |---|---|---|
-| `index.html` | Page Accueil (`GET /`) | ✅ → `include/web_interface.h` |
-| `scan.html` | Page Équipements (`GET /scan`) | ✅ → `include/web_interface_scan.h` |
-| `ota.html` | Page OTA (`GET /update`) | ✅ → `include/web_interface_ota.h` |
+| `index.html` / `index.js` | Page Accueil (`GET /`) | ✅ → `include/web_interface.h` |
+| `scan.html` / `scan.js` | Page Équipements (`GET /scan`) | ✅ → `include/web_interface_scan.h` |
+| `ota.html` / `ota.js` | Page OTA (`GET /update`) | ✅ → `include/web_interface_ota.h` |
+| `history.html` / `history.js` | Page Historique (`GET /history`) | ✅ → `include/web_interface_history.h` |
 | `styles.css` | CSS commun (reset, body, nav, footer…) | ✅ injecté inline dans chaque page |
 | `template.html` | Gabarit de référence documentaire | ❌ (non listé dans PAGES) |
+| `extracted/` | Sortie de `extract_web_sources.py` (récupération d'urgence) | — (non versionné, ne pas modifier à la main) |
 
 ---
 
@@ -53,11 +64,12 @@ Toutes les pages partagent la même architecture HTML :
     <span id="footer-ts">…</span>    ← horodatage ou version firmware
     <a href="/">← Accueil</a>
   </footer>
-  <script> … JavaScript inline … </script>
+  <script src="page.js"></script>   ← injecté inline par minify_web.py
 </body>
 ```
 
-Le CSS de `styles.css` est injecté à la place de `<link rel="stylesheet" href="styles.css">`.
+Le CSS de `styles.css` est injecté à la place de `<link rel="stylesheet" href="styles.css">`,
+et le JavaScript de `page.js` est injecté à la place de `<script src="page.js"></script>`.
 Chaque page conserve un bloc `<style>` pour ses règles propres (largeur max, composants).
 
 ---
@@ -67,12 +79,13 @@ Chaque page conserve un bloc `<style>` pour ses règles propres (largeur max, co
 ### 1. Modifier les sources
 
 - **Styles communs** → `web_src/styles.css`
-- **Page Accueil** → `web_src/index.html`
-- **Page Équipements** → `web_src/scan.html`
-- **Page OTA** → `web_src/ota.html`
+- **Page Accueil** → `web_src/index.html` + `web_src/index.js`
+- **Page Équipements** → `web_src/scan.html` + `web_src/scan.js`
+- **Page OTA** → `web_src/ota.html` + `web_src/ota.js`
+- **Page Historique** → `web_src/history.html` + `web_src/history.js`
 
-> Les fichiers HTML peuvent être ouverts directement dans un navigateur
-> (le `<link>` vers `styles.css` est résolu localement).
+> Les fichiers HTML ne contiennent que du HTML/PHP (markup) : tout le CSS va
+> dans `styles.css`, tout le JavaScript va dans le `*.js` correspondant à la page.
 
 ### 2. Régénérer les headers PROGMEM
 
@@ -82,10 +95,24 @@ python tools/minify_web.py
 
 Le script :
 1. Lit `styles.css`, le minifie et l'injecte inline dans chaque HTML à la place du `<link>`
-2. Minifie le CSS inline restant et le JavaScript de chaque page
-3. Génère les headers `include/web_interface*.h`
-4. Met à jour `data/index.html` (copie minifiée pour débogage)
-5. Régénère `include/oui_table.h` depuis `data/oui.json`
+2. Lit le `*.js` de chaque page, le minifie et l'injecte inline à la place du `<script src="...">`
+3. Minifie le CSS/JS inline restant
+4. Génère les headers `include/web_interface*.h`
+5. Met à jour `data/index.html` (copie minifiée pour débogage)
+6. Régénère `include/oui_table.h` depuis `data/oui.json`
+
+### Récupération d'urgence
+
+Si `web_src/*.html` ou `*.js` sont perdus mais que `include/web_interface*.h`
+sont encore présents :
+
+```bash
+python tools/extract_web_sources.py --force
+```
+
+Le HTML/JS est extrait depuis les headers PROGMEM et écrit dans
+`web_src/extracted/` (jamais dans `web_src/` directement, pour ne pas
+écraser les sources originales).
 
 ### 3. Compiler et flasher
 

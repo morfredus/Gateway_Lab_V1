@@ -8,6 +8,9 @@ include/wifi-config.h
 # Fichiers divers (a ignorer si leur contenu n'est pas a partager)
 .copilot
 
+# Sources web extraites depuis les headers PROGMEM (récupération d'urgence)
+web_src/extracted/
+
 # -----------------------------------------------------------------------------
 # 2. FICHIERS GENERES PAR COMPILATION ET OUTILS
 # -----------------------------------------------------------------------------

@@ -142,6 +142,10 @@ private:
     // Deduit l'OS depuis la valeur TTL ICMP et l'injecte dans os (si vide)
     static String _osFromTtl(uint8_t ttl);
 
+    // Calcule un score de confiance (0-100) et son libelle pour l'UI -
+    // explique a l'utilisateur quelle source a permis l'identification
+    static int _confidenceFor(const NetworkDevice& d, String& label);
+
     SemaphoreHandle_t           _mutex      = nullptr;
     TaskHandle_t                _taskHandle = nullptr;
     std::vector<NetworkDevice>  _results;
