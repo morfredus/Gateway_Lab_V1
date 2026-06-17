@@ -1,3 +1,18 @@
+## Branches expérimentales
+
+### pixel_8_remote
+
+Branche de recherche et d'expérimentation.
+
+- Basée sur Gateway Lab v0.4.0
+- Développement indépendant
+- Ne sera pas fusionnée dans `main`
+- Ne sera pas fusionnée dans `dev`
+- Peut contenir des prototypes, essais et ruptures de compatibilité
+
+Cette branche sert uniquement à explorer le concept d'un compagnon mobile Android pour Gateway Lab.
+
+
 # Gateway Lab V1
 
 ![Version](https://img.shields.io/badge/version-0.4.0-blue)
