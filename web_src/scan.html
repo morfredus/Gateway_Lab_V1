@@ -21,6 +21,7 @@
   <nav>
     <a href="/">Accueil</a>
     <a href="/scan" class="active">Équipements</a>
+    <a href="/history">Historique</a>
     <a href="/update">OTA</a>
   </nav>
 
@@ -181,9 +182,17 @@
         var statusHtml = d.online
           ? '<span class="status-online"  title="En ligne — vu lors du dernier scan">●</span>'
           : '<span class="status-offline" title="Hors ligne — non vu lors du dernier scan">○</span>';
-        var nameHtml = d.hostname
-          ? '<div class="name-cell">' + esc(d.hostname) + sourceBadge(d.source) + '</div>'
-          : '<span class="none">—</span>';
+        var displayName = d.alias || d.hostname;
+        var aliasKey = d.mac || d.ip;
+        var editBtn = '<button class="alias-edit" title="Renommer cet équipement" ' +
+          'data-key="' + esc(aliasKey) + '" data-alias="' + esc(d.alias || '') + '" ' +
+          'onclick="editAlias(this)">✎</button>';
+        var nameHtml = displayName
+          ? '<div class="name-cell">' + esc(displayName) +
+              (d.alias ? '<span class="alias-tag" title="Alias personnalisé"> ★</span>' : sourceBadge(d.source)) +
+              editBtn +
+            '</div>'
+          : '<span class="none">—</span>' + editBtn;
         var svcHtml = (d.services && d.services.length)
           ? '<div class="svc-list">' + d.services.map(function(s) {
               return '<span class="svc-badge svc-' + svcClass(s) + '" title="Service DNS-SD : ' + esc(s) + '">' + esc(s) + '</span>';
@@ -206,6 +215,8 @@
         var seenHtml = d.online
           ? fmtSeen(d.elapsedMs)
           : '<span class="none" title="Non vu lors du dernier scan">hors ligne</span>';
+        if (d.seenCount > 0)
+          seenHtml += '<div class="seen-count" title="Nombre de scans où cet équipement a été vu en ligne">vu ' + d.seenCount + 'x</div>';
         return '<tr' + (d.online ? '' : ' class="row-offline"') + '>' +
           '<td class="status-cell">' + statusHtml + '</td>' +
           '<td class="ip-cell">'     + esc(d.ip)  + '</td>' +
@@ -261,6 +272,16 @@
               (n ? n + ' équipement(s) — ' : '') + 'Actualisé : ' + new Date().toLocaleTimeString('fr-FR');
           }
         });
+    }
+
+    function editAlias(btn) {
+      var key      = btn.getAttribute('data-key');
+      var current  = btn.getAttribute('data-alias') || '';
+      var value = prompt('Alias pour cet équipement (laisser vide pour effacer) :', current);
+      if (value === null) return;
+      var body = 'mac=' + encodeURIComponent(key) + '&alias=' + encodeURIComponent(value);
+      fetch('/api/alias', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+        .then(function() { fetchDevices(); });
     }
 
     function triggerScan() {

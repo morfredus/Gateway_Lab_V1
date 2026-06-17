@@ -5,6 +5,46 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.0] - 2026-06-16
+
+### Ajoute
+
+- **Historique des equipements** (`src/modules/device_history.h/.cpp`, `time_sync.h/.cpp`) :
+  - Synchronisation NTP au demarrage (epoch reel pour les horodatages)
+  - Champs `firstSeen`, `lastSeenAt`, `seenCount` sur chaque equipement (`NetworkDevice`)
+  - Journal chronologique des evenements (`/history.json`, 300 entrees max, FIFO) :
+    nouvel equipement, reconnexion, deconnexion, changement de champ
+  - Nouvelle page **Historique** (`/history`) affichant la vue chronologique
+  - Nouvel endpoint `GET /api/history`
+
+- **Alias utilisateur** : chaque equipement peut etre renomme manuellement
+  (bouton ✎ dans la colonne "Nom d'hote" de la page Equipements). Persiste
+  dans `/devices.json` et prend le pas sur le hostname a l'affichage.
+  Nouvel endpoint `POST /api/alias`.
+
+- **Classification intelligente** (`network_scanner.cpp` - `_classifyDevices()`) :
+  combine manufacturer/services DNS-SD/ports ouverts/hostname pour affiner la
+  categorie d'un equipement quand elle est encore vide ou generique ("IoT") -
+  ex: SMB+SSH/HTTP -> NAS, RTSP -> Camera, port HA -> Smart Hub, AirPlay -> Speaker.
+
+- **Detection des changements** : chaque scan compare l'etat courant a l'etat
+  precedent et journalise automatiquement les changements de IP, fabricant,
+  categorie, nom d'hote ou ports ouverts pour un meme equipement (MAC).
+
+- **Sauvegarde / restauration** :
+  - `GET /api/backup` - telechargement d'un export JSON complet (equipements,
+    alias, historique de detection)
+  - `POST /api/restore` - restauration depuis un fichier exporte precedemment
+  - Nouvelle section "Sauvegarde des equipements" sur la page d'accueil
+
+### Notes
+
+- Toutes les fonctionnalites s'ajoutent a l'existant sans rien retirer - le
+  scan continue de suivre ARP -> ICMP -> hostnames -> SSDP -> DNS-SD -> ports
+  -> NetBIOS -> enrichissement -> classification -> historique -> sauvegarde.
+
+---
+
 ## [0.1.2] - 2026-06-16
 
 ### Ajoute

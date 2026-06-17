@@ -21,6 +21,7 @@
   <nav>
     <a href="/" class="active">Accueil</a>
     <a href="/scan">Équipements</a>
+    <a href="/history">Historique</a>
     <a href="/update">OTA</a>
   </nav>
 
@@ -56,9 +57,30 @@
     <a class="shortcut" href="/scan">
       <span class="icon">📡</span>Équipements
     </a>
+    <a class="shortcut" href="/history">
+      <span class="icon">🕒</span>Historique
+    </a>
     <a class="shortcut" href="/update">
       <span class="icon">🔄</span>Mise à jour
     </a>
+  </div>
+
+  <!-- ── Sauvegarde / restauration ────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Sauvegarde des équipements</p>
+    </div>
+    <p class="info-label" style="margin-bottom:0.9rem">
+      Exportez l'inventaire complet (équipements, alias, historique) ou restaurez-le
+      depuis un fichier précédemment exporté.
+    </p>
+    <a class="btn" id="backup-btn" href="/api/backup" download="gateway-lab-backup.json" style="display:block;text-align:center;text-decoration:none;margin-bottom:0.75rem">
+      Télécharger la sauvegarde
+    </a>
+    <label for="restore-file">Restaurer depuis un fichier</label>
+    <input type="file" id="restore-file" accept="application/json">
+    <button class="btn" id="restore-btn" type="button">Restaurer</button>
+    <div id="restore-msg" style="margin-top:0.75rem;font-size:0.9rem;color:#94a3b8"></div>
   </div>
 
   <!-- ── Footer ────────────────────────────────────────────── -->
@@ -106,6 +128,28 @@
     }
     refresh();
     setInterval(refresh, 10000);
+
+    document.getElementById('restore-btn').addEventListener('click', function() {
+      var input = document.getElementById('restore-file');
+      var msg   = document.getElementById('restore-msg');
+      if (!input.files || !input.files[0]) {
+        msg.textContent = 'Choisissez un fichier de sauvegarde.';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function() {
+        msg.textContent = 'Restauration en cours...';
+        fetch('/api/restore', { method: 'POST', body: reader.result })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            msg.textContent = d.status === 'ok'
+              ? 'Restauration réussie - rechargez la page Équipements.'
+              : 'Erreur : ' + (d.error || 'inconnue');
+          })
+          .catch(function() { msg.textContent = 'Erreur de connexion.'; });
+      };
+      reader.readAsText(input.files[0]);
+    });
   </script>
 </body>
 </html>

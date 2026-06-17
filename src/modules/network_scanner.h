@@ -47,6 +47,11 @@ struct NetworkDevice {
     String   services;      // Services DNS-SD détectés, séparés par '|' (ex: "HTTP|SSH|SMB")
     String   openPorts;    // Ports TCP ouverts, séparés par '|' (ex: "80|443|22")
 
+    String   alias;         // Nom personnalise par l'utilisateur - prioritaire sur hostname a l'affichage
+    uint32_t firstSeenEpoch = 0;   // Epoch NTP de la premiere detection (0 = inconnu, pas d'heure synchronisee)
+    uint32_t lastSeenEpoch  = 0;   // Epoch NTP de la derniere detection (0 = inconnu)
+    uint32_t seenCount      = 0;   // Nombre de scans ou l'equipement a ete vu en ligne
+
     uint32_t lastSeen;      // millis() du dernier scan — converti en elapsed côté client
     bool     online;        // true si détecté lors du dernier scan
 };
@@ -71,6 +76,16 @@ public:
 
     // Statistiques pour l'UI (connus / en ligne / hors ligne)
     ScanStats getStats() const;
+
+    // Definit l'alias utilisateur d'un equipement identifie par MAC ou IP
+    // Retourne false si aucun equipement correspondant n'a ete trouve
+    bool setAlias(const String& macOrIp, const String& alias);
+
+    // Sauvegarde JSON complete (devices + parametres) pour /api/backup
+    String backupToJson() const;
+
+    // Restauration depuis un JSON produit par backupToJson() - remplace les resultats actuels
+    bool restoreFromJson(const String& json);
 
 private:
     // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
@@ -115,6 +130,14 @@ private:
 
     // Enrichissement final : pattern matching sur le hostname (manufacturer/category/os)
     void _enrichDevices();
+
+    // Classification intelligente : combine manufacturer/services/ports/hostname
+    // pour affiner ou completer la categorie quand elle est encore vide/generique
+    void _classifyDevices();
+
+    // Met a jour firstSeen/lastSeen/seenCount et journalise les nouveautes/changements
+    // detectes par rapport a l'etat precedent (avant le merge du scan courant)
+    void _updateHistory(const std::vector<NetworkDevice>& previous);
 
     // Deduit l'OS depuis la valeur TTL ICMP et l'injecte dans os (si vide)
     static String _osFromTtl(uint8_t ttl);
