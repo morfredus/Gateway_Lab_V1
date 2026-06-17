@@ -61,6 +61,7 @@ Le projet privilégie :
 | Historique des équipements | Synchronisation NTP, firstSeen/lastSeen/seenCount, journal chronologique (`/history`) |
 | Alias utilisateur        | Renommage manuel d'un équipement, prioritaire sur le hostname     |
 | Classification intelligente | Affine la catégorie d'un équipement à partir de plusieurs signaux |
+| Niveau de confiance      | Score 0-100% expliquant la fiabilité de l'identification, par source |
 | Détection des changements | Comparaison automatique entre deux scans (IP, fabricant, catégorie, ports...) |
 | Sauvegarde / restauration | Export et import JSON complet de l'inventaire et de l'historique |
 | OTA Web                  | Upload firmware depuis le navigateur                              |
@@ -69,30 +70,14 @@ Le projet privilégie :
 
 ---
 
-## Captures d'écran
-
-- Accueil 
-
-![Accueil](<docs/pictures/Gateway Lab V1 - Accueil.png>)
-
-- Equipement
-
-![Equipement](<docs/pictures/Gateway Lab V1 - Equipement.png>)
-
-- Historique
-
-![Historique](<docs/pictures/Gateway Lab V1 - Historique.png>)
-
-- OTA
-
-![OTA](<docs/pictures/Gateway Lab V1 - OTA.png>)
-
 ### Accueil
 
 * Informations réseau
 * État de connexion
 * Accès rapide aux équipements
 * Accès OTA
+
+![Accueil](<docs/pictures/Gateway Lab V1 - Accueil.png>)
 
 ### Équipements
 
@@ -104,15 +89,21 @@ Le projet privilégie :
 * Modèle
 * Temps depuis la dernière détection / nombre de détections
 
+![Equipement](<docs/pictures/Gateway Lab V1 - Equipement.png>)
+
 ### Historique
 
 * Vue chronologique des événements (nouvel équipement, reconnexion, déconnexion, changement)
 * Horodatage réel via synchronisation NTP
 
+![Historique](<docs/pictures/Gateway Lab V1 - Historique.png>)
+
 ### OTA
 
 * Mise à jour firmware via navigateur
 * Redirection automatique après flash
+
+![OTA](<docs/pictures/Gateway Lab V1 - OTA.png>)
 
 ---
 
