@@ -66,6 +66,12 @@ void setup() {
             .setAlias        = [](const String& macOrIp, const String& alias) {
                 return netScanner.setAlias(macOrIp, alias);
             },
+            .resetDevices    = [](bool keepAlias, bool keepManufacturer) {
+                return netScanner.resetDevices(keepAlias, keepManufacturer);
+            },
+            .rescanDevice    = [](const String& ip) {
+                return netScanner.rescanDevice(ip);
+            },
             .getHistoryJson  = [] {
                 JsonDocument doc;
                 JsonArray arr = doc.to<JsonArray>();
@@ -84,6 +90,7 @@ void setup() {
                 serializeJson(doc, json);
                 return json;
             },
+            .clearHistory    = [] { deviceHistory.clear(); },
             .getBackupJson   = [] { return netScanner.backupToJson(); },
             .restoreFromJson = [](const String& json) { return netScanner.restoreFromJson(json); },
         });

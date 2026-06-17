@@ -255,6 +255,57 @@ footer a:hover { text-decoration: underline; }
 .scan-btn:hover    { background: #06b6d4; }
 .scan-btn:disabled { background: #334155; color: #64748b; cursor: default; }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reset-menu {
+  position: relative;
+}
+
+.reset-btn {
+  font-size: 0.875rem;
+  padding: 0.4rem 1rem;
+  background: #334155;
+  color: #f1f5f9;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+.reset-btn:hover { background: #475569; }
+
+.reset-menu-list {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  background: #1e293b;
+  border: 1px solid #ffffff14;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #00000040;
+  min-width: 220px;
+  z-index: 20;
+  overflow: hidden;
+}
+.reset-menu-list.open { display: block; }
+
+.reset-menu-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.9rem;
+  background: none;
+  border: none;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.reset-menu-list button:hover { background: #0c4a6e; color: #38bdf8; }
+
 .progress-wrap {
   width: 100%;
   background: #0f172a;
@@ -309,6 +360,19 @@ tr:last-child td { border-bottom: none; }
 tr:hover td      { background: #ffffff06; }
 
 .ip-cell   { font-weight: 700; color: #f1f5f9; font-family: monospace; font-size: 0.87rem; white-space: nowrap; }
+
+.rescan-btn {
+  font-size: 0.75rem;
+  color: #64748b;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  vertical-align: middle;
+  margin-left: 0.2rem;
+}
+.rescan-btn:hover    { color: #38bdf8; }
+.rescan-btn:disabled { color: #334155; cursor: default; }
 .mac-cell  { font-family: monospace; font-size: 0.78rem; color: #94a3b8; white-space: nowrap; }
 .name-cell { color: #7dd3fc; }
 .mfr-model { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
@@ -527,6 +591,21 @@ input[type=file] {
 /* ════════════════════════════════════════════════════
    15. PAGE HISTORIQUE — Vue chronologique
    ════════════════════════════════════════════════════ */
+
+.hist-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.1rem;
+  padding: 0.6rem 0.75rem;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  margin-bottom: 0.9rem;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+}
+.hist-filters label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+.hist-filters input { cursor: pointer; }
 
 .hist-entry {
   display: flex;

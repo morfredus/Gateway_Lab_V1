@@ -664,6 +664,122 @@ int NetworkScanner::_confidenceFor(const NetworkDevice& d, String& label) {
 //   22 SSH · 80 HTTP · 443 HTTPS · 445 SMB · 554 RTSP · 1883 MQTT
 //   3389 RDP · 8080 HTTP-Alt · 8123 HA · 9100 IPP
 // ---------------------------------------------------------------------------
+// Noms courts des ports pour la liste pipe-séparée
+static String _portName(uint16_t p) {
+    switch (p) {
+        case 21:   return "FTP";
+        case 22:   return "SSH";
+        case 23:   return "Telnet";
+        case 80:   return "HTTP";
+        case 443:  return "HTTPS";
+        case 445:  return "SMB";
+        case 554:  return "RTSP";
+        case 1883: return "MQTT";
+        case 3389: return "RDP";
+        case 5000: return "HTTP/5000";
+        case 8080: return "HTTP/8080";
+        case 8123: return "HA";
+        case 8443: return "HTTPS/8443";
+        case 9100: return "IPP";
+        default:   return String(p);
+    }
+}
+
+// Heuristiques banner HTTP → fabricant
+static String _bannerToMfr(const String& banner) {
+    String b = banner;
+    b.toLowerCase();
+    if (b.indexOf("synology") >= 0)  return "Synology";
+    if (b.indexOf("qnap")     >= 0)  return "QNAP";
+    if (b.indexOf("freebox")  >= 0)  return "Freebox";
+    if (b.indexOf("philips")  >= 0)  return "Philips";
+    if (b.indexOf("ubiquiti") >= 0)  return "Ubiquiti";
+    if (b.indexOf("openwrt")  >= 0)  return "OpenWrt Router";
+    if (b.indexOf("dd-wrt")   >= 0)  return "DD-WRT Router";
+    if (b.indexOf("hikvision")>= 0)  return "Hikvision";
+    if (b.indexOf("dahua")    >= 0)  return "Dahua";
+    if (b.indexOf("axis")     >= 0)  return "Axis";
+    if (b.indexOf("cisco")    >= 0)  return "Cisco";
+    if (b.indexOf("mikrotik") >= 0)  return "MikroTik";
+    if (b.indexOf("goahead")  >= 0)  return "IP Camera";   // GoAhead = firmware caméra IP
+    if (b.indexOf("homeassistant") >= 0) return "Home Assistant";
+    return "";
+}
+
+// Heuristiques banner HTTP → catégorie
+static String _bannerToCategory(const String& banner) {
+    String b = banner;
+    b.toLowerCase();
+    if (b.indexOf("camera") >= 0 || b.indexOf("hikvision") >= 0 ||
+        b.indexOf("dahua")  >= 0 || b.indexOf("axis") >= 0 ||
+        b.indexOf("goahead")>= 0) return "Camera";
+    if (b.indexOf("synology") >= 0 || b.indexOf("qnap") >= 0)
+        return "NAS";
+    if (b.indexOf("homeassistant") >= 0) return "Smart Hub";
+    return "";
+}
+
+// ---------------------------------------------------------------------------
+// Fusionne le resultat d'un scan de ports dans un equipement donne.
+// Extrait de _scanPorts() pour etre reutilisable par rescanDevice()
+// (rafraichissement cible d'un seul equipement, sans mutex - appele sous
+// protection du mutex par l'appelant).
+// ---------------------------------------------------------------------------
+void NetworkScanner::_applyPortScanResult(NetworkDevice& d, const PortScanResult& pr) {
+    // Construire la liste pipe-séparée des ports ouverts
+    if (!pr.openPorts.empty()) {
+        String portList;
+        for (size_t i = 0; i < pr.openPorts.size(); i++) {
+            if (i) portList += "|";
+            portList += _portName(pr.openPorts[i]);
+        }
+        d.openPorts = portList;
+    }
+
+    // Enrichir depuis le banner HTTP
+    if (!pr.httpBanner.isEmpty()) {
+        if (d.manufacturer.isEmpty()) {
+            String mfr = _bannerToMfr(pr.httpBanner);
+            if (!mfr.isEmpty()) d.manufacturer = mfr;
+        }
+        if (d.category.isEmpty() || d.category == "IoT") {
+            String cat = _bannerToCategory(pr.httpBanner);
+            if (!cat.isEmpty()) d.category = cat;
+        }
+        // Stocker le banner dans model si vide (info utile)
+        if (d.model.isEmpty() && pr.httpBanner.length() < 40) {
+            d.model = pr.httpBanner;
+        }
+    }
+
+    // OS depuis TTL (si pas déjà rempli par SSDP/API)
+    if (d.os.isEmpty() && !pr.openPorts.empty()) {
+        // Port 3389 RDP → Windows certain
+        for (uint16_t p : pr.openPorts) {
+            if (p == 3389) { d.os = "Windows"; break; }
+            if (p == 554)  { d.os = "Camera/NVR"; break; }
+        }
+    }
+
+    // Banniere SSH -> OS probable (Linux/embarque) si encore vide
+    if (d.os.isEmpty() && !pr.sshBanner.isEmpty()) {
+        String sb = pr.sshBanner;
+        sb.toLowerCase();
+        if (sb.indexOf("openssh") >= 0) d.os = "Linux / Unix";
+    }
+
+    // API IoT identifiee precisement -> manufacturer/category/model/firmware
+    if (!pr.iotType.isEmpty()) {
+        if (d.manufacturer.isEmpty()) d.manufacturer = pr.iotType;
+        if (d.category.isEmpty() || d.category == "IoT") {
+            if (pr.iotType == "FritzBox") d.category = "Router";
+            else d.category = "IoT";
+        }
+        if (d.model.isEmpty() && !pr.iotModel.isEmpty()) d.model = pr.iotModel;
+        if (d.os.isEmpty() && !pr.iotFirmware.isEmpty()) d.os = pr.iotFirmware;
+    }
+}
+
 void NetworkScanner::_scanPorts() {
     // Collecter les IPs online (excl. soi-même)
     std::vector<String> ipsToScan;
@@ -682,119 +798,11 @@ void NetworkScanner::_scanPorts() {
     auto scanResults = portScanner.scan(ipsToScan, 250);
     if (scanResults.empty()) return;
 
-    // Noms courts des ports pour la liste pipe-séparée
-    auto portName = [](uint16_t p) -> String {
-        switch (p) {
-            case 21:   return "FTP";
-            case 22:   return "SSH";
-            case 23:   return "Telnet";
-            case 80:   return "HTTP";
-            case 443:  return "HTTPS";
-            case 445:  return "SMB";
-            case 554:  return "RTSP";
-            case 1883: return "MQTT";
-            case 3389: return "RDP";
-            case 5000: return "HTTP/5000";
-            case 8080: return "HTTP/8080";
-            case 8123: return "HA";
-            case 8443: return "HTTPS/8443";
-            case 9100: return "IPP";
-            default:   return String(p);
-        }
-    };
-
-    // Heuristiques banner HTTP → fabricant ou catégorie
-    auto bannerToMfr = [](const String& banner) -> String {
-        String b = banner;
-        b.toLowerCase();
-        if (b.indexOf("synology") >= 0)  return "Synology";
-        if (b.indexOf("qnap")     >= 0)  return "QNAP";
-        if (b.indexOf("freebox")  >= 0)  return "Freebox";
-        if (b.indexOf("philips")  >= 0)  return "Philips";
-        if (b.indexOf("ubiquiti") >= 0)  return "Ubiquiti";
-        if (b.indexOf("openwrt")  >= 0)  return "OpenWrt Router";
-        if (b.indexOf("dd-wrt")   >= 0)  return "DD-WRT Router";
-        if (b.indexOf("hikvision")>= 0)  return "Hikvision";
-        if (b.indexOf("dahua")    >= 0)  return "Dahua";
-        if (b.indexOf("axis")     >= 0)  return "Axis";
-        if (b.indexOf("cisco")    >= 0)  return "Cisco";
-        if (b.indexOf("mikrotik") >= 0)  return "MikroTik";
-        if (b.indexOf("goahead")  >= 0)  return "IP Camera";   // GoAhead = firmware caméra IP
-        if (b.indexOf("homeassistant") >= 0) return "Home Assistant";
-        return "";
-    };
-
-    auto bannerToCategory = [](const String& banner) -> String {
-        String b = banner;
-        b.toLowerCase();
-        if (b.indexOf("camera") >= 0 || b.indexOf("hikvision") >= 0 ||
-            b.indexOf("dahua")  >= 0 || b.indexOf("axis") >= 0 ||
-            b.indexOf("goahead")>= 0) return "Camera";
-        if (b.indexOf("synology") >= 0 || b.indexOf("qnap") >= 0)
-            return "NAS";
-        if (b.indexOf("homeassistant") >= 0) return "Smart Hub";
-        return "";
-    };
-
     xSemaphoreTake(_mutex, portMAX_DELAY);
     for (auto& d : _results) {
         auto it = scanResults.find(d.ip);
         if (it == scanResults.end()) continue;
-
-        const PortScanResult& pr = it->second;
-
-        // Construire la liste pipe-séparée des ports ouverts
-        if (!pr.openPorts.empty()) {
-            String portList;
-            for (size_t i = 0; i < pr.openPorts.size(); i++) {
-                if (i) portList += "|";
-                portList += portName(pr.openPorts[i]);
-            }
-            d.openPorts = portList;
-        }
-
-        // Enrichir depuis le banner HTTP
-        if (!pr.httpBanner.isEmpty()) {
-            if (d.manufacturer.isEmpty()) {
-                String mfr = bannerToMfr(pr.httpBanner);
-                if (!mfr.isEmpty()) d.manufacturer = mfr;
-            }
-            if (d.category.isEmpty() || d.category == "IoT") {
-                String cat = bannerToCategory(pr.httpBanner);
-                if (!cat.isEmpty()) d.category = cat;
-            }
-            // Stocker le banner dans model si vide (info utile)
-            if (d.model.isEmpty() && pr.httpBanner.length() < 40) {
-                d.model = pr.httpBanner;
-            }
-        }
-
-        // OS depuis TTL (si pas déjà rempli par SSDP/API)
-        if (d.os.isEmpty() && !pr.openPorts.empty()) {
-            // Port 3389 RDP → Windows certain
-            for (uint16_t p : pr.openPorts) {
-                if (p == 3389) { d.os = "Windows"; break; }
-                if (p == 554)  { d.os = "Camera/NVR"; break; }
-            }
-        }
-
-        // Banniere SSH -> OS probable (Linux/embarque) si encore vide
-        if (d.os.isEmpty() && !pr.sshBanner.isEmpty()) {
-            String sb = pr.sshBanner;
-            sb.toLowerCase();
-            if (sb.indexOf("openssh") >= 0) d.os = "Linux / Unix";
-        }
-
-        // API IoT identifiee precisement -> manufacturer/category/model/firmware
-        if (!pr.iotType.isEmpty()) {
-            if (d.manufacturer.isEmpty()) d.manufacturer = pr.iotType;
-            if (d.category.isEmpty() || d.category == "IoT") {
-                if (pr.iotType == "FritzBox") d.category = "Router";
-                else d.category = "IoT";
-            }
-            if (d.model.isEmpty() && !pr.iotModel.isEmpty()) d.model = pr.iotModel;
-            if (d.os.isEmpty() && !pr.iotFirmware.isEmpty()) d.os = pr.iotFirmware;
-        }
+        _applyPortScanResult(d, it->second);
     }
     xSemaphoreGive(_mutex);
 
@@ -807,6 +815,18 @@ void NetworkScanner::_scanPorts() {
 // Cible uniquement les IP online dont le hostname est vide - tres efficace
 // pour les PC Windows et serveurs Samba qui ne repondent pas a mDNS/PTR DNS.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Fusionne le resultat d'une requete NetBIOS dans un equipement donne.
+// Extrait de _scanNetBios() pour etre reutilisable par rescanDevice().
+// ---------------------------------------------------------------------------
+void NetworkScanner::_applyNetBiosResult(NetworkDevice& d, const NetBiosInfo& info) {
+    if (!d.hostname.isEmpty()) return;
+    d.hostname = info.hostname;
+    d.source   = "NetBIOS";
+    if (d.model.isEmpty() && !info.workgroup.isEmpty())
+        d.model = info.workgroup;
+}
+
 void NetworkScanner::_scanNetBios() {
     std::vector<String> ipsToScan;
     String selfIp = WiFi.localIP().toString();
@@ -828,12 +848,7 @@ void NetworkScanner::_scanNetBios() {
     for (auto& d : _results) {
         auto it = nbResults.find(d.ip);
         if (it == nbResults.end()) continue;
-        if (!d.hostname.isEmpty()) continue;
-
-        d.hostname = it->second.hostname;
-        d.source   = "NetBIOS";
-        if (d.model.isEmpty() && !it->second.workgroup.isEmpty())
-            d.model = it->second.workgroup;
+        _applyNetBiosResult(d, it->second);
     }
     xSemaphoreGive(_mutex);
 
@@ -1122,6 +1137,159 @@ bool NetworkScanner::setAlias(const String& macOrIp, const String& alias) {
     xSemaphoreGive(_mutex);
     if (found) _saveToStore();
     return found;
+}
+
+// ---------------------------------------------------------------------------
+// RAZ de la liste des equipements connus - repart sur une base vide,
+// en conservant optionnellement les equipements alias / a fabricant resolu
+// ---------------------------------------------------------------------------
+int NetworkScanner::resetDevices(bool keepAlias, bool keepManufacturer) {
+    int removed = 0;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    std::vector<NetworkDevice> kept;
+    for (auto& d : _results) {
+        bool keep = (keepAlias && !d.alias.isEmpty()) ||
+                    (keepManufacturer && !d.manufacturer.isEmpty());
+        if (keep) kept.push_back(d);
+        else      removed++;
+    }
+    _results = kept;
+    xSemaphoreGive(_mutex);
+    if (removed > 0) _saveToStore();
+    return removed;
+}
+
+// ---------------------------------------------------------------------------
+// Rafraichissement cible d'un seul equipement (par IP), sans relancer un
+// scan complet du sous-reseau : sonde ARP + ICMP, puis - si l'equipement
+// repond - resolution de nom, scan de ports et NetBIOS limites a cette IP.
+// Refuse si un scan complet est en cours (_scanning).
+// ---------------------------------------------------------------------------
+bool NetworkScanner::rescanDevice(const String& ip) {
+    if (_scanning) return false;
+
+    bool known = false;
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (const auto& d : _results) {
+            if (d.ip == ip) { known = true; break; }
+        }
+        xSemaphoreGive(_mutex);
+    }
+    if (!known) return false;
+
+    _scanning = true;
+
+    std::vector<NetworkDevice> previousState;
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        previousState = _results;
+        xSemaphoreGive(_mutex);
+    }
+
+    // ── Sonde ARP directe sur l'IP ───────────────────────────────────────
+    IPAddress target;
+    target.fromString(ip);
+    ip4_addr_t ip4target;
+    IP4_ADDR(&ip4target, target[0], target[1], target[2], target[3]);
+    etharp_request(netif_default, &ip4target);
+    vTaskDelay(pdMS_TO_TICKS(250));
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _readArpTable();
+    xSemaphoreGive(_mutex);
+
+    bool isOnline = false;
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (const auto& d : _results) {
+            if (d.ip == ip) { isOnline = d.online; break; }
+        }
+        xSemaphoreGive(_mutex);
+    }
+
+    // ── Repli ICMP si l'ARP n'a pas repondu ──────────────────────────────
+    if (!isOnline) {
+        auto pings = icmpScanner.pingWithTtl({ ip }, 300);
+        if (!pings.empty() && pings[0].ttl > 0) {
+            isOnline = true;
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (auto& d : _results) {
+                if (d.ip == ip) {
+                    d.online   = true;
+                    d.lastSeen = millis();
+                    if (d.os.isEmpty()) d.os = _osFromTtl(pings[0].ttl);
+                    break;
+                }
+            }
+            xSemaphoreGive(_mutex);
+        } else {
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (auto& d : _results) {
+                if (d.ip == ip) { d.online = false; break; }
+            }
+            xSemaphoreGive(_mutex);
+        }
+    }
+
+    // ── Enrichissement, uniquement si l'equipement repond ────────────────
+    if (isOnline) {
+        hostnameResolver.batchPtrDns({ ip });
+        HostnameSource src = HostnameSource::None;
+        String name = hostnameResolver.resolve(ip, src);
+
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (auto& d : _results) {
+            if (d.ip != ip) continue;
+            if (!name.isEmpty()) {
+                d.hostname = name;
+                d.source   = hostnameSourceStr(src);
+            }
+            applyIspDetection(d);
+            break;
+        }
+        xSemaphoreGive(_mutex);
+
+        auto portResults = portScanner.scan({ ip }, 250);
+        auto prIt = portResults.find(ip);
+        if (prIt != portResults.end()) {
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (auto& d : _results) {
+                if (d.ip == ip) { _applyPortScanResult(d, prIt->second); break; }
+            }
+            xSemaphoreGive(_mutex);
+        }
+
+        bool needsHostname = false;
+        {
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (const auto& d : _results) {
+                if (d.ip == ip) { needsHostname = d.hostname.isEmpty(); break; }
+            }
+            xSemaphoreGive(_mutex);
+        }
+        if (needsHostname) {
+            auto nbResults = netBiosScanner.scan({ ip }, 250);
+            auto nbIt = nbResults.find(ip);
+            if (nbIt != nbResults.end()) {
+                xSemaphoreTake(_mutex, portMAX_DELAY);
+                for (auto& d : _results) {
+                    if (d.ip == ip) { _applyNetBiosResult(d, nbIt->second); break; }
+                }
+                xSemaphoreGive(_mutex);
+            }
+        }
+    }
+
+    _enrichDevices();
+    _classifyDevices();
+    _updateHistory(previousState);
+    _saveToStore();
+
+    Log::i(TAG, "Rafraichissement cible terminé — %s (%s)", ip.c_str(), isOnline ? "en ligne" : "hors ligne");
+
+    _scanning = false;
+    return true;
 }
 
 // ---------------------------------------------------------------------------

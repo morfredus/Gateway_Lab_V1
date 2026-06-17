@@ -38,22 +38,68 @@ function renderEntry(e) {
          '</div>';
 }
 
+var historyData = [];
+
+function activeFilters() {
+  var checked = {};
+  document.querySelectorAll('.hist-filter:checked').forEach(function(cb) { checked[cb.value] = true; });
+  return checked;
+}
+
+function renderHistory() {
+  var filters   = activeFilters();
+  var filtered  = historyData.filter(function(e) { return filters[e.event]; });
+  var container = document.getElementById('history-list');
+  var empty     = document.getElementById('history-empty');
+  if (!filtered.length) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = historyData.length ? 'Aucun événement ne correspond aux filtres sélectionnés.' : 'Aucun événement enregistré pour le moment.';
+    return;
+  }
+  empty.style.display = 'none';
+  container.innerHTML = filtered.map(renderEntry).join('');
+}
+
+document.querySelectorAll('.hist-filter').forEach(function(cb) {
+  cb.addEventListener('change', renderHistory);
+});
+
 function loadHistory() {
   fetch('/api/history')
     .then(function(r) { return r.json(); })
     .then(function(list) {
-      var container = document.getElementById('history-list');
-      var empty     = document.getElementById('history-empty');
-      if (!list || !list.length) {
-        container.innerHTML = '';
-        empty.style.display = 'block';
-        return;
-      }
-      empty.style.display = 'none';
-      container.innerHTML = list.map(renderEntry).join('');
+      historyData = list || [];
+      renderHistory();
       document.getElementById('footer-ts').textContent = 'Actualisé : ' + new Date().toLocaleTimeString('fr-FR');
     })
     .catch(function() {});
+}
+
+function clearHistory() {
+  if (!historyData.length) {
+    if (!confirm('Le journal est déjà vide. Continuer ?')) return;
+  } else if (!confirm('Vider le journal d\'historique ? Une sauvegarde sera téléchargée avant suppression.')) {
+    return;
+  }
+
+  function doClear() {
+    fetch('/api/history', { method: 'DELETE' }).then(function() { loadHistory(); });
+  }
+
+  if (!historyData.length) { doClear(); return; }
+
+  var blob = new Blob([JSON.stringify(historyData, null, 2)], { type: 'application/json' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'gateway-lab-historique-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  doClear();
 }
 
 fetch('/api/status').then(function(r) { return r.json(); }).then(function(d) {

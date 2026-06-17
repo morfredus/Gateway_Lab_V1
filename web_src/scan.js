@@ -151,9 +151,13 @@ function renderDevices(devices) {
       : '<span class="none" title="Non vu lors du dernier scan">hors ligne</span>';
     if (d.seenCount > 0)
       seenHtml += '<div class="seen-count" title="Nombre de scans où cet équipement a été vu en ligne">vu ' + d.seenCount + 'x</div>';
+    var rescanBtn = d.ip
+      ? '<button class="rescan-btn" title="Réinterroger cet équipement (sans relancer un scan complet)" ' +
+        'data-ip="' + esc(d.ip) + '" onclick="rescanDevice(this)">⟲</button>'
+      : '';
     return '<tr' + (d.online ? '' : ' class="row-offline"') + '>' +
       '<td class="status-cell">' + statusHtml + '</td>' +
-      '<td class="ip-cell">'     + esc(d.ip)  + '</td>' +
+      '<td class="ip-cell">'     + esc(d.ip) + rescanBtn + '</td>' +
       '<td>'                     + nameHtml    + '</td>' +
       '<td>'                     + mfrHtml     + '</td>' +
       '<td>'                     + catHtml     + '</td>' +
@@ -218,11 +222,53 @@ function editAlias(btn) {
     .then(function() { fetchDevices(); });
 }
 
+function rescanDevice(btn) {
+  var ip = btn.getAttribute('data-ip');
+  btn.disabled = true;
+  var prevHtml = btn.textContent;
+  btn.textContent = '…';
+  fetch('/api/devices/rescan', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'ip=' + encodeURIComponent(ip) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) alert('Réinterrogation impossible : ' + d.error);
+      fetchDevices();
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.textContent = prevHtml;
+    });
+}
+
 function triggerScan() {
   document.getElementById('scan-btn').disabled = true;
   document.getElementById('scan-btn').textContent = 'Démarrage…';
   startProgressAnim();
   fetch('/api/scan', { method: 'POST' }).then(function() { fetchDevices(); });
+}
+
+function toggleResetMenu() {
+  document.getElementById('reset-menu-list').classList.toggle('open');
+}
+
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('reset-menu-list');
+  if (menu && menu.classList.contains('open') && !e.target.closest('.reset-menu')) {
+    menu.classList.remove('open');
+  }
+});
+
+function resetDevices(keepAlias, keepManufacturer) {
+  document.getElementById('reset-menu-list').classList.remove('open');
+  var msg = 'Effacer la liste des équipements';
+  if (keepAlias && keepManufacturer) msg += ', en conservant ceux avec un alias ou un fabricant connu';
+  else if (keepAlias) msg += ', en conservant ceux avec un alias';
+  else if (keepManufacturer) msg += ', en conservant ceux avec un fabricant connu';
+  msg += ' ?';
+  if (!confirm(msg)) return;
+
+  var body = 'keepAlias=' + (keepAlias ? '1' : '0') + '&keepManufacturer=' + (keepManufacturer ? '1' : '0');
+  fetch('/api/devices/reset', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+    .then(function() { fetchDevices(); });
 }
 
 fetchDevices();

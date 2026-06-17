@@ -23,6 +23,9 @@
 #include <Arduino.h>
 #include <vector>
 
+struct PortScanResult;   // Defini dans port_scanner.h
+struct NetBiosInfo;      // Defini dans netbios_scanner.h
+
 // Statistiques du scan : équipements connus / en ligne / hors ligne
 struct ScanStats {
     int known   = 0;  // Total dans _results (online + offline)
@@ -81,11 +84,23 @@ public:
     // Retourne false si aucun equipement correspondant n'a ete trouve
     bool setAlias(const String& macOrIp, const String& alias);
 
+    // RAZ de la liste des equipements connus, pour repartir sur une base vide.
+    // keepAlias        : conserve les equipements ayant un alias defini par l'utilisateur
+    // keepManufacturer : conserve les equipements dont le fabricant a ete resolu (OUI)
+    // Retourne le nombre d'equipements supprimes
+    int resetDevices(bool keepAlias, bool keepManufacturer);
+
     // Sauvegarde JSON complete (devices + parametres) pour /api/backup
     String backupToJson() const;
 
     // Restauration depuis un JSON produit par backupToJson() - remplace les resultats actuels
     bool restoreFromJson(const String& json);
+
+    // Rafraichit un seul equipement (identifie par IP) sans relancer un scan
+    // complet : sonde ARP/ICMP, puis resolution de nom + ports + NetBIOS si
+    // l'equipement repond. Retourne false si l'IP est inconnue ou si un scan
+    // complet est en cours.
+    bool rescanDevice(const String& ip);
 
 private:
     // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
@@ -125,8 +140,14 @@ private:
     // Scan TCP des ports communs + banner HTTP -> remplit openPorts, os, manufacturer
     void _scanPorts();
 
+    // Fusionne le resultat d'un scan de ports dans un equipement (extrait de _scanPorts)
+    void _applyPortScanResult(NetworkDevice& d, const PortScanResult& pr);
+
     // Requete NetBIOS Node Status sur les IP sans hostname -> renseigne hostname/source
     void _scanNetBios();
+
+    // Fusionne le resultat d'une requete NetBIOS dans un equipement (extrait de _scanNetBios)
+    void _applyNetBiosResult(NetworkDevice& d, const NetBiosInfo& info);
 
     // Enrichissement final : pattern matching sur le hostname (manufacturer/category/os)
     void _enrichDevices();
