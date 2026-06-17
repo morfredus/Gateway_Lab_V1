@@ -122,6 +122,26 @@ sortie comme :
 OK
 ```
 
+## Automatisation de la génération des assets
+
+Par défaut, les assets web sont générés manuellement :
+
+```bash
+python tools/minify_web.py
+```
+
+Cette approche facilite le développement et permet de contrôler
+précisément les fichiers générés avant un commit.
+
+Une automatisation est disponible via :
+
+```ini
+extra_scripts = pre:tools/custom_hooks.py
+```
+
+Le hook exécute automatiquement `tools/minify_web.py` avant chaque build
+et interrompt la compilation si la génération échoue.
+
 ### Étape 4 — Compiler et flasher
 
 Brancher la carte ESP32-S3 via USB, puis :
