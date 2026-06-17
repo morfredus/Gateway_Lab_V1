@@ -5,6 +5,37 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.2.2] - 2026-06-17
+
+### Modifie
+
+- **Séparation HTML / CSS / JS dans `web_src/`** : tout le JavaScript inline
+  des pages (`index.html`, `scan.html`, `ota.html`, `history.html`) a été
+  extrait dans des fichiers dédiés (`index.js`, `scan.js`, `ota.js`,
+  `history.js`). Les fichiers HTML ne contiennent désormais plus que du
+  markup, dans la même logique que `styles.css` pour le CSS.
+- `tools/minify_web.py` minifie et injecte désormais aussi le `.js` de
+  chaque page inline (à la place de `<script src="page.js"></script>`),
+  en plus du CSS commun.
+- `tools/extract_web_sources.py` réécrit en conséquence : il extrait HTML
+  **et** JS séparément depuis les headers PROGMEM, et écrit toujours dans
+  `web_src/extracted/` — les sources originales de `web_src/` ne sont plus
+  jamais écrasées.
+
+### Corrige
+
+- Page OTA (`/update`) : le lien **Historique** manquait dans le menu de
+  navigation. Les 4 pages affichent maintenant le même menu complet
+  (Accueil / Équipements / Historique / OTA).
+
+### Notes
+
+- Aucun changement de comportement côté utilisateur (hors lien de menu
+  corrigé) — uniquement une réorganisation des sources et de la chaîne de
+  build des assets web.
+
+---
+
 ## [0.2.1] - 2026-06-17
 
 ### Ajoute

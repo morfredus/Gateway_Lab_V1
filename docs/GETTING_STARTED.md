@@ -96,19 +96,24 @@ static const char* WIFI_NETWORKS[][2] = {
 ### Étape 3 — Générer les fichiers web
 
 Les pages HTML sont embarquées directement dans le firmware.
-Il faut les préparer avant de compiler :
+Leurs sources se trouvent dans `web_src/` : un fichier `.html` (markup), un
+fichier `.js` (script de la page) et un `styles.css` commun aux 4 pages.
+Avant de compiler, il faut les transformer en headers C++ (`include/*.h`) :
 
 ```bash
 python tools/minify_web.py
 ```
 
-Vous devriez voir une sortie comme :
+Le script minifie le CSS et le JavaScript, les injecte directement dans
+chaque page HTML, puis génère un header `.h` par page. Vous devriez voir une
+sortie comme :
 
 ```
 [styles.css]  → injecté inline dans chaque page
-[index.html]  → include/web_interface.h
-[scan.html]   → include/web_interface_scan.h
-[ota.html]    → include/web_interface_ota.h
+[index.html + index.js]  → include/web_interface.h
+[scan.html + scan.js]    → include/web_interface_scan.h
+[ota.html + ota.js]      → include/web_interface_ota.h
+[history.html + history.js] → include/web_interface_history.h
 [oui.json]    → include/oui_table.h
 OK
 ```
@@ -195,6 +200,13 @@ C'est la page principale.
 | `Freebox` | API Freebox |
 | `ESP32` | L'ESP32 lui-même |
 
+### Page Historique (`/history`)
+
+Affiche une liste chronologique des événements détectés entre deux scans :
+nouvel équipement, reconnexion, déconnexion, ou changement d'un champ
+(IP, fabricant, catégorie...). Les horodatages utilisent l'heure réelle
+(synchronisée par NTP au démarrage).
+
 ### Page OTA (`/update`)
 
 Permet de mettre à jour le firmware sans rebrancher la carte :
@@ -241,7 +253,7 @@ Le fichier `secrets.h` n'a pas encore été créé. Voir **Étape 2** ci-dessus.
 Si vous souhaitez modifier le projet :
 
 ```
-1. Modifier web_src/*.html ou web_src/styles.css
+1. Modifier web_src/*.html, web_src/*.js ou web_src/styles.css
            ↓
 2. python tools/minify_web.py    (régénère les headers C++)
            ↓
@@ -251,9 +263,15 @@ Si vous souhaitez modifier le projet :
 ```
 
 **Règles importantes :**
-- Ne modifier `styles.css` qu'en source (`web_src/styles.css`) — jamais dans `include/`
+- Chaque type de contenu va dans son propre fichier source : HTML dans
+  `web_src/*.html`, CSS dans `web_src/styles.css`, JavaScript dans
+  `web_src/*.js` — jamais de `<style>` ou `<script>` inline dans le HTML
 - Ne jamais modifier les fichiers `include/web_interface*.h` à la main
+  (ils sont régénérés à chaque exécution de `minify_web.py`)
 - La version du firmware n'est définie qu'une seule fois, dans `platformio.ini`
+- En cas de perte des fichiers `web_src/`, `python tools/extract_web_sources.py
+  --force` permet de les reconstruire (dans `web_src/extracted/`) à partir
+  des headers `include/*.h` déjà générés
 
 ---
 
