@@ -12,6 +12,7 @@
  */
 
 #include "network_scanner.h"
+#include <time.h>                // strftime() pour l'export CSV (dates lisibles)
 #include "hostname_resolver.h"   // mDNS passif + PTR DNS batch
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include "ssdp_scanner.h"        // Découverte UPnP/SSDP
@@ -28,6 +29,7 @@
 #include "time_sync.h"           // Epoch NTP pour firstSeen/lastSeen
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <LittleFS.h>            // Diagnostics : espace utilise/libre
 #include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
 #include "lwip/etharp.h"   // etharp_get_entry(), etharp_request()
 #include "lwip/netif.h"    // netif_default
@@ -460,11 +462,14 @@ void NetworkScanner::_mergeDnsSd() {
 // Stack 20 Ko : lwIP + DNS + std::map + HTTP client SSDP + XML parsing
 // ---------------------------------------------------------------------------
 void NetworkScanner::_task(void* self) {
-    static_cast<NetworkScanner*>(self)->_run();
+    NetworkScanner* s = static_cast<NetworkScanner*>(self);
+    s->_run();
     vTaskDelete(nullptr);
 }
 
 void NetworkScanner::_run() {
+    uint32_t _t0 = millis();
+
     // Charger les devices connus depuis LittleFS (injectés offline)
     _mergePersistedDevices();
 
@@ -582,7 +587,25 @@ void NetworkScanner::_run() {
     // Sauvegarder en LittleFS pour le prochain boot
     _saveToStore();
 
-    Log::i(TAG, "Scan complet — %u équipement(s) total", (unsigned)_results.size());
+    uint32_t durMs = millis() - _t0;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _lastScanMs = durMs;
+    _scanMsTotal += durMs;
+    _scanCount++;
+
+    // Nouvel equipement = present en ligne maintenant mais absent (ou hors ligne) avant le scan
+    for (const auto& d : _results) {
+        if (!d.online) continue;
+        bool wasOnline = false;
+        for (const auto& p : previousState) {
+            bool sameDevice = (!d.mac.isEmpty() && d.mac == p.mac) || (d.mac.isEmpty() && d.ip == p.ip);
+            if (sameDevice && p.online) { wasOnline = true; break; }
+        }
+        if (!wasOnline) { _newDevicesPending = true; break; }
+    }
+    xSemaphoreGive(_mutex);
+
+    Log::i(TAG, "Scan complet — %u équipement(s) total (%u ms)", (unsigned)_results.size(), (unsigned)durMs);
     _scanning   = false;
     _taskHandle = nullptr;
 }
@@ -1128,6 +1151,20 @@ void NetworkScanner::startScan() {
     Log::i(TAG, "Scan réseau lancé");
 }
 
+bool NetworkScanner::hasNewDevices() const {
+    return _newDevicesPending;
+}
+
+void NetworkScanner::acknowledgeNewDevices() {
+    _newDevicesPending = false;
+}
+
+void NetworkScanner::saveNow() {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _saveToStore();
+    xSemaphoreGive(_mutex);
+}
+
 bool NetworkScanner::isScanRunning() const { return _scanning; }
 
 std::vector<NetworkDevice> NetworkScanner::getResults() const {
@@ -1164,6 +1201,13 @@ String NetworkScanner::resultsToJson() const {
         obj["firstSeen"]    = d.firstSeenEpoch;
         obj["lastSeenAt"]   = d.lastSeenEpoch;
         obj["seenCount"]    = d.seenCount;
+        obj["favorite"]     = d.favorite;
+        JsonArray notesArr = obj["notes"].to<JsonArray>();
+        for (const auto& n : d.notes) {
+            JsonObject no = notesArr.add<JsonObject>();
+            no["ts"]   = n.ts;
+            no["text"] = n.text;
+        }
         String confLabel;
         obj["confidence"]      = _confidenceFor(d, confLabel);
         obj["confidenceLabel"] = confLabel;
@@ -1211,6 +1255,96 @@ bool NetworkScanner::setAlias(const String& macOrIp, const String& alias) {
     xSemaphoreGive(_mutex);
     if (found) _saveToStore();
     return found;
+}
+
+// ---------------------------------------------------------------------------
+// Favori utilisateur : identifie l'equipement par MAC (priorite) ou IP
+// ---------------------------------------------------------------------------
+bool NetworkScanner::setFavorite(const String& macOrIp, bool favorite) {
+    bool found = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+            d.favorite = favorite;
+            found = true;
+            break;
+        }
+    }
+    xSemaphoreGive(_mutex);
+    if (found) _saveToStore();
+    return found;
+}
+
+// ---------------------------------------------------------------------------
+// Notes utilisateur : inventaire libre (entretien, changements, observations)
+// ---------------------------------------------------------------------------
+bool NetworkScanner::addNote(const String& macOrIp, const String& text) {
+    if (text.isEmpty()) return false;
+    bool found = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+            DeviceNote n;
+            n.ts   = timeSync.nowEpoch();
+            n.text = text;
+            d.notes.push_back(n);
+            found = true;
+            break;
+        }
+    }
+    xSemaphoreGive(_mutex);
+    if (found) _saveToStore();
+    return found;
+}
+
+bool NetworkScanner::deleteNote(const String& macOrIp, uint32_t ts) {
+    bool found = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+            for (size_t i = 0; i < d.notes.size(); i++) {
+                if (d.notes[i].ts == ts) {
+                    d.notes.erase(d.notes.begin() + i);
+                    found = true;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    xSemaphoreGive(_mutex);
+    if (found) _saveToStore();
+    return found;
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics : memoire, stockage, temps de scan moyens (cartouche UI)
+// ---------------------------------------------------------------------------
+ScanTimings NetworkScanner::getTimings() const {
+    ScanTimings t;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    t.lastScanMs   = _lastScanMs;
+    t.avgScanMs    = _scanCount   ? (_scanMsTotal   / _scanCount)   : 0;
+    t.lastRescanMs = _lastRescanMs;
+    t.avgRescanMs  = _rescanCount ? (_rescanMsTotal / _rescanCount) : 0;
+    xSemaphoreGive(_mutex);
+    return t;
+}
+
+String NetworkScanner::diagnosticsToJson() const {
+    ScanTimings t = getTimings();
+    JsonDocument doc;
+    doc["freeHeap"]      = ESP.getFreeHeap();
+    doc["freePsram"]     = ESP.getFreePsram();
+    doc["fsUsedBytes"]   = LittleFS.usedBytes();
+    doc["fsTotalBytes"]  = LittleFS.totalBytes();
+    doc["lastScanMs"]    = t.lastScanMs;
+    doc["avgScanMs"]     = t.avgScanMs;
+    doc["lastRescanMs"]  = t.lastRescanMs;
+    doc["avgRescanMs"]   = t.avgRescanMs;
+    String json;
+    serializeJson(doc, json);
+    return json;
 }
 
 // ---------------------------------------------------------------------------
@@ -1279,6 +1413,7 @@ bool NetworkScanner::rescanDevice(const String& ip) {
 
 void NetworkScanner::_rescanTask(void* selfPtr) {
     NetworkScanner* self = static_cast<NetworkScanner*>(selfPtr);
+
     String ip;
     {
         xSemaphoreTake(self->_mutex, portMAX_DELAY);
@@ -1299,6 +1434,7 @@ void NetworkScanner::_rescanTask(void* selfPtr) {
 }
 
 void NetworkScanner::_runRescan(const String& ip) {
+    uint32_t _t0 = millis();
     std::vector<NetworkDevice> previousState;
     {
         xSemaphoreTake(_mutex, portMAX_DELAY);
@@ -1513,10 +1649,15 @@ void NetworkScanner::_runRescan(const String& ip) {
     _updateHistory(previousState);
     _saveToStore();
 
-    Log::i(TAG, "Rafraichissement cible terminé — %s (%s)", ip.c_str(), isOnline ? "en ligne" : "hors ligne");
+    uint32_t durMs = millis() - _t0;
+
+    Log::i(TAG, "Rafraichissement cible terminé — %s (%s, %u ms)", ip.c_str(), isOnline ? "en ligne" : "hors ligne", (unsigned)durMs);
 
     xSemaphoreTake(_mutex, portMAX_DELAY);
     _rescanStatus.ok = isOnline;
+    _lastRescanMs = durMs;
+    _rescanMsTotal += durMs;
+    _rescanCount++;
     xSemaphoreGive(_mutex);
 }
 
@@ -1570,6 +1711,16 @@ String NetworkScanner::backupToJson() const {
         obj["firstSeen"]    = d.firstSeenEpoch;
         obj["lastSeenAt"]   = d.lastSeenEpoch;
         obj["seenCount"]    = d.seenCount;
+        obj["favorite"]     = d.favorite;
+        String confLabel;
+        obj["confidence"]      = _confidenceFor(d, confLabel);
+        obj["confidenceLabel"] = confLabel;
+        JsonArray notesArr = obj["notes"].to<JsonArray>();
+        for (const auto& n : d.notes) {
+            JsonObject no = notesArr.add<JsonObject>();
+            no["ts"]   = n.ts;
+            no["text"] = n.text;
+        }
     }
 
     String json;
@@ -1609,6 +1760,14 @@ bool NetworkScanner::restoreFromJson(const String& json) {
         d.firstSeenEpoch= obj["firstSeen"]    | 0;
         d.lastSeenEpoch = obj["lastSeenAt"]   | 0;
         d.seenCount     = obj["seenCount"]    | 0;
+        d.favorite      = obj["favorite"]     | false;
+        JsonArray notesArr = obj["notes"].as<JsonArray>();
+        for (JsonObject no : notesArr) {
+            DeviceNote n;
+            n.ts   = no["ts"]   | 0;
+            n.text = no["text"] | "";
+            d.notes.push_back(n);
+        }
         d.online        = false;
         d.lastSeen      = 0;
         if (!d.ip.isEmpty() || !d.mac.isEmpty())
@@ -1623,4 +1782,69 @@ bool NetworkScanner::restoreFromJson(const String& json) {
 
     Log::i(TAG, "Restauration : %u équipement(s) importés", (unsigned)restored.size());
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// Export CSV - utilise par /api/devices/export.csv (tableur, scripts externes)
+// ---------------------------------------------------------------------------
+static String csvField(const String& s) {
+    bool needsQuotes = s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0;
+    if (!needsQuotes) return s;
+    String escaped = s;
+    escaped.replace("\"", "\"\"");
+    return "\"" + escaped + "\"";
+}
+
+// Date lisible (heure locale, synchronisee par NTP) pour l'export CSV uniquement
+// — le JSON garde les epochs bruts pour rester exploitable par /api/restore.
+static String csvDate(uint32_t epoch) {
+    if (epoch == 0) return "";
+    time_t t = (time_t)epoch;
+    struct tm tmInfo;
+    localtime_r(&t, &tmInfo);
+    char buf[20];
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tmInfo);
+    return String(buf);
+}
+
+static String csvNotes(const std::vector<DeviceNote>& notes) {
+    String joined;
+    for (size_t i = 0; i < notes.size(); i++) {
+        if (i) joined += " | ";
+        joined += notes[i].text;
+    }
+    return joined;
+}
+
+String NetworkScanner::devicesToCsv() const {
+    std::vector<NetworkDevice> copy;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    copy = _results;
+    xSemaphoreGive(_mutex);
+
+    String csv = "ip,mac,hostname,alias,manufacturer,model,category,type,os,services,openPorts,online,favorite,confidence,notes,firstSeen,lastSeenAt,seenCount\n";
+    for (const auto& d : copy) {
+        if (d.ip.isEmpty() && d.mac.isEmpty()) continue;
+        String confLabel;
+        int confidence = _confidenceFor(d, confLabel);
+        csv += csvField(d.ip)           + ",";
+        csv += csvField(d.mac)          + ",";
+        csv += csvField(d.hostname)     + ",";
+        csv += csvField(d.alias)        + ",";
+        csv += csvField(d.manufacturer) + ",";
+        csv += csvField(d.model)        + ",";
+        csv += csvField(d.category)     + ",";
+        csv += csvField(d.type)         + ",";
+        csv += csvField(d.os)           + ",";
+        csv += csvField(d.services)     + ",";
+        csv += csvField(d.openPorts)    + ",";
+        csv += String(d.online   ? "Yes" : "No") + ",";
+        csv += String(d.favorite ? "Yes" : "No") + ",";
+        csv += String(confidence)             + ",";
+        csv += csvField(csvNotes(d.notes))    + ",";
+        csv += csvField(csvDate(d.firstSeenEpoch)) + ",";
+        csv += csvField(csvDate(d.lastSeenEpoch))  + ",";
+        csv += String(d.seenCount)      + "\n";
+    }
+    return csv;
 }

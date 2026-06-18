@@ -27,6 +27,8 @@ web_src/history.html   ──┤
 web_src/history.js      ──┤
 web_src/wifi.html       ──┤
 web_src/wifi.js         ──┤
+web_src/topology.html   ──┤
+web_src/topology.js     ──┤
 data/oui.json          ──┘
 ```
 
@@ -41,6 +43,7 @@ data/oui.json          ──┘
 | `ota.html` / `ota.js` | Page OTA (`GET /update`) | ✅ → `include/web_interface_ota.h` |
 | `history.html` / `history.js` | Page Historique (`GET /history`) | ✅ → `include/web_interface_history.h` |
 | `wifi.html` / `wifi.js` | Page Paramètres → Réseau WiFi (`GET /wifi`) | ✅ → `include/web_interface_wifi.h` |
+| `topology.html` / `topology.js` | Page Topologie (`GET /topology`) | ✅ → `include/web_interface_topology.h` |
 | `styles.css` | CSS commun (reset, body, nav, footer…) | ✅ injecté inline dans chaque page |
 | `template.html` | Gabarit de référence documentaire | ❌ (non listé dans PAGES) |
 | `extracted/` | Sortie de `extract_web_sources.py` (récupération d'urgence) | — (non versionné, ne pas modifier à la main) |
@@ -92,6 +95,7 @@ Chaque page conserve un bloc `<style>` pour ses règles propres (largeur max, co
 - **Page OTA** → `web_src/ota.html` + `web_src/ota.js`
 - **Page Historique** → `web_src/history.html` + `web_src/history.js`
 - **Page Paramètres WiFi** → `web_src/wifi.html` + `web_src/wifi.js`
+- **Page Topologie** → `web_src/topology.html` + `web_src/topology.js`
 
 > Les fichiers HTML ne contiennent que du HTML/PHP (markup) : tout le CSS va
 > dans `styles.css`, tout le JavaScript va dans le `*.js` correspondant à la page.

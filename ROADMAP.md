@@ -6,11 +6,12 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ## En cours / Prochaine version
 
-* Équipements favoris
-* Export CSV
 * Authentification du portail de configuration WiFi et de l'API `/api/wifi`
 * Reconnexion automatique vers le portail si tous les réseaux enregistrés
   échouent durablement (actuellement uniquement au tout premier démarrage)
+* Détection des points d'accès / répéteurs WiFi et visualisation graphique
+  de la topologie réseau (la page `/topology` ajoutée en v0.7.0 n'en est que
+  la première étape : liste texte passerelle/équipements)
 
 ---
 
@@ -21,10 +22,11 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * ~~Historique persistant des équipements~~
 * ~~Première apparition / dernière apparition~~
 * ~~Compteur de détections~~
-* Équipements favoris
-* ~~Notes utilisateur sur un équipement~~ (alias)
+* ~~Équipements favoris~~ (terminé en v0.6.0)
+* ~~Notes utilisateur sur un équipement~~ (alias + notes datées, v0.2.0 et v0.6.0)
 * ~~Export JSON complet~~ (sauvegarde/restauration)
-* Export CSV
+* ~~Export CSV~~ (terminé en v0.7.0)
+* ~~Filtres sur la page Équipements (type, fabricant, favoris)~~ (terminé en v0.7.0)
 
 ### v0.2.x — Découverte avancée
 * Fingerprinting TCP/IP stack avancé (TTL + TCP options + window size)
@@ -43,12 +45,14 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ### v0.4.x — Topologie réseau
 
-* Détection automatique de la passerelle
-* Détection des points d'accès WiFi
+* ~~Page dédiée et détection automatique de la passerelle~~ (terrain préparé
+  en v0.7.0 : page `/topology`, vue texte passerelle/équipements à partir des
+  données déjà collectées)
+* Détection des points d'accès / répéteurs WiFi
 * Identification des switches connus
 * Cartographie logique du réseau
-* Relations entre équipements
-* Visualisation graphique du réseau
+* Relations entre équipements (qui est connecté à quel répéteur/AP)
+* Visualisation graphique du réseau (graphe interactif)
 
 ### v0.5.x — Connectivité
 
@@ -109,3 +113,9 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.4.0  | Détection des adresses MAC privées/aléatoires (catégorie `Mobile/Aléatoire`) |
 | v0.5.0  | Réinitialisation de l'inventaire avec options de conservation (alias, fabricant), réinterrogation ciblée d'un équipement sans scan complet, filtrage et effacement (avec sauvegarde) de l'historique |
 | v0.6.0  | Sous-catégorie (`type`), score de confiance unique et plus prudent, passe précise asynchrone avec barre de progression sous la ligne de l'équipement, sondage SNMP, découverte WS-Discovery/ONVIF, API appareils multimédia (Cast/Sonos/Roku/Samsung), service DNS-SD Matter, amélioration du contraste des textes/badges en thème sombre |
+| v0.6.2  | Simplification de la NeoPixel d'état et des gestes du bouton BOOT, réglage de la luminosité NeoPixel depuis la page Paramètres |
+| v0.7.0  | Filtres sur la page Équipements (type, fabricant, favoris, en ligne), export CSV de l'inventaire (`/api/devices/export.csv`), cartouche diagnostics déplacée de la page Équipements vers la page Accueil, page Topologie (`/topology`) en préparation du futur v0.4.x |
+| v0.7.1  | Menu "Données ▾" unifié (export CSV/JSON + restauration) sur la page Équipements, export CSV avec dates lisibles et colonnes Yes/No, ajout des notes et du niveau de confiance dans les exports CSV et JSON |
+| v0.7.2  | Sauvegarde/restauration des paramètres de fonctionnement (réseaux WiFi, luminosité NeoPixel) distincte de l'inventaire, menu "Données ▾" réorganisé (Export CSV/JSON puis Sauvegarde/Restauration), BOM UTF-8 et charset explicite pour la gestion correcte des accents dans les exports |
+| v0.7.3  | Filtre "Favoris uniquement" sur la page Historique, éclaircissement de l'étoile favoris non active sur la page Équipements pour une meilleure lisibilité |
+| v0.7.4  | Largeur de page uniformisée (960px) entre Accueil, OTA, Paramètres, Historique et Topologie ; seule la page Équipements conserve une largeur adaptable au contenu du tableau |

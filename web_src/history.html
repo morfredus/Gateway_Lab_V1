@@ -22,6 +22,7 @@
     <a href="/">Accueil</a>
     <a href="/scan">Équipements</a>
     <a href="/history" class="active">Historique</a>
+    <a href="/topology">Topologie</a>
     <a href="/update">OTA</a>
     <a href="/wifi">Paramètres</a>
   </nav>
@@ -41,6 +42,7 @@
       <label><input type="checkbox" class="hist-filter" value="online"  checked> Reconnexions</label>
       <label><input type="checkbox" class="hist-filter" value="offline" checked> Déconnexions</label>
       <label><input type="checkbox" class="hist-filter" value="changed" checked> Changements de champs</label>
+      <label><input type="checkbox" id="hist-filter-favorite"> Favoris uniquement</label>
     </div>
     <div id="history-list"></div>
     <p class="empty-msg" id="history-empty" style="display:none">Aucun événement enregistré pour le moment.</p>

@@ -1,12 +1,69 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.6.0-blue)
+![Version](https://img.shields.io/badge/version-0.7.4-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-en%20développement-yellow)
 
-Passerelle intelligente ESP32-S3 pour la découverte, l'inventaire et l'exploration des équipements connectés au réseau local domestique.
+## Autonomous network inventory and discovery appliance powered by ESP32-S3.
+
+Gateway Lab V1 est une passerelle réseau autonome qui découvre, identifie et conserve l'historique des équipements présents sur un réseau local domestique.
+
+Conçu autour d'un ESP32-S3, le projet privilégie la simplicité de déploiement, l'autonomie, la faible consommation et la conservation locale des données.
+
+Principales fonctionnalités
+Découverte multi-protocoles (ARP, ICMP, mDNS, SSDP, DNS-SD, NetBIOS...)
+Inventaire persistant des équipements détectés
+Classification automatique (fabricant, catégorie, type)
+Historique des connexions, déconnexions et changements
+Favoris et notes utilisateur
+Export CSV et JSON
+Sauvegarde et restauration
+Interface web responsive
+Mise à jour OTA
+Fonctionnement autonome sans cloud
+Aperçu de l'interface
+### Accueil
+
+Informations réseau, état de connexion, diagnostics système et accès rapide aux principales fonctions.
+
+![Accueil](docs/pictures/Gateway_Lab_V1_Accueil.png)
+
+
+### Équipements
+
+Inventaire des appareils détectés avec filtres, favoris, notes, niveau de confiance et outils d'administration.
+
+![Équipements](docs/pictures/Gateway_Lab_V1_Equipements.png)
+
+
+### Historique
+
+Journal chronologique des nouveaux équipements, reconnexions, déconnexions et changements détectés.
+
+![Historique](docs/pictures/Gateway_Lab_V1_Historique.png)
+
+
+### Topologie
+
+Vue simplifiée de la passerelle, des points d'accès détectés et des équipements rattachés.
+
+![Topologie](docs/pictures/Gateway_Lab_V1_Topologie.png)
+
+
+### OTA
+
+Mise à jour du firmware directement depuis l'interface web.
+
+![OTA](docs/pictures/Gateway_Lab_V1_OTA.png)
+
+
+### Paramètres
+
+Configuration WiFi, gestion des réseaux enregistrés et réglage de la NeoPixel d'état.
+
+![Paramètres](docs/pictures/Gateway_Lab_V1_Parametres.png)
 
 ---
 
@@ -63,7 +120,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Portail de configuration | Point d'accès `GatewayLab-Setup` + page web si aucun réseau n'est connu |
 | Persistance NVS          | Réseaux WiFi enregistrés survivant aux redémarrages/coupures      |
 | mDNS                     | Accessible via `gateway-lab-v1.local`                             |
-| Interface web            | Pages Accueil / Équipements / Historique / OTA / Paramètres       |
+| Interface web            | Pages Accueil / Équipements / Historique / Topologie / OTA / Paramètres |
 | Scan réseau LAN          | Sweep ARP du sous-réseau local                                    |
 | Tâche FreeRTOS dédiée    | Scan asynchrone sur Core 0                                        |
 | Résolution hostnames     | mDNS passif + DNS inverse PTR                                     |
@@ -93,59 +150,19 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Découverte WS-Discovery/ONVIF | Probe SOAP multicast lors de la passe précise — caméras, imprimantes, NAS |
 | API appareils multimédia | Cast, Sonos, Roku, Samsung Smart TV — sondées lors de la passe précise |
 | Découverte Matter (DNS-SD) | Détection des appareils Matter commissionnables (`_matterc._udp`) |
-| Filtrage de l'historique | Filtres par type d'événement (nouveau, reconnexion, déconnexion, changement) |
+| Filtrage de l'historique | Filtres par type d'événement (nouveau, reconnexion, déconnexion, changement) et par favoris uniquement |
 | Effacement de l'historique | Vide le journal après téléchargement automatique d'une sauvegarde JSON |
 | OTA Web                  | Upload firmware depuis le navigateur                              |
 | ArduinoOTA               | Mise à jour réseau depuis PlatformIO                              |
-| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/devices/rescan/status`, `/api/scan`, `/api/alias`, `/api/history`, `/api/backup`, `/api/restore`, `/api/wifi` |
-
----
-
-### Accueil
-
-* Informations réseau
-* État de connexion
-* Accès rapide aux équipements
-* Accès OTA
-
-![Accueil](<docs/pictures/Gateway_Lab_V1_Accueil.png>)
-
-### Équipements
-
-* Inventaire des appareils détectés
-* Résolution des noms d'hôtes
-* Alias utilisateur personnalisable
-* Fabricant
-* Catégorie
-* Modèle
-* Temps depuis la dernière détection / nombre de détections
-* Réinterrogation ciblée d'un équipement (bouton ⟲ par ligne, sans relancer un scan complet)
-* Réinitialisation de l'inventaire (bouton « Réinitialiser », avec options de conservation des alias et/ou des fabricants connus)
-
-![Equipement](<docs/pictures/Gateway_Lab_V1_Equipement.png>)
-
-### Historique
-
-* Vue chronologique des événements (nouvel équipement, reconnexion, déconnexion, changement)
-* Filtres par type d'événement
-* Horodatage réel via synchronisation NTP
-* Bouton « Vider l'historique » : télécharge une sauvegarde JSON puis vide le journal
-
-![Historique](<docs/pictures/Gateway_Lab_V1_Historique.png>)
-
-### OTA
-
-* Mise à jour firmware via navigateur
-* Redirection automatique après flash
-
-![OTA](<docs/pictures/Gateway_Lab_V1_OTA.png>)
-
-### Paramètres — Réseau WiFi
-
-* État de la connexion (SSID, IP, signal)
-* Liste des réseaux enregistrés
-* Ajout / suppression de réseaux WiFi
-* Portail de configuration automatique au premier démarrage (point d'accès `GatewayLab-Setup`)
+| Favoris et notes d'inventaire | Marquer un équipement en favori et lui attacher des notes libres datées (entretien, firmware, etc.) |
+| Cartouche diagnostics    | Heap libre, PSRAM libre, espace LittleFS, temps moyen d'un scan / d'une passe précise — affichée sur la page Accueil |
+| NeoPixel d'état          | Bleu pulsé (démarrage), bleu fixe (prêt), vert clignotant (scan), jaune clignotant (nouvel équipement), violet (portail WiFi), cyan (sauvegarde) — luminosité réglable depuis la page Paramètres, persistée |
+| Bouton BOOT               | Appui court = lance un scan, maintien 3 s = sauvegarde immédiate |
+| Filtres équipements      | Filtre par type, fabricant, favoris uniquement, en ligne uniquement (page Équipements, côté client) |
+| Menu Données              | Sur la page Équipements : Export CSV / Export JSON (inventaire) puis, après séparateur, Sauvegarde / Restauration (paramètres de fonctionnement) |
+| Sauvegarde des paramètres | Réseaux WiFi enregistrés, luminosité NeoPixel (`/api/system/backup`, `/api/system/restore`) — distincte de la sauvegarde de l'inventaire |
+| Page Topologie           | Vue simplifiée (passerelle/routeurs vs reste des équipements), première étape avant la cartographie graphique (roadmap v0.4.x) |
+| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/devices/rescan/status`, `/api/scan`, `/api/alias`, `/api/favorite`, `/api/notes`, `/api/diagnostics`, `/api/history`, `/api/backup`, `/api/restore`, `/api/devices/export.csv`, `/api/system/backup`, `/api/system/restore`, `/api/wifi`, `/api/led/brightness` |
 
 ---
 
@@ -250,7 +267,8 @@ Gateway-Lab-V1/
 │   ├── web_interface_scan.h     # Généré depuis web_src/scan.html
 │   ├── web_interface_ota.h      # Généré depuis web_src/ota.html
 │   ├── web_interface_history.h  # Généré depuis web_src/history.html
-│   └── web_interface_wifi.h     # Généré depuis web_src/wifi.html
+│   ├── web_interface_wifi.h     # Généré depuis web_src/wifi.html
+│   └── web_interface_topology.h # Généré depuis web_src/topology.html
 │
 ├── web_src/
 │   ├── index.html                # Page d'accueil — HTML uniquement (source)
@@ -263,6 +281,8 @@ Gateway-Lab-V1/
 │   ├── history.js                # Script de la page historique (source)
 │   ├── wifi.html                 # Page Paramètres WiFi — HTML uniquement (source)
 │   ├── wifi.js                   # Script de la page Paramètres WiFi (source)
+│   ├── topology.html             # Page Topologie — HTML uniquement (source)
+│   ├── topology.js               # Script de la page Topologie (source)
 │   ├── styles.css                # Feuille de style unique (injectée inline par minify_web.py)
 │   ├── template.html             # Gabarit de référence (documentation)
 │   ├── extracted/                # Sortie de extract_web_sources.py (non versionné)
@@ -306,6 +326,7 @@ include/web_interface_scan.h
 include/web_interface_ota.h
 include/web_interface_history.h
 include/web_interface_wifi.h
+include/web_interface_topology.h
 ```
 
 Ils sont reconstruits à partir de :
@@ -328,7 +349,7 @@ python tools/minify_web.py
 
 Chaque page web est découpée en trois sources, qui ont chacune un rôle unique :
 
-* `web_src/styles.css` → **tout** le CSS commun (une seule feuille pour les 5 pages)
+* `web_src/styles.css` → **tout** le CSS commun (une seule feuille pour les 6 pages)
 * `web_src/*.html` → uniquement du HTML/markup (aucun style, aucun script inline)
 * `web_src/*.js` → uniquement le JavaScript de la page correspondante
 
@@ -343,7 +364,9 @@ web_src/ota.js         ──┤
 web_src/history.html   ──┤
 web_src/history.js     ──┤
 web_src/wifi.html      ──┤
-web_src/wifi.js        ──┘
+web_src/wifi.js        ──┤
+web_src/topology.html  ──┤
+web_src/topology.js    ──┘
 ```
 
 `minify_web.py` minifie le CSS et le JS, puis les injecte **inline** dans chaque
@@ -365,7 +388,7 @@ Les headers générés sont versionnés dans Git — aucun pre-script PlatformIO
 | Outil | Usage |
 |---|---|
 | `python tools/minify_web.py` | Génère les headers PROGMEM depuis `web_src/` et `data/oui.json` |
-| `python tools/validate_html.py` | Valide la structure HTML des 5 pages + gabarit |
+| `python tools/validate_html.py` | Valide la structure HTML des 6 pages + gabarit |
 | `python tools/extract_web_sources.py` | Prévisualise l'extraction des headers → `web_src/extracted/` (dry-run) |
 | `python tools/extract_web_sources.py --force` | Récupération d'urgence : écrit le HTML/JS extrait des headers dans `web_src/extracted/` (sans jamais toucher aux sources originales de `web_src/`) |
 
@@ -392,6 +415,12 @@ Vue chronologique des événements détectés
 ### GET /wifi
 
 Page Paramètres → Réseau WiFi (état de connexion, réseaux enregistrés)
+
+### GET /topology
+
+Page Topologie : vue simplifiée (passerelle/routeurs détectés vs reste des
+équipements), à partir des données déjà collectées par le scan. Première
+étape avant la cartographie graphique prévue en roadmap (v0.4.x).
 
 ### GET /api/status
 
@@ -462,6 +491,39 @@ les 500 ms par l'interface) :
 `running` repasse à `false` une fois la passe terminée ; `ok` indique si
 l'équipement a répondu.
 
+### POST /api/favorite
+
+Marque ou démarque un équipement comme favori (paramètres `mac` ou `ip`,
+et `favorite` : `1` pour marquer, `0` pour démarquer).
+
+### POST /api/notes
+
+Ajoute une note libre datée à un équipement (paramètres `mac` ou `ip`, et
+`text`). Le timestamp (`ts`, epoch NTP) est attribué côté serveur — `0` si
+l'horloge n'est pas encore synchronisée.
+
+### DELETE /api/notes
+
+Supprime une note d'un équipement (paramètres `mac` ou `ip`, et `ts` —
+le timestamp de la note à supprimer).
+
+### GET /api/diagnostics
+
+Retourne l'état mémoire/stockage et les temps de scan moyens :
+
+```json
+{
+  "freeHeap": 184320,
+  "freePsram": 7340032,
+  "fsUsedBytes": 12480,
+  "fsTotalBytes": 1474560,
+  "lastScanMs": 4210,
+  "avgScanMs": 3980,
+  "lastRescanMs": 1850,
+  "avgRescanMs": 1720
+}
+```
+
 ### GET /api/history
 
 Retourne le journal chronologique des événements (les plus récents en premier).
@@ -479,9 +541,43 @@ Télécharge un export JSON complet de l'inventaire, des alias et de l'historiqu
 
 Restaure l'inventaire depuis un export JSON précédemment généré par `/api/backup`.
 
+### GET /api/devices/export.csv
+
+Télécharge l'inventaire au format CSV (une ligne par équipement : IP, MAC,
+hôte, alias, fabricant, modèle, catégorie, type, OS, services, ports
+ouverts, en ligne (`Yes`/`No`), favori (`Yes`/`No`), niveau de confiance,
+notes utilisateur, première/dernière apparition (date lisible
+`AAAA-MM-JJ HH:MM:SS`), compteur de vues). Utile pour une exploitation dans
+un tableur ou un script externe — pour une sauvegarde/restauration complète
+(format JSON, dates en epoch), utiliser `/api/backup`. Le fichier contient un
+BOM UTF-8 en tête pour un affichage correct des accents dans Excel.
+
+### GET /api/system/backup
+
+Télécharge une sauvegarde JSON des **paramètres de fonctionnement du
+projet** — distincte de `/api/backup` (qui sauvegarde l'inventaire des
+équipements) : réseaux WiFi enregistrés (SSID + mot de passe), luminosité
+NeoPixel, et nom mDNS à titre informatif (fixé à la compilation via
+`MDNS_HOSTNAME`, non restaurable).
+
+### POST /api/system/restore
+
+Restaure les paramètres de fonctionnement depuis un export JSON généré par
+`/api/system/backup`. Les réseaux WiFi du fichier sont ajoutés ou mis à jour
+(jamais supprimés automatiquement) ; la luminosité NeoPixel est appliquée
+immédiatement.
+
 ### POST /update
 
 Upload d'un firmware `.bin`.
+
+### GET /api/led/brightness
+
+Retourne la luminosité courante de la NeoPixel d'état : `{"brightness": 15}`.
+
+### POST /api/led/brightness
+
+Définit la luminosité (paramètre `value`, 0-100), persistée en NVS.
 
 ### GET /api/wifi
 
@@ -567,6 +663,10 @@ Pour les fonctionnalités prévues, consulter `ROADMAP.md`.
 - `include/board_config.h` — ne pas modifier
 - `include/secrets.h` — ne jamais committer
 - CSS modifiable uniquement dans `web_src/styles.css`
+- Largeur de page : toutes les pages utilisent la classe `page-scan`
+  (max-width 960px) pour une largeur uniforme ; seule la page Équipements
+  exploite réellement cette largeur pour son tableau (les autres pages
+  l'utilisent simplement pour aligner leur carte sur la même largeur)
 - HTML modifiable uniquement dans `web_src/*.html` (jamais de `<style>` ou `<script>` inline)
 - JavaScript modifiable uniquement dans `web_src/*.js`
 - Versioning uniquement dans `platformio.ini` via `PROJECT_VERSION`

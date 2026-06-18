@@ -34,27 +34,36 @@ function refresh() {
       document.getElementById('footer-ts').textContent    = 'Erreur de connexion';
     });
 }
-refresh();
-setInterval(refresh, 10000);
+function fmtMs(ms) {
+  if (!ms) return '—';
+  if (ms < 1000) return ms + ' ms';
+  return (ms / 1000).toFixed(1) + ' s';
+}
 
-document.getElementById('restore-btn').addEventListener('click', function() {
-  var input = document.getElementById('restore-file');
-  var msg   = document.getElementById('restore-msg');
-  if (!input.files || !input.files[0]) {
-    msg.textContent = 'Choisissez un fichier de sauvegarde.';
-    return;
-  }
-  var reader = new FileReader();
-  reader.onload = function() {
-    msg.textContent = 'Restauration en cours...';
-    fetch('/api/restore', { method: 'POST', body: reader.result })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        msg.textContent = d.status === 'ok'
-          ? 'Restauration réussie - rechargez la page Équipements.'
-          : 'Erreur : ' + (d.error || 'inconnue');
-      })
-      .catch(function() { msg.textContent = 'Erreur de connexion.'; });
-  };
-  reader.readAsText(input.files[0]);
-});
+function fmtBytes(b) {
+  if (b === undefined || b === null) return '—';
+  if (b < 1024) return b + ' o';
+  return (b / 1024).toFixed(0) + ' Ko';
+}
+
+function fetchDiagnostics() {
+  fetch('/api/diagnostics')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) return;
+      var bar = document.getElementById('diag-bar');
+      if (!bar) return;
+      bar.style.display = 'flex';
+      document.getElementById('diag-heap').textContent  = 'Heap libre : '  + fmtBytes(d.freeHeap);
+      document.getElementById('diag-psram').textContent = 'PSRAM libre : ' + fmtBytes(d.freePsram);
+      document.getElementById('diag-fs').textContent     = 'LittleFS : '   + fmtBytes(d.fsUsedBytes) + ' / ' + fmtBytes(d.fsTotalBytes);
+      document.getElementById('diag-scan').textContent   = 'Scan moyen : ' + fmtMs(d.avgScanMs);
+      document.getElementById('diag-rescan').textContent = 'Passe précise moyenne : ' + fmtMs(d.avgRescanMs);
+    })
+    .catch(function() {});
+}
+
+refresh();
+fetchDiagnostics();
+setInterval(refresh, 10000);
+setInterval(fetchDiagnostics, 30000);

@@ -99,16 +99,56 @@ function updateStats(stats) {
   document.getElementById('stat-offline').textContent = stats.offline + ' hors ligne';
 }
 
-function renderDevices(devices) {
+var lastDevices = [];
+
+function populateFilterOptions(devices) {
+  var catSel = document.getElementById('filter-category');
+  var mfrSel = document.getElementById('filter-manufacturer');
+  var prevCat = catSel.value;
+  var prevMfr = mfrSel.value;
+  var cats = Array.from(new Set(devices.map(function(d) { return d.category; }).filter(Boolean))).sort();
+  var mfrs = Array.from(new Set(devices.map(function(d) { return d.manufacturer; }).filter(Boolean))).sort();
+  catSel.innerHTML = '<option value="">Tous</option>' +
+    cats.map(function(c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+  mfrSel.innerHTML = '<option value="">Tous</option>' +
+    mfrs.map(function(m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join('');
+  catSel.value = prevCat;
+  mfrSel.value = prevMfr;
+}
+
+function applyFilters(devices) {
+  var cat = document.getElementById('filter-category').value;
+  var mfr = document.getElementById('filter-manufacturer').value;
+  var favOnly    = document.getElementById('filter-favorite').checked;
+  var onlineOnly = document.getElementById('filter-online').checked;
+  return devices.filter(function(d) {
+    if (cat && d.category !== cat) return false;
+    if (mfr && d.manufacturer !== mfr) return false;
+    if (favOnly && !d.favorite) return false;
+    if (onlineOnly && !d.online) return false;
+    return true;
+  });
+}
+
+function renderDevices(allDevices) {
+  lastDevices = allDevices || [];
+  populateFilterOptions(lastDevices);
   var tbody = document.getElementById('devices-body');
   var meta  = document.getElementById('scan-meta');
-  if (!devices || devices.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-msg">Aucun équipement détecté</td></tr>';
+  var devices = applyFilters(lastDevices);
+  if (!lastDevices.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">Aucun équipement détecté</td></tr>';
     meta.textContent = '0 équipement';
     return;
   }
+  if (!devices.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">Aucun équipement ne correspond aux filtres</td></tr>';
+    meta.textContent = '0 équipement affiché sur ' + lastDevices.length;
+    return;
+  }
   var onlineCount = devices.filter(function(d) { return d.online; }).length;
-  meta.textContent = onlineCount + ' équipement' + (onlineCount > 1 ? 's' : '') + ' en ligne';
+  meta.textContent = onlineCount + ' équipement' + (onlineCount > 1 ? 's' : '') + ' en ligne' +
+    (devices.length !== lastDevices.length ? ' (' + devices.length + '/' + lastDevices.length + ' affichés)' : '');
   // Tri : online d'abord, puis par IP
   devices.sort(function(a, b) {
     if (a.online !== b.online) return a.online ? -1 : 1;
@@ -161,7 +201,17 @@ function renderDevices(devices) {
       ? '<button class="rescan-btn" title="Réinterroger cet équipement (sans relancer un scan complet)" ' +
         'data-ip="' + esc(d.ip) + '" onclick="rescanDevice(this)">⟲</button>'
       : '';
-    return '<tr' + (d.online ? '' : ' class="row-offline"') + '>' +
+    var favKey = d.mac || d.ip;
+    var favBtn = '<button class="fav-btn ' + (d.favorite ? 'fav-on' : '') + '" ' +
+      'title="' + (d.favorite ? 'Retirer des favoris' : 'Marquer comme favori') + '" ' +
+      'data-key="' + esc(favKey) + '" data-fav="' + (d.favorite ? '1' : '0') + '" ' +
+      'onclick="toggleFavorite(this)">' + (d.favorite ? '★' : '☆') + '</button>';
+    var noteCount = (d.notes && d.notes.length) || 0;
+    var notesBtn = '<button class="notes-btn" title="Notes (' + noteCount + ')" ' +
+      'data-key="' + esc(favKey) + '" onclick="toggleNotesRow(this)">📝' +
+      (noteCount ? '<span class="notes-count">' + noteCount + '</span>' : '') + '</button>';
+    var notesData = 'data-notes=\'' + esc(JSON.stringify(d.notes || [])) + '\'';
+    return '<tr' + (d.online ? '' : ' class="row-offline"') + ' ' + notesData + '>' +
       '<td class="status-cell">' + statusHtml + '</td>' +
       '<td class="ip-cell">'     + esc(d.ip) + rescanBtn + '</td>' +
       '<td>'                     + nameHtml    + '</td>' +
@@ -169,6 +219,7 @@ function renderDevices(devices) {
       '<td>'                     + catHtml     + '</td>' +
       '<td class="mac-cell">'    + esc(d.mac)  + '</td>' +
       '<td class="seen-cell">'   + seenHtml    + '</td>' +
+      '<td class="actions-cell">' + favBtn + notesBtn + '</td>' +
       '</tr>';
   }).join('');
 }
@@ -225,6 +276,76 @@ function editAlias(btn) {
   if (value === null) return;
   var body = 'mac=' + encodeURIComponent(key) + '&alias=' + encodeURIComponent(value);
   fetch('/api/alias', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+    .then(function() { fetchDevices(); });
+}
+
+function toggleFavorite(btn) {
+  var key = btn.getAttribute('data-key');
+  var fav = btn.getAttribute('data-fav') === '1';
+  var body = 'mac=' + encodeURIComponent(key) + '&favorite=' + (fav ? '0' : '1');
+  fetch('/api/favorite', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+    .then(function() { fetchDevices(); });
+}
+
+var NOTES_ROW_ID = 'notes-row';
+
+function fmtNoteDate(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleString('fr-FR');
+}
+
+function toggleNotesRow(btn) {
+  var row = btn.closest('tr');
+  var existing = document.getElementById(NOTES_ROW_ID);
+  if (existing) {
+    var wasForRow = existing.previousSibling === row;
+    existing.remove();
+    if (wasForRow) return;
+  }
+  var key = btn.getAttribute('data-key');
+  var notes = [];
+  try { notes = JSON.parse(row.getAttribute('data-notes') || '[]'); } catch (e) {}
+
+  var newRow = document.createElement('tr');
+  newRow.id = NOTES_ROW_ID;
+  var nCols = row.children.length || 8;
+  var listHtml = notes.length
+    ? notes.map(function(n) {
+        return '<li class="note-item">' +
+          '<span class="note-date">' + esc(fmtNoteDate(n.ts)) + '</span>' +
+          '<span class="note-text">' + esc(n.text) + '</span>' +
+          '<button class="note-del" data-key="' + esc(key) + '" data-ts="' + n.ts + '" onclick="deleteNote(this)">✕</button>' +
+        '</li>';
+      }).join('')
+    : '<li class="note-empty">Aucune note</li>';
+  newRow.innerHTML =
+    '<td colspan="' + nCols + '">' +
+      '<div class="notes-panel">' +
+        '<ul class="notes-list">' + listHtml + '</ul>' +
+        '<div class="notes-add">' +
+          '<input type="text" class="notes-input" placeholder="Ajouter une note (ex: cartouche changée le 12/05)" />' +
+          '<button class="notes-add-btn" data-key="' + esc(key) + '" onclick="addNote(this)">Ajouter</button>' +
+        '</div>' +
+      '</div>' +
+    '</td>';
+  row.parentNode.insertBefore(newRow, row.nextSibling);
+}
+
+function addNote(btn) {
+  var key   = btn.getAttribute('data-key');
+  var input = btn.parentNode.querySelector('.notes-input');
+  var text  = (input.value || '').trim();
+  if (!text) return;
+  var body = 'mac=' + encodeURIComponent(key) + '&text=' + encodeURIComponent(text);
+  fetch('/api/notes', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+    .then(function() { fetchDevices(); });
+}
+
+function deleteNote(btn) {
+  var key = btn.getAttribute('data-key');
+  var ts  = btn.getAttribute('data-ts');
+  var body = 'mac=' + encodeURIComponent(key) + '&ts=' + encodeURIComponent(ts);
+  fetch('/api/notes', { method: 'DELETE', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
     .then(function() { fetchDevices(); });
 }
 
@@ -318,11 +439,49 @@ function toggleResetMenu() {
   document.getElementById('reset-menu-list').classList.toggle('open');
 }
 
+function toggleDataMenu() {
+  document.getElementById('data-menu-list').classList.toggle('open');
+}
+
+function triggerRestore() {
+  document.getElementById('data-menu-list').classList.remove('open');
+  document.getElementById('restore-file').click();
+}
+
+document.getElementById('restore-file').addEventListener('change', function() {
+  var input = this;
+  var msg   = document.getElementById('restore-msg');
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    msg.style.display = 'block';
+    msg.textContent = 'Restauration des paramètres en cours...';
+    fetch('/api/system/restore', { method: 'POST', body: reader.result })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        msg.textContent = d.status === 'ok'
+          ? 'Paramètres restaurés (' + d.networksRestored + ' réseau(x) WiFi).'
+          : 'Erreur : ' + (d.error || 'inconnue');
+      })
+      .catch(function() { msg.textContent = 'Erreur de connexion.'; });
+  };
+  reader.readAsText(input.files[0], 'UTF-8');
+  input.value = '';
+});
+
 document.addEventListener('click', function(e) {
   var menu = document.getElementById('reset-menu-list');
   if (menu && menu.classList.contains('open') && !e.target.closest('.reset-menu')) {
     menu.classList.remove('open');
   }
+  var dataMenu = document.getElementById('data-menu-list');
+  if (dataMenu && dataMenu.classList.contains('open') && !e.target.closest('.reset-menu')) {
+    dataMenu.classList.remove('open');
+  }
+});
+
+['filter-category', 'filter-manufacturer', 'filter-favorite', 'filter-online'].forEach(function(id) {
+  document.getElementById(id).addEventListener('change', function() { renderDevices(lastDevices); });
 });
 
 function resetDevices(keepAlias, keepManufacturer) {

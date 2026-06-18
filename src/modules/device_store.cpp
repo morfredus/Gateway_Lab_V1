@@ -69,6 +69,14 @@ std::vector<NetworkDevice> DeviceStore::load() {
         d.firstSeenEpoch   = obj["firstSeen"]     | 0;
         d.lastSeenEpoch    = obj["lastSeenAt"]    | 0;
         d.seenCount        = obj["seenCount"]     | 0;
+        d.favorite         = obj["favorite"]      | false;
+        JsonArray notesArr = obj["notes"].as<JsonArray>();
+        for (JsonObject no : notesArr) {
+            DeviceNote n;
+            n.ts   = no["ts"]   | 0;
+            n.text = no["text"] | "";
+            d.notes.push_back(n);
+        }
         d.online       = false;
         d.lastSeen     = 0;   // Inconnu — sera affiché comme "hors ligne"
         if (!d.ip.isEmpty() || !d.mac.isEmpty())
@@ -109,6 +117,13 @@ void DeviceStore::save(const std::vector<NetworkDevice>& devices) {
         obj["lastSeenAt"]   = d.lastSeenEpoch;
         obj["seenCount"]    = d.seenCount;
         obj["online"]       = d.online;
+        obj["favorite"]     = d.favorite;
+        JsonArray notesArr = obj["notes"].to<JsonArray>();
+        for (const auto& n : d.notes) {
+            JsonObject no = notesArr.add<JsonObject>();
+            no["ts"]   = n.ts;
+            no["text"] = n.text;
+        }
     }
 
     serializeJson(doc, f);
