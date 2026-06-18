@@ -2,182 +2,218 @@
   {
     "oui": "B8:27:EB",
     "manufacturer": "Raspberry Pi",
-    "category": "SBC"
+    "category": "SBC",
+    "type": "Single Board Computer"
   },
   {
     "oui": "DC:A6:32",
     "manufacturer": "Raspberry Pi",
-    "category": "SBC"
+    "category": "SBC",
+    "type": "Single Board Computer"
   },
   {
     "oui": "E4:5F:01",
     "manufacturer": "Raspberry Pi",
-    "category": "SBC"
+    "category": "SBC",
+    "type": "Single Board Computer"
   },
   {
     "oui": "D8:3A:DD",
     "manufacturer": "Raspberry Pi",
-    "category": "SBC"
+    "category": "SBC",
+    "type": "Single Board Computer"
   },
   {
     "oui": "28:CD:C1",
     "manufacturer": "Raspberry Pi",
-    "category": "SBC"
+    "category": "SBC",
+    "type": "Single Board Computer"
   },
   {
     "oui": "18:FE:34",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "24:6F:28",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "A4:CF:12",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "30:AE:A4",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "AC:67:B2",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "3C:61:05",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "FC:F5:C4",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "10:06:1C",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "50:FF:20",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "C8:F0:9E",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "CC:50:E3",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "08:3A:F2",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "40:22:D8",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "54:43:B2",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "7C:DF:A1",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "94:B9:7E",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "BC:FF:4D",
     "manufacturer": "Espressif",
-    "category": "IoT"
+    "category": "IoT",
+    "type": "Microcontroller"
   },
   {
     "oui": "A4:E1:1A",
     "manufacturer": "Tuya / Smart Life",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Device"
   },
   {
     "oui": "68:57:2D",
     "manufacturer": "Tuya / Smart Life",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Device"
   },
   {
     "oui": "84:E1:F1",
     "manufacturer": "Tuya / Smart Life",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Device"
   },
   {
     "oui": "D8:1F:12",
     "manufacturer": "Tuya / Smart Life",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Device"
   },
   {
     "oui": "10:52:1C",
     "manufacturer": "Sonoff / Itead",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Relay"
   },
   {
     "oui": "BC:DD:C2",
     "manufacturer": "Shelly / Allterco",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Relay"
   },
   {
     "oui": "CA:C9:A3",
     "manufacturer": "Shelly / Allterco",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Relay"
   },
   {
     "oui": "00:17:88",
     "manufacturer": "Philips Hue",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Lighting"
   },
   {
     "oui": "EC:B5:FA",
     "manufacturer": "Philips Hue",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Lighting"
   },
   {
     "oui": "54:10:EC",
     "manufacturer": "Tado",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Thermostat"
   },
   {
     "oui": "88:6B:0F",
     "manufacturer": "Tado",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Thermostat"
   },
   {
     "oui": "00:1D:C9",
     "manufacturer": "Netatmo",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Sensor"
   },
   {
     "oui": "70:EE:50",
     "manufacturer": "Netatmo",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Sensor"
   },
   {
     "oui": "E0:4F:43",
     "manufacturer": "Somfy",
-    "category": "Home Automation"
+    "category": "Home Automation",
+    "type": "Smart Controller"
   },
   {
     "oui": "28:CF:E9",
@@ -287,7 +323,14 @@
   {
     "oui": "18:31:BF",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
+  },
+  {
+    "oui": "0C:DC:91",
+    "manufacturer": "Amazon",
+    "category": "Smart Home",
+    "type": "Smart Display"
   },
   {
     "oui": "0C:DC:91",
@@ -298,42 +341,50 @@
   {
     "oui": "FC:A1:83",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "74:75:48",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "44:65:0D",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "F0:27:2D",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "40:B4:CD",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "0C:47:C9",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "50:DC:E7",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "CC:F4:11",
     "manufacturer": "Amazon",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "34:D2:70",
@@ -453,197 +504,236 @@
   {
     "oui": "7C:D1:C3",
     "manufacturer": "Google",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "F4:F5:D8",
     "manufacturer": "Google",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "54:60:09",
     "manufacturer": "Google",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "20:DF:B9",
     "manufacturer": "Google",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "48:D6:D5",
     "manufacturer": "Google",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "00:1A:11",
     "manufacturer": "Google",
-    "category": "Smart Home"
+    "category": "Smart Home",
+    "type": "Smart Home Device"
   },
   {
     "oui": "A8:9C:ED",
     "manufacturer": "TP-Link",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "50:C7:BF",
     "manufacturer": "TP-Link",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "98:DA:C4",
     "manufacturer": "TP-Link",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "C0:C9:E3",
     "manufacturer": "TP-Link",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "B0:4E:26",
     "manufacturer": "TP-Link",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "54:AF:97",
     "manufacturer": "TP-Link",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "1C:3B:F3",
     "manufacturer": "TP-Link",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "3C:84:6E",
     "manufacturer": "TP-Link",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "24:A4:3C",
     "manufacturer": "Ubiquiti",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "68:D7:9A",
     "manufacturer": "Ubiquiti",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "78:8A:20",
     "manufacturer": "Ubiquiti",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "FC:EC:DA",
     "manufacturer": "Ubiquiti",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "44:D9:E7",
     "manufacturer": "Ubiquiti",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "B4:FB:E4",
     "manufacturer": "Ubiquiti",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "4C:5E:0C",
     "manufacturer": "MikroTik",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "D4:CA:6D",
     "manufacturer": "MikroTik",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "CC:2D:E0",
     "manufacturer": "MikroTik",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "00:09:5B",
     "manufacturer": "Netgear",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "20:E5:2A",
     "manufacturer": "Netgear",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "28:C6:8E",
     "manufacturer": "Netgear",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "A0:40:A0",
     "manufacturer": "Netgear",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "00:0C:6E",
     "manufacturer": "Asus",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "04:92:26",
     "manufacturer": "Asus",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "10:BF:48",
     "manufacturer": "Asus",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "2C:FD:A1",
     "manufacturer": "Asus",
-    "category": "Network"
+    "category": "Network",
+    "type": "Network Equipment"
   },
   {
     "oui": "F8:1A:67",
     "manufacturer": "Freebox",
-    "category": "Router"
+    "category": "Router",
+    "type": "Internet Router"
   },
   {
     "oui": "00:24:D4",
     "manufacturer": "Freebox",
-    "category": "Router"
+    "category": "Router",
+    "type": "Internet Router"
   },
   {
     "oui": "68:A3:78",
     "manufacturer": "Freebox",
-    "category": "Router"
+    "category": "Router",
+    "type": "Internet Router"
   },
   {
     "oui": "F4:CA:E5",
     "manufacturer": "Orange",
-    "category": "Router"
+    "category": "Router",
+    "type": "Internet Router"
   },
   {
     "oui": "00:90:D0",
     "manufacturer": "Orange",
-    "category": "Router"
+    "category": "Router",
+    "type": "Internet Router"
   },
   {
     "oui": "10:65:30",
     "manufacturer": "Orange",
-    "category": "Router"
+    "category": "Router",
+    "type": "Internet Router"
   },
   {
     "oui": "00:22:A0",
     "manufacturer": "SFR",
-    "category": "Router"
+    "category": "Router",
+    "type": "Internet Router"
   },
   {
     "oui": "84:9D:C7",
     "manufacturer": "SFR",
-    "category": "Router"
+    "category": "Router",
+    "type": "Internet Router"
   },
   {
     "oui": "00:50:F2",
@@ -708,167 +798,200 @@
   {
     "oui": "00:11:32",
     "manufacturer": "Synology",
-    "category": "NAS"
+    "category": "NAS",
+    "type": "NAS Server"
   },
   {
     "oui": "BC:5F:F4",
     "manufacturer": "Synology",
-    "category": "NAS"
+    "category": "NAS",
+    "type": "NAS Server"
   },
   {
     "oui": "24:5E:BE",
     "manufacturer": "QNAP",
-    "category": "NAS"
+    "category": "NAS",
+    "type": "NAS Server"
   },
   {
     "oui": "00:08:9B",
     "manufacturer": "QNAP",
-    "category": "NAS"
+    "category": "NAS",
+    "type": "NAS Server"
   },
   {
     "oui": "50:14:79",
     "manufacturer": "iRobot",
-    "category": "Robot Vacuum"
+    "category": "Robot Vacuum",
+    "type": "Robot Vacuum"
   },
   {
     "oui": "68:37:E9",
     "manufacturer": "iRobot",
-    "category": "Robot Vacuum"
+    "category": "Robot Vacuum",
+    "type": "Robot Vacuum"
   },
   {
     "oui": "00:50:C2",
     "manufacturer": "iRobot",
-    "category": "Robot Vacuum"
+    "category": "Robot Vacuum",
+    "type": "Robot Vacuum"
   },
   {
     "oui": "78:2B:46",
     "manufacturer": "Roborock",
-    "category": "Robot Vacuum"
+    "category": "Robot Vacuum",
+    "type": "Robot Vacuum"
   },
   {
     "oui": "58:63:56",
     "manufacturer": "Roborock",
-    "category": "Robot Vacuum"
+    "category": "Robot Vacuum",
+    "type": "Robot Vacuum"
   },
   {
     "oui": "78:28:CA",
     "manufacturer": "Sonos",
-    "category": "Audio"
+    "category": "Audio",
+    "type": "Network Speaker"
   },
   {
     "oui": "5C:AA:FD",
     "manufacturer": "Sonos",
-    "category": "Audio"
+    "category": "Audio",
+    "type": "Network Speaker"
   },
   {
     "oui": "94:9F:3E",
     "manufacturer": "Sonos",
-    "category": "Audio"
+    "category": "Audio",
+    "type": "Network Speaker"
   },
   {
     "oui": "B8:E9:37",
     "manufacturer": "Sonos",
-    "category": "Audio"
+    "category": "Audio",
+    "type": "Network Speaker"
   },
   {
     "oui": "34:7E:5C",
     "manufacturer": "Sonos",
-    "category": "Audio"
+    "category": "Audio",
+    "type": "Network Speaker"
   },
   {
     "oui": "B0:09:DA",
     "manufacturer": "Ring",
-    "category": "Security"
+    "category": "Security",
+    "type": "Video Doorbell"
   },
   {
     "oui": "EC:1A:59",
     "manufacturer": "Ring",
-    "category": "Security"
+    "category": "Security",
+    "type": "Video Doorbell"
   },
   {
     "oui": "44:19:B6",
     "manufacturer": "Hikvision",
-    "category": "Camera"
+    "category": "Camera",
+    "type": "IP Camera"
   },
   {
     "oui": "BC:AD:28",
     "manufacturer": "Hikvision",
-    "category": "Camera"
+    "category": "Camera",
+    "type": "IP Camera"
   },
   {
     "oui": "28:57:BE",
     "manufacturer": "Hikvision",
-    "category": "Camera"
+    "category": "Camera",
+    "type": "IP Camera"
   },
   {
     "oui": "08:ED:ED",
     "manufacturer": "Dahua",
-    "category": "Camera"
+    "category": "Camera",
+    "type": "IP Camera"
   },
   {
     "oui": "3C:EF:8C",
     "manufacturer": "Dahua",
-    "category": "Camera"
+    "category": "Camera",
+    "type": "IP Camera"
   },
   {
     "oui": "EC:71:DB",
     "manufacturer": "Reolink",
-    "category": "Camera"
+    "category": "Camera",
+    "type": "IP Camera"
   },
   {
     "oui": "B0:4F:13",
     "manufacturer": "Reolink",
-    "category": "Camera"
+    "category": "Camera",
+    "type": "IP Camera"
   },
   {
     "oui": "00:1B:A9",
     "manufacturer": "Brother",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "00:80:77",
     "manufacturer": "Brother",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "00:0C:00",
     "manufacturer": "Brother",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "30:05:5C",
     "manufacturer": "Brother",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "F8:63:3F",
     "manufacturer": "Canon",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "74:38:B7",
     "manufacturer": "Canon",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "00:00:85",
     "manufacturer": "Canon",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "00:26:AB",
     "manufacturer": "Epson",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "74:F8:DB",
     "manufacturer": "Epson",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "AC:18:26",
     "manufacturer": "Epson",
-    "category": "Printer"
+    "category": "Printer",
+    "type": "Network Printer"
   },
   {
     "oui": "64:BC:0C",
@@ -903,26 +1026,31 @@
   {
     "oui": "B8:3E:59",
     "manufacturer": "Roku",
-    "category": "Streaming"
+    "category": "Streaming",
+    "type": "Streaming Device"
   },
   {
     "oui": "D0:4D:2C",
     "manufacturer": "Roku",
-    "category": "Streaming"
+    "category": "Streaming",
+    "type": "Streaming Device"
   },
   {
     "oui": "CC:6D:A0",
     "manufacturer": "Roku",
-    "category": "Streaming"
+    "category": "Streaming",
+    "type": "Streaming Device"
   },
   {
     "oui": "08:05:81",
     "manufacturer": "Roku",
-    "category": "Streaming"
+    "category": "Streaming",
+    "type": "Streaming Device"
   },
   {
     "oui": "00:04:4B",
     "manufacturer": "Nvidia",
-    "category": "Streaming"
+    "category": "Streaming",
+    "type": "Streaming Device"
   }
 ]
