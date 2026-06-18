@@ -25,6 +25,7 @@
 
 struct PortScanResult;   // Defini dans port_scanner.h
 struct NetBiosInfo;      // Defini dans netbios_scanner.h
+struct DnsSdInfo;        // Defini dans dns_sd_scanner.h
 
 // Statistiques du scan : équipements connus / en ligne / hors ligne
 struct ScanStats {
@@ -32,6 +33,17 @@ struct ScanStats {
     int online  = 0;  // Vus lors du dernier scan
     int offline = 0;  // Connus mais absents lors du dernier scan
 };
+
+// Avancement de la passe precise sur un seul equipement (rescanDevice) -
+// permet a l'UI d'afficher une etape/pourcentage plutot qu'un bouton figé.
+struct RescanStatus {
+    bool   running = false;   // true pendant l'execution de la tache
+    bool   ok      = false;   // resultat de la derniere passe terminee
+    String ip;                // IP visee par la passe en cours/terminee
+    String step;               // Etape courante, ex: "SSDP/UPnP"
+    int    percent = 0;       // Avancement estime (0-100)
+};
+
 
 // ---------------------------------------------------------------------------
 // Informations collectées pour chaque équipement découvert
@@ -97,11 +109,18 @@ public:
     // Restauration depuis un JSON produit par backupToJson() - remplace les resultats actuels
     bool restoreFromJson(const String& json);
 
-    // Rafraichit un seul equipement (identifie par IP) sans relancer un scan
-    // complet : sonde ARP/ICMP, puis resolution de nom + ports + NetBIOS si
-    // l'equipement repond. Retourne false si l'IP est inconnue ou si un scan
-    // complet est en cours.
+    // Lance la passe precise (asynchrone, tache FreeRTOS dediee) sur un seul
+    // equipement identifie par IP : ARP/ICMP, hostname, ports, NetBIOS,
+    // SSDP/UPnP, DNS-SD, SNMP. Retourne immediatement (true si la tache a
+    // demarre) - suivre l'avancement via getRescanStatus().
+    // Retourne false si l'IP est inconnue ou si un scan/rescan est deja en cours.
     bool rescanDevice(const String& ip);
+
+    // Avancement courant de la passe precise (thread-safe) - pour le polling UI
+    RescanStatus getRescanStatus() const;
+
+    // Serialisation JSON de getRescanStatus() pour l'API /api/devices/rescan/status
+    String rescanStatusToJson() const;
 
 private:
     // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
@@ -109,6 +128,16 @@ private:
 
     // Corps du scan complet : sweep ARP + lecture finale + résolution hostnames
     void _run();
+
+    // Point d'entree de la tache FreeRTOS dediee a la passe precise (rescanDevice)
+    static void _rescanTask(void* self);
+
+    // Corps de la passe precise sur _rescanStatus.ip - met a jour _rescanStatus
+    // a chaque etape pour que l'UI puisse afficher un avancement reel
+    void _runRescan(const String& ip);
+
+    // Met a jour l'etape/pourcentage courant de la passe precise (thread-safe)
+    void _setRescanProgress(const String& step, int percent);
 
     // Envoi de requêtes ARP natives sur tout le sous-réseau (lots de BATCH_SIZE)
     void _sweepSubnet();
@@ -128,9 +157,17 @@ private:
     // Enrichit les équipements existants et ajoute les nouveaux
     void _mergeSsdp();
 
+    // Applique un equipement decouvert par SSDP a une entree existante
+    // (extrait de _mergeSsdp() pour etre reutilisable par rescanDevice())
+    void _applySsdpResult(NetworkDevice& d, const NetworkDevice& sdev);
+
     // Fusionne les résultats du scan DNS-SD dans _results
     // Renseigne services, model (si vide), hostname (si vide), category (si vide/IoT)
     void _mergeDnsSd();
+
+    // Applique un resultat DNS-SD a une entree existante
+    // (extrait de _mergeDnsSd() pour etre reutilisable par rescanDevice())
+    void _applyDnsSdResult(NetworkDevice& d, const DnsSdInfo& info);
 
     // Charge les devices connus depuis DeviceStore et les injecte offline dans _results
     void _mergePersistedDevices();
@@ -168,10 +205,12 @@ private:
     // explique a l'utilisateur quelle source a permis l'identification
     static int _confidenceFor(const NetworkDevice& d, String& label);
 
-    SemaphoreHandle_t           _mutex      = nullptr;
-    TaskHandle_t                _taskHandle = nullptr;
+    SemaphoreHandle_t           _mutex        = nullptr;
+    TaskHandle_t                _taskHandle   = nullptr;
+    TaskHandle_t                _rescanTaskHandle = nullptr;
     std::vector<NetworkDevice>  _results;
     volatile bool               _scanning   = false;
+    RescanStatus                _rescanStatus;   // Protege par _mutex (lecture/ecriture)
 };
 
 // Instance globale

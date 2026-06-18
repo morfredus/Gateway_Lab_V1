@@ -76,22 +76,20 @@ PAGES = [
 # ---------------------------------------------------------------------------
 try:
     import rcssmin
-    HAS_RCSSMIN = True
 except ImportError:
-    HAS_RCSSMIN = False
+    rcssmin = None
 
 try:
     import rjsmin
-    HAS_RJSMIN = True
 except ImportError:
-    HAS_RJSMIN = False
+    rjsmin = None
 
 # ---------------------------------------------------------------------------
 # HTML minification helpers
 # ---------------------------------------------------------------------------
 def _minify_css_block(css: str) -> str:
-    if HAS_RCSSMIN:
-        return rcssmin.cssmin(css)
+    if rcssmin is not None:
+        return str(rcssmin.cssmin(css))
     css = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
     css = re.sub(r'\s*([{}:;,>~+])\s*', r'\1', css)
     css = re.sub(r'\s+', ' ', css).strip()
@@ -99,8 +97,8 @@ def _minify_css_block(css: str) -> str:
 
 
 def _minify_js_block(js: str) -> str:
-    if HAS_RJSMIN:
-        return rjsmin.jsmin(js)
+    if rjsmin is not None:
+        return str(rjsmin.jsmin(js))
     js = re.sub(r'//[^\n]*', '', js)
     js = re.sub(r'\s+', ' ', js).strip()
     return js

@@ -5,6 +5,60 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.6.0] - 2026-06-18
+
+### Ajoute
+
+- **Champ `type` (sous-catégorie)** (`src/modules/network_scanner.cpp`,
+  `device_store.cpp`, `oui_table.h`) : les équipements peuvent désormais
+  porter un sous-type au sein de leur catégorie (ex. "Smart Speaker", "Smart
+  Display") en plus de la catégorie générale, persisté avec le reste de la
+  fiche et affiché dans les pages Équipements et Historique.
+- **Score de confiance unique et plus prudent** (`NetworkScanner::_confidenceFor()`)
+  : remplace l'ancienne logique par un score global qui retient le signal le
+  *plus faible* entre marque et catégorie plutôt que le meilleur. Les OUI
+  ambigus (Apple, Samsung, Xiaomi, Huawei, Intel, HP, Dell, Lenovo, Microsoft
+  — un même préfixe MAC pouvant désigner un PC, un mobile, une tablette ou un
+  écran connecté) sont désormais plafonnés à 35 % de confiance. Une infobulle
+  détaille la confiance par champ (marque / catégorie / modèle / type).
+- **Passe précise asynchrone avec suivi de progression** (`POST /api/devices/rescan`,
+  `GET /api/devices/rescan/status`) : la réinterrogation ciblée d'un
+  équipement (bouton ⟲) tourne désormais dans sa propre tâche FreeRTOS au
+  lieu de bloquer la requête HTTP. L'avancement (étape + pourcentage) est
+  interrogeable via polling et s'affiche directement **sous la ligne de
+  l'équipement concerné** dans le tableau, pour rester visible même si la
+  ligne est en bas de liste.
+- **Sondage SNMP `sysDescr`** (`src/modules/snmp_scanner.cpp`, nouveau) :
+  implémentation maison (encodage/décodage ASN.1 BER) d'une requête SNMPv1
+  `GetRequest` en lecture publique — beaucoup de routeurs, switches,
+  imprimantes et NAS y exposent fabricant et modèle en texte clair.
+  Utilisé uniquement lors de la passe précise.
+- **Découverte WS-Discovery / ONVIF** (`src/modules/ws_discovery_scanner.cpp`,
+  nouveau) : sonde les caméras IP et imprimantes compatibles ONVIF
+  (protocole indépendant de SSDP), utilisée lors de la passe précise pour
+  catégoriser automatiquement (Caméra, Imprimante, NAS).
+- **API HTTP propriétaires des appareils multimédia courants**
+  (`src/modules/media_api_scanner.cpp`, nouveau) : sondage direct, lors de
+  la passe précise, des ports fixes non couverts par le scan de ports
+  standard — Google Cast/Chromecast (`:8008/setup/eureka_info`), Sonos
+  (`:1400/xml/device_description.xml`), Roku (`:8060/query/device-info`),
+  Samsung Smart TV (`:8001/api/v2/`) — pour récupérer marque/modèle/nom
+  exacts sans configuration préalable.
+- **Service DNS-SD Matter** (`_matterc._udp`, en plus de `_matter._tcp` déjà
+  présent) : détection des appareils Matter commissionables (pas encore
+  appairés), en préparation de la généralisation de ce standard IoT.
+- **Catégorisation Amazon Fire TV / Fire Stick** (`SsdpScanner::_categorize()`)
+  : les équipements répondant au protocole DIAL (SSDP, `manufacturer=Amazon`
+  ou `deviceType` contenant `dial`) sont désormais classés en catégorie
+  *Streaming* (`os="Fire OS"`) au lieu de retomber dans le générique *IoT*.
+
+### Modifié
+
+- Contraste de l'interface Équipements/Historique éclairci sur le thème
+  sombre : textes secondaires (`#94a3b8` → `#c3d0e0`, `#64748b` → `#9aacc2`)
+  et quelques badges peu lisibles (`.port-other`, `.status-offline`) rendus
+  plus visibles sur le fond bleu nuit.
+
 ## [0.5.0] - 2026-06-17
 
 ### Ajoute

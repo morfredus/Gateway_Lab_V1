@@ -121,6 +121,12 @@ et comment on peut les trouver.
 Appareils compatibles : box Internet (Freebox, Livebox…), NAS Synology, enceintes Sonos,
 téléviseurs Samsung, Philips Hue Bridge, Chromecast, etc.
 
+DIAL (DIscovery And Launch, `urn:dial-multiscreen-org:device:dial:1`) est un
+profil SSDP utilisé pour le "second écran" (Netflix, YouTube…) : Amazon Fire
+TV / Fire Stick l'annoncent et y exposent `manufacturer=Amazon` dans le
+descripteur XML, ce qui permet de les classer en catégorie *Streaming* sans
+logique dédiée à Amazon (voir `SsdpScanner::_categorize()`).
+
 ### Comment ça marche — Annonce spontanée (NOTIFY)
 
 Quand un équipement UPnP démarre ou se connecte au réseau :
@@ -350,14 +356,157 @@ Accessible sans aucune authentification.
 
 ---
 
+## NetBIOS Node Status
+
+### C'est quoi ?
+
+NetBIOS est un protocole historique de Windows pour le nommage et le partage
+réseau (toujours actif aujourd'hui via Samba sur Linux/NAS). Une requête
+**Node Status** (UDP 137) permet d'obtenir le nom NetBIOS d'un poste sans
+authentification.
+
+### Comment Gateway Lab l'utilise ?
+
+```
+Gateway Lab → IP cible:137 :
+  NBSTAT (requête Node Status)
+PC Windows → Gateway Lab :
+  Liste des noms NetBIOS enregistrés (nom de machine, groupe de travail…)
+```
+
+Utilisé en repli quand mDNS/PTR n'ont donné aucun nom — efficace sur les PC
+Windows et les NAS Samba qui n'annoncent pas toujours en mDNS.
+
+---
+
+## Scan de ports TCP + sondage d'API IoT
+
+### C'est quoi ?
+
+Un scan de ports vérifie quels services réseau sont actifs sur un équipement
+en tentant une connexion TCP sur une liste de ports courants (HTTP, SSH,
+SMB, RTSP, MQTT, RDP, IPP…). Un port qui accepte la connexion est "ouvert".
+
+### Comment Gateway Lab l'utilise ?
+
+`PortScanner` sonde 14 ports via des sockets non bloquants + `select()` (par
+lots de 8, contrainte lwIP). Sur le premier port HTTP ouvert détecté, le
+scanner lit l'en-tête `Server:` (banner grabbing) puis tente des requêtes
+ciblées vers des API IoT non authentifiées connues :
+
+| Équipement | Requête | Champs récupérés |
+|---|---|---|
+| Shelly | `GET /shelly` | type, firmware, MAC |
+| Tasmota | `GET /cm?cmnd=Status%200` | module, version |
+| FritzBox | `GET /jason_boxinfo.xml` | nom, version |
+
+---
+
+## SNMP — Simple Network Management Protocol
+
+### C'est quoi ?
+
+SNMP (UDP 161) est le protocole standard d'administration des équipements
+réseau professionnels (switches, routeurs, imprimantes, NAS). En lecture
+publique (community `public`), l'OID `1.3.6.1.2.1.1.1.0` (`sysDescr`) renvoie
+une description texte libre de l'équipement, généralement explicite
+(fabricant, modèle, version firmware).
+
+### Comment Gateway Lab l'utilise ?
+
+Implémenté entièrement en interne (encodage/décodage ASN.1 BER manuel d'une
+requête `GetRequest` SNMPv1), uniquement lors de la **passe précise** sur un
+équipement (pas pendant le scan complet, pour ne pas l'alourdir) :
+
+```
+Gateway Lab → IP cible:161 :
+  GetRequest community="public" OID=1.3.6.1.2.1.1.1.0
+Equipement  → Gateway Lab :
+  "HP LaserJet Pro M404dn ; FW 2406..." (texte libre)
+```
+
+Le texte est analysé par des heuristiques de mots-clés pour en déduire le
+fabricant (HP, Cisco, Synology, Ubiquiti…) quand l'OUI MAC est ambigu.
+
+---
+
+## WS-Discovery (ONVIF)
+
+### C'est quoi ?
+
+WS-Discovery est le protocole de découverte utilisé par la quasi-totalité
+des caméras IP et imprimantes compatibles **ONVIF**, indépendamment de SSDP.
+Un appareil répond à une requête **Probe** SOAP par un **ProbeMatch**
+contenant ses types (rôle) et ses adresses de service.
+
+### Comment Gateway Lab l'utilise ?
+
+```
+Gateway Lab → Tout le réseau (239.255.255.250:3702) :
+  SOAP <d:Probe/>
+Caméra ONVIF → Gateway Lab :
+  ProbeMatch — Types: "dn:NetworkVideoTransmitter", XAddrs: "http://192.168.1.x:..."
+```
+
+Le type annoncé permet de catégoriser automatiquement l'équipement (Caméra,
+Imprimante, NAS). Utilisé lors de la passe précise, en complément de SSDP/DNS-SD.
+
+---
+
+## API HTTP propriétaires des appareils multimédia courants
+
+Certains appareils multimédia grand public exposent une API HTTP locale sur
+un port fixe non couvert par le scan de ports standard. Lors de la passe
+précise, Gateway Lab les interroge directement :
+
+| Appareil | Requête | Champs récupérés |
+|---|---|---|
+| Google Cast / Chromecast | `GET :8008/setup/eureka_info` | nom, modèle |
+| Sonos | `GET :1400/xml/device_description.xml` | modèle, nom de pièce |
+| Roku | `GET :8060/query/device-info` | modèle, nom convivial |
+| Samsung Smart TV (Tizen) | `GET :8001/api/v2/` | nom, modèle |
+
+Ces API ne nécessitent aucune authentification et renvoient le modèle exact,
+bien plus fiable que l'OUI MAC seul pour ces marques (Apple, Samsung…
+justement signalées comme ambiguës en détection OUI).
+
+---
+
+## Matter (DNS-SD)
+
+### C'est quoi ?
+
+Matter est le standard d'interopérabilité IoT (Google, Apple, Amazon,
+Samsung…) qui s'annonce, comme les autres services Apple/Google, via DNS-SD.
+Un appareil Matter commissionable (pas encore appairé) s'annonce via le
+service `_matterc._udp` ; un appareil déjà appairé via `_matter._tcp`.
+
+### Comment Gateway Lab l'utilise ?
+
+`DnsSdScanner` interroge désormais ces deux types de service au même titre
+que `_googlecast._tcp` ou `_homekit._tcp` — aucune requête supplémentaire,
+juste deux entrées de plus dans la table des services interrogés.
+
+---
+
 ## Récapitulatif des protocoles
 
 | Protocole | Port | Transport | Usage dans Gateway Lab |
 |---|---|---|---|
 | ARP | — | Ethernet L2 | Découverte des équipements (sweep) |
+| ICMP | — | IP | Repli si l'ARP ne répond pas (TTL → OS) |
 | mDNS | 5353 | UDP multicast 224.0.0.251 | Résolution de noms `.local` |
+| DNS-SD | 5353 | UDP multicast 224.0.0.251 | Services (`_matter._tcp`, `_matterc._udp`, `_googlecast._tcp`…) |
 | DNS PTR | 53 | UDP → serveur DNS box | Résolution de noms DHCP |
 | SSDP | 1900 | UDP multicast 239.255.255.250 | Découverte UPnP |
+| WS-Discovery | 3702 | UDP multicast 239.255.255.250 | Découverte ONVIF (caméras, imprimantes) — passe précise |
+| NetBIOS | 137 | UDP | Node Status — nom de machine Windows/Samba |
+| SNMP | 161 | UDP | `sysDescr` (fabricant/modèle) — passe précise |
+| TCP ports (scan) | 21/22/23/80/443/445/554/1883/3389/5000/8080/8123/8443/9100 | TCP | Bannières + API IoT (Shelly, Tasmota, FritzBox) |
+| API Cast | 8008 | TCP | `/setup/eureka_info` — passe précise |
+| API Sonos | 1400 | TCP | `/xml/device_description.xml` — passe précise |
+| API Roku | 8060 | TCP | `/query/device-info` — passe précise |
+| API Samsung TV | 8001 | TCP | `/api/v2/` — passe précise |
 | HTTP | 80/443/49000/… | TCP | Descripteurs XML + APIs spécifiques |
 | ArduinoOTA | 3232 | UDP | Mise à jour firmware réseau |
 | HTTP (OTA web) | 80 | TCP | Mise à jour firmware navigateur |

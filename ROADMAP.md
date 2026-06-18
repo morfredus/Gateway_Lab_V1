@@ -28,7 +28,7 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ### v0.2.x — Découverte avancée
 * Fingerprinting TCP/IP stack avancé (TTL + TCP options + window size)
-* SNMP v1/v2c (community "public") pour équipements réseau (port UDP 161)
+* ~~SNMP v1/v2c (community "public") pour équipements réseau (port UDP 161)~~ (terminé en v0.6.0, sondage `sysDescr` lors de la passe précise)
 
 ### v0.3.x — Configuration WiFi sans recompilation (terminé en v0.3.0)
 
@@ -57,7 +57,17 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * Événements réseau temps réel
 * API d'intégration externe
 
-### v0.6.x — Matériel
+### v0.6.x — Détection avancée (terminé en v0.6.0)
+
+* ~~Sous-catégorie (`type`) au sein d'une catégorie~~
+* ~~Score de confiance unique et plus prudent (minimum des signaux), détail par champ~~
+* ~~Passe précise asynchrone avec suivi de progression affiché sous la ligne de l'équipement~~
+* ~~Sondage SNMP `sysDescr`~~
+* ~~Découverte WS-Discovery / ONVIF (caméras, imprimantes, NAS)~~
+* ~~API HTTP propriétaires des appareils multimédia courants (Cast, Sonos, Roku, Samsung)~~
+* ~~Service DNS-SD Matter (`_matterc._udp`)~~
+
+### v0.7.x — Matériel
 
 * Écran OLED
 * Analyse Bluetooth Low Energy
@@ -98,3 +108,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.3.0  | Portail de configuration WiFi (point d'accès + page captive), persistance NVS multi-réseaux, page Paramètres → Réseau WiFi (`/wifi`), API `/api/wifi` |
 | v0.4.0  | Détection des adresses MAC privées/aléatoires (catégorie `Mobile/Aléatoire`) |
 | v0.5.0  | Réinitialisation de l'inventaire avec options de conservation (alias, fabricant), réinterrogation ciblée d'un équipement sans scan complet, filtrage et effacement (avec sauvegarde) de l'historique |
+| v0.6.0  | Sous-catégorie (`type`), score de confiance unique et plus prudent, passe précise asynchrone avec barre de progression sous la ligne de l'équipement, sondage SNMP, découverte WS-Discovery/ONVIF, API appareils multimédia (Cast/Sonos/Roku/Samsung), service DNS-SD Matter, amélioration du contraste des textes/badges en thème sombre |
