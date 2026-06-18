@@ -6,19 +6,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-en%20développement-yellow)
 
-Gateway Lab V1
-
-
-
-
-
-
-
-
-
-
-
-Autonomous network inventory and discovery appliance powered by ESP32-S3.
+## Autonomous network inventory and discovery appliance powered by ESP32-S3.
 
 Gateway Lab V1 est une passerelle réseau autonome qui découvre, identifie et conserve l'historique des équipements présents sur un réseau local domestique.
 
@@ -36,44 +24,46 @@ Interface web responsive
 Mise à jour OTA
 Fonctionnement autonome sans cloud
 Aperçu de l'interface
-Accueil
+### Accueil
 
 Informations réseau, état de connexion, diagnostics système et accès rapide aux principales fonctions.
 
+![Accueil](docs/pictures/Gateway_Lab_V1_Accueil.png)
 
 
-
-Équipements
+### Équipements
 
 Inventaire des appareils détectés avec filtres, favoris, notes, niveau de confiance et outils d'administration.
 
+![Équipements](docs/pictures/Gateway_Lab_V1_Equipements.png)
 
 
-
-Historique
+### Historique
 
 Journal chronologique des nouveaux équipements, reconnexions, déconnexions et changements détectés.
 
+![Historique](docs/pictures/Gateway_Lab_V1_Historique.png)
 
 
-
-Topologie
+### Topologie
 
 Vue simplifiée de la passerelle, des points d'accès détectés et des équipements rattachés.
 
+![Topologie](docs/pictures/Gateway_Lab_V1_Topologie.png)
 
 
-
-OTA
+### OTA
 
 Mise à jour du firmware directement depuis l'interface web.
 
+![OTA](docs/pictures/Gateway_Lab_V1_OTA.png)
 
 
-
-Paramètres
+### Paramètres
 
 Configuration WiFi, gestion des réseaux enregistrés et réglage de la NeoPixel d'état.
+
+![Paramètres](docs/pictures/Gateway_Lab_V1_Parametres.png)
 
 ---
 
