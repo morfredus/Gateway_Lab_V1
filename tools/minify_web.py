@@ -29,6 +29,7 @@ WEB_SRC_DIR  = PROJECT_ROOT / "web_src"
 DATA_DIR     = PROJECT_ROOT / "data"
 INCLUDE_DIR  = PROJECT_ROOT / "include"
 STYLES_CSS   = WEB_SRC_DIR / "styles.css"
+MENU_HTML    = WEB_SRC_DIR / "menu.html"
 
 # ---------------------------------------------------------------------------
 # Pages HTML à traiter : (html_src, js_src, header_dest, const_name, data_copy|None)
@@ -40,13 +41,6 @@ PAGES = [
         INCLUDE_DIR / "web_interface.h",
         "INDEX_HTML",
         DATA_DIR   / "index.html",
-    ),
-    (
-        WEB_SRC_DIR / "ota.html",
-        WEB_SRC_DIR / "ota.js",
-        INCLUDE_DIR / "web_interface_ota.h",
-        "OTA_PAGE",
-        None,
     ),
     (
         WEB_SRC_DIR / "scan.html",
@@ -117,7 +111,19 @@ def _load_shared_css() -> str:
     return ''
 
 
+def _load_shared_menu() -> str:
+    if MENU_HTML.exists():
+        return MENU_HTML.read_text(encoding='utf-8')
+    return ''
+
+
 def minify_html(html: str, js_path: Path | None) -> str:
+    # Inline le menu de navigation partagé (web_src/menu.html) en lieu et
+    # place du marqueur — avant la suppression des commentaires HTML, car
+    # le marqueur utilise lui-même la syntaxe de commentaire
+    shared_menu = _load_shared_menu()
+    if shared_menu:
+        html = re.sub(r'<!--\s*include:menu\.html\s*-->', shared_menu, html)
     html = re.sub(r'<!--(?!\[if).*?-->', '', html, flags=re.DOTALL)
     # Inline styles.css in place of <link rel="stylesheet" href="styles.css">
     shared_css = _load_shared_css()

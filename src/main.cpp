@@ -21,6 +21,7 @@
 #include "modules/time_sync.h"         // Synchronisation NTP (firstSeen/lastSeen)
 #include "modules/status_led.h"        // Pilotage de la NeoPixel d'etat
 #include "modules/boot_button.h"       // Gestes du bouton BOOT (court/maintien 3s)
+#include "modules/system_health.h"     // Garde-fou heap — mode degrade (pas de redemarrage auto)
 
 // Suit les transitions du scan en cours pour piloter la LED (Scanning -> Ready)
 static bool _ledScanInProgress = false;
@@ -28,6 +29,8 @@ static bool _ledScanInProgress = false;
 void setup() {
     Serial.begin(115200);
     Log::i("Main", "=== %s v%s ===", PROJECT_NAME, PROJECT_VERSION);
+
+    systemHealth.begin();
 
     // Montage LittleFS — doit être fait avant la connexion WiFi
     deviceStore.begin();
@@ -139,7 +142,10 @@ void setup() {
             .getDiagnosticsJson = [] { return netScanner.diagnosticsToJson(); },
             .acknowledgeNewDevices = [] {
                 netScanner.acknowledgeNewDevices();
-                if (statusLed.state() == LedState::NewDevice) statusLed.setState(LedState::Ready);
+                // Ne pas écraser un statut d'incident (ex: mode dégradé) en cours.
+                if (statusLed.state() == LedState::NewDevice && !systemHealth.isDegraded()) {
+                    statusLed.setState(LedState::Ready);
+                }
             },
         });
         webSrv.begin(WEB_SERVER_PORT);
@@ -148,6 +154,10 @@ void setup() {
 }
 
 void loop() {
+    // Garde-fou mémoire — bascule en mode dégradé si le heap devient critique
+    // (voir modules/system_health.h) ; aucun redémarrage automatique.
+    systemHealth.loop();
+
     // Vérification et reconnexion WiFi automatique (debounce 30 s)
     wifiMgr.loop();
 

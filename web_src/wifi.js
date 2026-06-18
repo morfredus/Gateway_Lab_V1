@@ -1,6 +1,9 @@
 // Récupère la version au chargement (commun à toutes les pages)
 fetch('/api/status').then(function(r) { return r.json(); }).then(function(d) {
-  if (d.version) document.getElementById('site-ver').textContent = 'v' + d.version;
+  if (d.version) {
+    document.getElementById('site-ver').textContent = 'v' + d.version;
+    document.getElementById('fw-version').textContent = 'v' + d.version;
+  }
 }).catch(function() {});
 
 function refreshWifiStatus() {
@@ -105,6 +108,120 @@ ledBrightnessInput.addEventListener('change', function() {
   fetch('/api/led/brightness', { method: 'POST', body: fd }).catch(function() {});
 });
 
+function fmtBytes(b) {
+  if (b === undefined || b === null) return '—';
+  if (b < 1024) return b + ' o';
+  return (b / 1024).toFixed(0) + ' Ko';
+}
+
+function refreshHealth() {
+  fetch('/api/diagnostics', { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) return;
+    var badge = document.getElementById('health-badge');
+    var msg   = document.getElementById('health-msg');
+    if (d.degraded) {
+      badge.textContent = 'Mode dégradé';
+      badge.className = 'badge badge-warn';
+      msg.textContent = 'Mémoire critique — nouveaux scans, rescans, notes et modifications de '
+        + 'configuration désactivés. L\'inventaire déjà acquis reste consultable. '
+        + (d.degradedReason || '') + '.';
+    } else {
+      badge.textContent = 'Normal';
+      badge.className = 'badge badge-ok';
+      msg.textContent = 'Mémoire disponible suffisante.';
+    }
+    document.getElementById('sys-heap').textContent    = fmtBytes(d.freeHeap);
+    document.getElementById('sys-psram').textContent   = fmtBytes(d.freePsram);
+    document.getElementById('sys-devices').textContent = (d.deviceCount !== undefined ? d.deviceCount : '—')
+      + ' / ' + (d.maxDevices !== undefined ? d.maxDevices : '—');
+    document.getElementById('sys-history').textContent = (d.historyCount !== undefined ? d.historyCount : '—')
+      + ' événement' + (d.historyCount === 1 ? '' : 's');
+  }).catch(function() {});
+}
+
+document.getElementById('restart-btn').addEventListener('click', function() {
+  if (!confirm('Redémarrer Gateway Lab V1 maintenant ?')) return;
+  fetch('/api/system/restart', { method: 'POST' }).catch(function() {});
+  document.getElementById('health-msg').textContent = 'Redémarrage en cours…';
+});
+
+// ── Mise à jour du firmware (ex page OTA) ──────────────────────────────
+document.getElementById('ota-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var fileInput = document.getElementById('ota-file');
+  var file      = fileInput.files[0];
+  var msg       = document.getElementById('ota-msg');
+  var bar       = document.getElementById('ota-bar');
+  var submitBtn = e.target.querySelector('button[type="submit"]');
+  if (!file) {
+    msg.textContent = 'Aucun fichier sélectionné.';
+    return;
+  }
+
+  document.getElementById('ota-progress').style.display = 'block';
+  fileInput.disabled = true;
+  submitBtn.disabled = true;
+
+  var fd = new FormData();
+  fd.append('firmware', file);
+  var xhr = new XMLHttpRequest();
+  xhr.upload.onprogress = function(e) {
+    var pct = Math.round(e.loaded / e.total * 100);
+    bar.style.width = pct + '%';
+    if (pct < 100) {
+      msg.style.color = '';
+      msg.textContent = 'Transfert du firmware : ' + pct + '%';
+    } else {
+      msg.textContent = 'Vérification du firmware…';
+    }
+  };
+  xhr.onload = function() {
+    bar.style.width = '100%';
+    if (xhr.status === 200 && xhr.responseText.indexOf('FAIL') === -1) {
+      msg.style.color = '#10b981';
+      msg.textContent = 'Firmware vérifié — redémarrage en cours…';
+      waitForOtaReboot();
+    } else {
+      msg.style.color = '#ef4444';
+      msg.textContent = 'Erreur : ' + xhr.responseText;
+      fileInput.disabled = false;
+      submitBtn.disabled = false;
+    }
+  };
+  xhr.onerror = function() {
+    msg.style.color = '#ef4444';
+    msg.textContent = 'Erreur réseau pendant le transfert.';
+    fileInput.disabled = false;
+    submitBtn.disabled = false;
+  };
+  xhr.open('POST', '/update');
+  xhr.send(fd);
+});
+
+function waitForOtaReboot() {
+  var msg  = document.getElementById('ota-msg');
+  var dot  = 0;
+  var dots = ['', '.', '..', '...'];
+  setTimeout(function poll() {
+    dot = (dot + 1) % 4;
+    msg.style.color = '';
+    msg.textContent = 'Redémarrage en cours' + dots[dot];
+    fetch('/api/status', { cache: 'no-store' })
+      .then(function(r) {
+        if (r.ok) {
+          msg.style.color = '#10b981';
+          msg.textContent = 'Redémarrage terminé — retour à l\'accueil…';
+          setTimeout(function() { window.location.href = '/'; }, 800);
+        } else {
+          setTimeout(poll, 1000);
+        }
+      })
+      .catch(function() { setTimeout(poll, 1000); });
+  }, 3000);
+}
+
 refreshWifiStatus();
 refreshLedBrightness();
+refreshHealth();
 setInterval(refreshWifiStatus, 10000);
+setInterval(refreshHealth, 10000);

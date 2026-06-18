@@ -3,7 +3,7 @@
 HTML Validator — Gateway Lab V1
 
 Valide la structure HTML des pages sources dans web_src/ :
-  - index.html, scan.html, ota.html (pages réelles)
+  - index.html, scan.html, wifi.html (pages réelles)
   - template.html (gabarit de référence)
 
 Vérifie :
@@ -33,11 +33,13 @@ WEB_SRC_DIR  = PROJECT_ROOT / "web_src"
 PAGES = [
     (WEB_SRC_DIR / "index.html",   True),
     (WEB_SRC_DIR / "scan.html",    True),
-    (WEB_SRC_DIR / "ota.html",     True),
     (WEB_SRC_DIR / "history.html", True),
     (WEB_SRC_DIR / "wifi.html",    True),
+    (WEB_SRC_DIR / "topology.html", True),
     (WEB_SRC_DIR / "template.html", False),
 ]
+
+MENU_HTML = WEB_SRC_DIR / "menu.html"
 
 # ---------------------------------------------------------------------------
 # Validateur HTML
@@ -151,6 +153,11 @@ def validate_page(path: Path, is_real_page: bool) -> bool:
         return False
 
     html = path.read_text(encoding='utf-8')
+    if MENU_HTML.exists():
+        # Le menu de navigation partagé n'est inliné qu'au moment de la
+        # minification (tools/minify_web.py) — on le simule ici pour valider
+        # la structure réellement servie par l'ESP32.
+        html = re.sub(r'<!--\s*include:menu\.html\s*-->', MENU_HTML.read_text(encoding='utf-8'), html)
     page_ok = True
 
     # Structure HTML

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gateway Lab V1 — Réseau WiFi</title>
+  <title>Gateway Lab V1 — Système</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="page-scan">
@@ -14,20 +14,15 @@
       Gateway Lab&nbsp;V1
       <span class="site-ver" id="site-ver">v—</span>
     </div>
-    <span class="site-tag">Paramètres — Réseau WiFi</span>
+    <span class="site-tag">Système</span>
   </header>
 
   <!-- ── Navigation ────────────────────────────────────────── -->
-  <nav>
-    <a href="/">Accueil</a>
-    <a href="/scan">Équipements</a>
-    <a href="/history">Historique</a>
-    <a href="/topology">Topologie</a>
-    <a href="/update">OTA</a>
-    <a href="/wifi" class="active">Paramètres</a>
-  </nav>
+  <!-- include:menu.html -->
 
   <!-- ── Contenu ───────────────────────────────────────────── -->
+  <p class="section-title">Réseau</p>
+
   <div class="card">
     <div class="card-header">
       <p class="card-title">État de la connexion</p>
@@ -69,12 +64,66 @@
     <p id="wifi-msg"></p>
   </div>
 
+  <p class="section-title">Appareil</p>
+
   <div class="card">
     <div class="card-header">
-      <p class="card-title">Luminosité de la LED d'état</p>
+      <p class="card-title">LED d'état</p>
     </div>
     <label for="led-brightness">Luminosité (<span id="led-brightness-value">—</span>%)</label>
     <input id="led-brightness" type="range" min="0" max="100" step="5" value="15">
+  </div>
+
+  <!-- ── Mise à jour du firmware (ex page OTA) ────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Mise à jour du firmware</p>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Firmware actuel</span>
+      <span class="info-value" id="fw-version">—</span>
+    </div>
+    <form id="ota-form">
+      <label>Sélectionnez le fichier firmware (.bin)</label>
+      <input type="file" id="ota-file" accept=".bin">
+      <div class="progress" id="ota-progress">
+        <div class="bar" id="ota-bar"></div>
+      </div>
+      <p id="ota-msg"></p>
+      <button type="submit" class="btn">Mettre à jour</button>
+    </form>
+  </div>
+
+  <!-- ── État système / mode dégradé ──────────────────────── -->
+  <div class="card" id="health-card">
+    <div class="card-header">
+      <p class="card-title">État système</p>
+      <span class="badge badge-ok" id="health-badge">Normal</span>
+    </div>
+    <p class="card-meta" id="health-msg">Mémoire disponible suffisante.</p>
+    <div class="info-row">
+      <span class="info-label">Heap libre</span>
+      <span class="info-value" id="sys-heap">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">PSRAM libre</span>
+      <span class="info-value" id="sys-psram">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Équipements</span>
+      <span class="info-value" id="sys-devices">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Historique</span>
+      <span class="info-value" id="sys-history">—</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Action système</p>
+    </div>
+    <button class="btn btn-danger" id="restart-btn" type="button">Redémarrer l'appareil</button>
   </div>
 
   <!-- ── Footer ────────────────────────────────────────────── -->

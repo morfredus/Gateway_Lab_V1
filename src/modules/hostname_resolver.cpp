@@ -20,9 +20,6 @@
 
 static const char* TAG = "Resolver";
 
-// Groupe multicast mDNS — RFC 6762
-static const IPAddress MDNS_GROUP(224, 0, 0, 251);
-static constexpr uint16_t MDNS_PORT      = 5353;
 static constexpr uint16_t DNS_PORT       = 53;
 static constexpr uint32_t PTR_TIMEOUT_MS = 500;   // Fenêtre d'attente batch PTR
 
@@ -33,36 +30,22 @@ static uint16_t _dnsIdCounter = 0x3000;
 HostnameResolver hostnameResolver;
 
 // ---------------------------------------------------------------------------
-// mDNS — Écoute multicast passive
+// mDNS passif — retiré en v0.8.2
+//
+// 224.0.0.251:5353 reste exclusivement détenu par le composant mDNS d'ESP-IDF
+// (responder démarré via MDNS.begin(), voir wifi_manager.cpp) dès qu'il est
+// actif — ce qui est permanent en pratique. Aucun socket applicatif tiers ne
+// peut le rejoindre, et il n'existe pas d'API ESP-IDF publique pour écouter
+// passivement les annonces reçues par ce service partagé. begin()/update()/
+// end() sont donc des no-op conservés pour compatibilité — voir
+// docs/WARNINGS.md.
 // ---------------------------------------------------------------------------
 
-void HostnameResolver::begin() {
-    if (_listening) return;
-    // SO_REUSEADDR activé par beginMulticast — coexistence avec le stack ESPmDNS
-    if (_udp.beginMulticast(MDNS_GROUP, MDNS_PORT)) {
-        _listening = true;
-        Log::i(TAG, "Écoute mDNS multicast démarrée (224.0.0.251:5353)");
-    } else {
-        Log::w(TAG, "Impossible de rejoindre 224.0.0.251:5353 — PTR DNS uniquement");
-    }
-}
+void HostnameResolver::begin() {}
 
-void HostnameResolver::update() {
-    if (!_listening) return;
-    int psize;
-    while ((psize = _udp.parsePacket()) > 0) {
-        uint8_t buf[512];
-        int len = _udp.read(buf, sizeof(buf));
-        if (len > 0) _parseDnsPacket(buf, len);
-    }
-}
+void HostnameResolver::update() {}
 
-void HostnameResolver::end() {
-    if (_listening) {
-        _udp.stop();
-        _listening = false;
-    }
-}
+void HostnameResolver::end() {}
 
 void HostnameResolver::clearCaches() {
     _mdnsCache.clear();
@@ -113,71 +96,6 @@ String HostnameResolver::_decodeDnsName(const uint8_t* buf, int len,
 
     if (!jumped) out_next = offset + 1;
     return name;
-}
-
-// ---------------------------------------------------------------------------
-// Parse d'un paquet DNS/mDNS — extrait les enregistrements de type A (IPv4)
-// présents dans toutes les sections (Answer, Authority, Additional).
-//
-// Un enregistrement A associe un nom (ex: raspberrypi.local) à une adresse IPv4.
-// On supprime le suffixe ".local" pour stocker "raspberrypi" dans le cache.
-// ---------------------------------------------------------------------------
-void HostnameResolver::_parseDnsPacket(const uint8_t* buf, int len) {
-    if (len < 12) return;
-
-    // Flags : QR = bit 15 ; 1 = réponse, 0 = requête
-    uint16_t flags = ((uint16_t)buf[2] << 8) | buf[3];
-    if (!(flags & 0x8000)) return;   // Ignorer les requêtes
-
-    uint16_t qdCount = ((uint16_t)buf[4] << 8) | buf[5];
-    uint16_t anCount = ((uint16_t)buf[6] << 8) | buf[7];
-    uint16_t nsCount = ((uint16_t)buf[8] << 8) | buf[9];
-    uint16_t arCount = ((uint16_t)buf[10] << 8) | buf[11];
-
-    int pos = 12;
-
-    // Sauter les questions (QNAME + QTYPE(2) + QCLASS(2))
-    for (uint16_t q = 0; q < qdCount && pos < len; q++) {
-        int next;
-        _decodeDnsName(buf, len, pos, next);
-        if (next < 0) return;
-        pos = next + 4;
-    }
-
-    // Parcourir tous les Resource Records (Answer + Authority + Additional)
-    int totalRR = anCount + nsCount + arCount;
-    for (int r = 0; r < totalRR && pos < len; r++) {
-        int nameEnd;
-        String name = _decodeDnsName(buf, len, pos, nameEnd);
-        if (nameEnd < 0 || nameEnd + 10 > len) return;
-
-        uint16_t rrType = ((uint16_t)buf[nameEnd]     << 8) | buf[nameEnd + 1];
-        uint16_t rdlen  = ((uint16_t)buf[nameEnd + 8] << 8) | buf[nameEnd + 9];
-        int      rdPos  = nameEnd + 10;
-
-        if (rdPos + (int)rdlen > len) return;
-
-        if (rrType == 1 && rdlen == 4) {
-            // Type A : RData = 4 octets IPv4
-            char ipStr[16];
-            snprintf(ipStr, sizeof(ipStr), "%u.%u.%u.%u",
-                     buf[rdPos], buf[rdPos+1], buf[rdPos+2], buf[rdPos+3]);
-
-            // Supprimer le suffixe ".local" pour stocker "raspberrypi"
-            String hostname = name;
-            if (hostname.endsWith(".local")) {
-                hostname = hostname.substring(0, hostname.length() - 6);
-            }
-            hostname.toLowerCase();
-
-            if (!hostname.isEmpty() && _mdnsCache.find(ipStr) == _mdnsCache.end()) {
-                _mdnsCache[ipStr] = hostname;
-                Log::d(TAG, "mDNS A: %s → %s", ipStr, hostname.c_str());
-            }
-        }
-
-        pos = rdPos + rdlen;
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +172,7 @@ String HostnameResolver::_parsePtrResponse(const uint8_t* buf, int len,
         pos = next + 4;
     }
 
-    // Lire les réponses — on cherche le premier PTR (type 12)
+    // Lire les réponses — chercher le premier PTR (type 12)
     for (uint16_t r = 0; r < anCnt && pos < len; r++) {
         int nameEnd;
         _decodeDnsName(buf, len, pos, nameEnd);

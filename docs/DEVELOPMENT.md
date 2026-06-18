@@ -100,7 +100,9 @@ réseau n'est encore enregistré dans la mémoire de l'ESP32 (NVS).
 
 Les pages HTML sont embarquées directement dans le firmware.
 Leurs sources se trouvent dans `web_src/` : un fichier `.html` (markup), un
-fichier `.js` (script de la page) et un `styles.css` commun aux 6 pages.
+fichier `.js` (script de la page) et un `styles.css` commun à toutes les
+pages. Un partiel partagé `web_src/menu.html` (la navigation commune) est
+inliné dans chaque page via le marqueur `<!-- include:menu.html -->`.
 Avant de compiler, il faut les transformer en headers C++ (`include/*.h`) :
 
 ```bash
@@ -115,7 +117,6 @@ sortie comme :
 [styles.css]  → injecté inline dans chaque page
 [index.html + index.js]  → include/web_interface.h
 [scan.html + scan.js]    → include/web_interface_scan.h
-[ota.html + ota.js]      → include/web_interface_ota.h
 [history.html + history.js] → include/web_interface_history.h
 [wifi.html + wifi.js]    → include/web_interface_wifi.h
 [topology.html + topology.js] → include/web_interface_topology.h
@@ -291,14 +292,6 @@ de l'équipement au moment de l'événement historique).
 Le bouton **Vider l'historique** télécharge automatiquement une sauvegarde
 JSON du journal avant de le vider côté serveur.
 
-### Page OTA (`/update`)
-
-Permet de mettre à jour le firmware sans rebrancher la carte :
-
-1. Compiler le firmware : `pio run`
-2. Trouver le fichier `.bin` dans `.pio/build/esp32s3_n16r8/firmware.bin`
-3. Le sélectionner sur la page OTA et cliquer **Mettre à jour**
-
 ### Page Topologie (`/topology`)
 
 Vue simplifiée (texte) en préparation de la future cartographie réseau
@@ -307,14 +300,19 @@ détectés du reste des équipements connus, à partir des données déjà
 collectées par le scan. La détection des répéteurs WiFi et une
 visualisation graphique des relations entre équipements viendront ensuite.
 
-### Page Paramètres (`/wifi`)
+### Page Système (`/wifi`)
 
-Permet de gérer les réseaux WiFi enregistrés sans recompiler ni reflasher :
+Permet de gérer les réseaux WiFi enregistrés sans recompiler ni reflasher,
+et héberge également la mise à jour du firmware (anciennement une page OTA
+dédiée) :
 
 - Affiche l'état de la connexion (SSID, adresse IP, signal)
 - Liste les réseaux enregistrés en mémoire (NVS)
 - Ajoute un nouveau réseau (SSID + mot de passe)
 - Supprime un réseau enregistré
+- Mise à jour du firmware : sélectionner le fichier `.bin`
+  (`.pio/build/esp32s3_n16r8/firmware.bin` après `pio run`) et cliquer
+  **Mettre à jour** — envoyé via `POST /update` (inchangé)
 
 Voir `docs/WIFI_SETUP.md` pour le détail complet de la configuration WiFi.
 

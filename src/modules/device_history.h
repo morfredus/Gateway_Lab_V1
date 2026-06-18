@@ -19,6 +19,7 @@
 #pragma once
 #include <Arduino.h>
 #include <vector>
+#include "../../include/app_config.h"   // MAX_HISTORY_EVENTS
 
 struct HistoryEntry {
     uint32_t epoch;       // Horodatage (0 si l'heure n'etait pas synchronisee)
@@ -48,7 +49,7 @@ public:
 
 private:
     static constexpr const char* PATH        = "/history.json";
-    static constexpr int         MAX_ENTRIES = 300;
+    static constexpr int         MAX_ENTRIES = MAX_HISTORY_EVENTS;
     bool _mounted = false;
 
     std::vector<HistoryEntry> _readAll() const;

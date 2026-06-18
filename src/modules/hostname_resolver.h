@@ -1,23 +1,26 @@
 /**
  * HostnameResolver — Résolution des noms d'hôtes des équipements réseau
  *
- * Deux mécanismes complémentaires, appliqués par ordre de priorité :
+ * Depuis v0.8.2 : un seul mécanisme actif.
  *
- *   1. mDNS passif (priorité haute)
- *      Écoute les annonces multicast sur 224.0.0.251:5353 pendant le scan ARP.
- *      Les équipements actifs émettent spontanément leurs enregistrements A
- *      (.local). On construit une table IP → hostname.local sans interrogation
- *      active. Dépend de SO_REUSEADDR pour coexister avec ESPmDNS sur le port.
+ *   PTR DNS actif batch (seul mécanisme — port 53, unicast)
+ *      Pour chaque IP, envoie une requête DNS PTR à `d.c.b.a.in-addr.arpa`
+ *      au serveur DNS du réseau (routeur/box). Toutes les requêtes sont
+ *      envoyées en parallèle ; une seule fenêtre d'attente de 500 ms couvre
+ *      l'ensemble. Retourne les hostnames DHCP enregistrés par le routeur
+ *      (ex: "livebox", "freebox-server").
  *
- *   2. PTR DNS actif batch (fallback)
- *      Pour chaque IP sans hostname mDNS, envoie une requête DNS PTR à
- *      `d.c.b.a.in-addr.arpa` au serveur DNS du réseau (routeur/box).
- *      Toutes les requêtes sont envoyées en parallèle ; une seule fenêtre
- *      d'attente de 500 ms couvre l'ensemble. Retourne les hostnames DHCP
- *      enregistrés par le routeur (ex: "livebox", "freebox-server").
- *
- * Priorité de résolution : mDNS > PTR DNS
- * Non bloquant si le réseau ne répond pas : timeout total ≤ 500 ms.
+ * L'écoute mDNS passive (224.0.0.251:5353) a été retirée en v0.8.2 : le
+ * composant mDNS d'ESP-IDF (initialisé par `MDNS.begin()` dans
+ * wifi_manager.cpp) garde ce socket exclusivement pour son propre
+ * responder — aucun socket applicatif tiers ne peut le rejoindre, même
+ * avec SO_REUSEADDR (voir docs/WARNINGS.md). Il n'existe pas d'API
+ * ESP-IDF publique pour écouter passivement les annonces mDNS reçues par
+ * ce service ; begin()/update()/end() sont donc conservés comme no-op
+ * pour ne pas casser les appelants existants, et `_mdnsCache` /
+ * `HostnameSource::MDNS` restent présents mais ne sont plus jamais
+ * peuplés. PTR DNS (port 53, sans rapport avec ce conflit) reste le seul
+ * mécanisme de résolution.
  */
 
 #pragma once
@@ -46,15 +49,15 @@ inline const char* hostnameSourceStr(HostnameSource s) {
 
 class HostnameResolver {
 public:
-    // Ouvre le socket multicast mDNS — appeler avant le début du scan ARP.
-    // Échoue gracieusement si le port est verrouillé par le stack mDNS.
+    // No-op depuis v0.8.2 (conservé pour compatibilité des appelants).
+    // L'écoute mDNS passive est structurellement impossible tant qu'ESPmDNS
+    // garde 224.0.0.251:5353 — voir docs/WARNINGS.md.
     void begin();
 
-    // Traite les paquets mDNS en attente dans le buffer du socket (non bloquant).
-    // Appeler périodiquement pendant le scan pour peupler le cache mDNS.
+    // No-op depuis v0.8.2 — voir begin().
     void update();
 
-    // Libère le socket UDP multicast.
+    // No-op depuis v0.8.2 — voir begin().
     void end();
 
     // Envoie des requêtes PTR DNS en batch pour toutes les IP fournies,
@@ -76,10 +79,6 @@ private:
     // out_next = -1 en cas d'erreur de décodage.
     String _decodeDnsName(const uint8_t* buf, int len, int offset, int& out_next) const;
 
-    // Parse un paquet DNS/mDNS complet et extrait les enregistrements A
-    // (nom.local → IPv4) dans _mdnsCache.
-    void _parseDnsPacket(const uint8_t* buf, int len);
-
     // Encode une IP en nom PTR DNS : "192.168.1.20" → "20.1.168.192.in-addr.arpa"
     // Retourne false si l'IP est malformée.
     static bool _buildPtrName(const String& ip, uint8_t* pkt, int& pos);
@@ -91,10 +90,7 @@ private:
     // Parse la réponse d'une requête PTR et retourne le premier hostname trouvé.
     String _parsePtrResponse(const uint8_t* buf, int len, uint16_t expectedId) const;
 
-    WiFiUDP _udp;                          // Socket dédié à l'écoute mDNS multicast
-    bool    _listening = false;            // true si le socket multicast est ouvert
-
-    std::map<String, String> _mdnsCache;  // IP → hostname.local (sans ".local")
+    std::map<String, String> _mdnsCache;  // Toujours vide depuis v0.8.2 (conservé pour resolve())
     std::map<String, String> _ptrCache;   // IP → hostname PTR DNS
 };
 

@@ -1,19 +1,26 @@
 /**
- * DnsSdScanner — Implémentation v0.0.9
+ * DnsSdScanner — Implémentation (réécrite en v0.8.2, plancher de requête
+ * corrigé en v0.8.3)
  *
- * Bibliothèques :
- *   WiFiUdp — socket UDP multicast mDNS (224.0.0.251:5353)
- *   FreeRTOS — vTaskDelay pour l'attente non bloquante
+ * Bibliothèque : mdns.h (composant mDNS ESP-IDF, déjà initialisé par
+ * ESPmDNS/MDNS.begin() — voir wifi_manager.cpp). Aucun socket dédié : les
+ * requêtes passent par le service mDNS déjà actif, ce qui élimine tout
+ * risque de conflit de bind sur 224.0.0.251:5353 (voir docs/WARNINGS.md).
+ *
+ * v0.8.3 : le plancher de fenêtre d'attente par type de service était fixé
+ * à 100 ms, trop court face au délai aléatoire de réponse de 20-120 ms
+ * imposé par la RFC 6762 §6 sur les enregistrements partagés (cas des PTR
+ * de découverte de service) — résultat observé : scan systématiquement
+ * vide malgré des services DNS-SD réellement présents sur le réseau (Hue,
+ * Echo, Synology…). Voir MIN_QUERY_TIMEOUT_MS ci-dessous.
  */
 
 #include "dns_sd_scanner.h"
 #include "../utils/logger.h"
+#include <mdns.h>
+#include <esp_err.h>
 
 static const char* TAG = "DNSSD";
-
-// Adresse et port mDNS (RFC 6762)
-static const IPAddress MDNS_GROUP(224, 0, 0, 251);
-static constexpr uint16_t MDNS_PORT = 5353;
 
 // Instance globale
 DnsSdScanner dnsSdScanner;
@@ -21,7 +28,8 @@ DnsSdScanner dnsSdScanner;
 // ════════════════════════════════════════════════════════════════════════════
 // Table des types de services DNS-SD à interroger
 //
-// Colonnes : type, label UI, suggestion de catégorie ("" = pas de suggestion)
+// Colonnes : type, label UI, suggestion de catégorie ("" = pas de suggestion,
+// non utilisée directement — voir _inferCategory(), basée sur les labels)
 // ════════════════════════════════════════════════════════════════════════════
 
 struct ServiceEntry {
@@ -73,289 +81,22 @@ static const ServiceEntry SERVICE_TYPES[] = {
     { nullptr, nullptr, nullptr }
 };
 
-// Retrouve l'entrée de service par type (ex: "_http._tcp")
-static const ServiceEntry* findService(const String& type) {
-    for (int i = 0; SERVICE_TYPES[i].type != nullptr; i++) {
-        if (type == SERVICE_TYPES[i].type) return &SERVICE_TYPES[i];
-    }
-    return nullptr;
+// Sépare "_http._tcp" → service="_http", proto="_tcp"
+static void _splitServiceType(const String& full, String& service, String& proto) {
+    int idx = full.indexOf("._");
+    if (idx < 0) { service = full; proto = "_tcp"; return; }
+    service = full.substring(0, idx);
+    proto   = full.substring(idx + 1);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Encodage d'un nom DNS en labels (RFC 1035)
-// ex: "_http._tcp.local" → \x05_http\x04_tcp\x05local\x00
-// ════════════════════════════════════════════════════════════════════════════
-
-static int encodeDnsName(const String& name, uint8_t* buf, int pos) {
-    int start = 0;
-    int nameLen = (int)name.length();
-    while (start <= nameLen) {
-        int dot = name.indexOf('.', start);
-        int end = (dot < 0) ? nameLen : dot;
-        int labelLen = end - start;
-        if (labelLen == 0) { buf[pos++] = 0; break; }
-        buf[pos++] = (uint8_t)labelLen;
-        for (int i = start; i < end; i++) buf[pos++] = (uint8_t)name[i];
-        if (dot < 0) { buf[pos++] = 0; break; }
-        start = dot + 1;
-    }
-    return pos;
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Décompression de nom DNS RFC 1035 (gère les pointeurs \xc0\xnn)
-// Identique à HostnameResolver::_decodeDnsName (méthode privée non réutilisable)
-// ════════════════════════════════════════════════════════════════════════════
-
-String DnsSdScanner::_decodeName(const uint8_t* buf, int len,
-                                   int offset, int& next) const {
-    String name;
-    bool jumped = false;
-    int safety = 0;
-
-    while (offset < len && safety++ < 128) {
-        uint8_t c = buf[offset];
-
-        if (c == 0x00) {
-            if (!jumped) next = offset + 1;
-            return name;
-        }
-        if ((c & 0xC0) == 0xC0) {
-            if (offset + 1 >= len) { next = -1; return ""; }
-            if (!jumped) next = offset + 2;
-            offset = ((c & 0x3F) << 8) | buf[offset + 1];
-            jumped = true;
-            continue;
-        }
-        int labelLen = (int)c;
-        offset++;
-        if (offset + labelLen > len) { next = -1; return ""; }
-        if (!name.isEmpty()) name += '.';
-        for (int i = 0; i < labelLen; i++) name += (char)buf[offset++];
-    }
-
-    if (!jumped) next = offset + 1;
-    return name;
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Parsing des TXT records DNS-SD
-//
-// Format : suite de chaînes précédées d'un octet de longueur.
-// Chaque chaîne est "key=value" ou juste "key".
-// On extrait les champs utiles : md, model, fn, fw, os, ver
-// ════════════════════════════════════════════════════════════════════════════
-
-void DnsSdScanner::_parseTxt(const uint8_t* rdata, int rdlen,
-                               _Instance& inst) const {
-    int pos = 0;
-    while (pos < rdlen) {
-        int slen = (int)rdata[pos++];
-        if (pos + slen > rdlen) break;
-
-        // Extraire "key=value"
-        String kv;
-        kv.reserve(slen);
-        for (int i = 0; i < slen; i++) kv += (char)rdata[pos + i];
-        pos += slen;
-
-        int eq = kv.indexOf('=');
-        if (eq < 0) continue;
-
-        String key = kv.substring(0, eq);
-        String val = kv.substring(eq + 1);
-        key.toLowerCase();
-        val.trim();
-        if (val.isEmpty()) continue;
-
-        // Champs utiles pour l'identification du device
-        // md = model (Chromecast, AppleTV, Synology DS224+…)
-        // fn = friendly name (nom configuré par l'utilisateur)
-        // model = variante de md
-        // fw  = firmware version
-        // am  = Apple model identifier (AppleTV6,2…)
-        if ((key == "md" || key == "model") && inst.model.isEmpty()) {
-            inst.model = val;
-        } else if (key == "fn" && inst.model.isEmpty()) {
-            inst.model = val;
-        } else if (key == "am" && inst.model.isEmpty()) {
-            // Apple model code → lisible (ex: "AppleTV6,2" → gardé tel quel)
-            inst.model = val;
-        }
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Envoi du paquet mDNS multi-question
-//
-// Un seul paquet UDP contient N questions PTR (une par service type).
-// Cela minimise la charge réseau et réduit le délai d'obtention des réponses.
-// ════════════════════════════════════════════════════════════════════════════
-
-void DnsSdScanner::_sendQueries(WiFiUDP& udp) {
-    // Compter les types de services
-    int count = 0;
-    for (int i = 0; SERVICE_TYPES[i].type != nullptr; i++) count++;
-
-    // Taille max estimée : 12 (header) + count × ~35 (question)
-    // Pour 23 services ≈ 12 + 23 × 35 = 817 octets — dans les limites UDP
-    const int BUF_SIZE = 1400;
-    uint8_t* pkt = (uint8_t*)malloc(BUF_SIZE);
-    if (!pkt) { Log::e(TAG, "Allocation échouée"); return; }
-    memset(pkt, 0, 12);
-
-    // Header mDNS (RFC 6762) : ID=0, Flags=0x0000 (query), QD=count
-    pkt[0] = 0; pkt[1] = 0;         // ID = 0 (requis par mDNS)
-    pkt[2] = 0; pkt[3] = 0;         // Flags = standard query
-    pkt[4] = (uint8_t)(count >> 8);
-    pkt[5] = (uint8_t)(count & 0xFF); // QDCOUNT
-
-    int pos = 12;
-    for (int i = 0; SERVICE_TYPES[i].type != nullptr && pos < BUF_SIZE - 40; i++) {
-        // Encoder "_type._tcp.local"
-        String fullType = String(SERVICE_TYPES[i].type) + ".local";
-        pos = encodeDnsName(fullType, pkt, pos);
-        // QTYPE = PTR (12), QCLASS = 0x8001 (IN + QU bit)
-        pkt[pos++] = 0x00; pkt[pos++] = 0x0C;   // PTR
-        pkt[pos++] = 0x80; pkt[pos++] = 0x01;   // IN + QU
-    }
-
-    udp.beginPacket(MDNS_GROUP, MDNS_PORT);
-    udp.write(pkt, pos);
-    bool ok = udp.endPacket();
-    free(pkt);
-
-    if (ok) {
-        Log::i(TAG, "DNS-SD : %d requêtes PTR envoyées → 224.0.0.251:5353", count);
-    } else {
-        Log::e(TAG, "DNS-SD : envoi échoué");
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Traitement d'un paquet DNS/mDNS reçu
-//
-// Parcourt les sections Answer + Additional et extrait :
-//   PTR (12) : service instance name → associe à un type de service connu
-//   SRV (33) : hostname + port de l'instance
-//   TXT (16) : métadonnées (modèle, firmware…)
-//   A   (1)  : hostname.local → IP (peuple _hostToIp)
-// ════════════════════════════════════════════════════════════════════════════
-
-void DnsSdScanner::_processPacket(const uint8_t* buf, int len) {
-    if (len < 12) return;
-
-    // On accepte aussi bien les réponses (QR=1) que les announcements spontanés
-    uint16_t flags = ((uint16_t)buf[2] << 8) | buf[3];
-    if (!(flags & 0x8000)) return;   // Ignorer les requêtes
-
-    uint16_t qdCount = ((uint16_t)buf[4]  << 8) | buf[5];
-    uint16_t anCount = ((uint16_t)buf[6]  << 8) | buf[7];
-    uint16_t nsCount = ((uint16_t)buf[8]  << 8) | buf[9];
-    uint16_t arCount = ((uint16_t)buf[10] << 8) | buf[11];
-
-    int pos = 12;
-
-    // Sauter la section Questions
-    for (uint16_t q = 0; q < qdCount && pos < len; q++) {
-        int next;
-        _decodeName(buf, len, pos, next);
-        if (next < 0 || next + 4 > len) return;
-        pos = next + 4;
-    }
-
-    // Parcourir Answer + Authority + Additional
-    int totalRR = (int)anCount + (int)nsCount + (int)arCount;
-    for (int r = 0; r < totalRR && pos < len; r++) {
-        int nameEnd;
-        String rrName = _decodeName(buf, len, pos, nameEnd);
-        if (nameEnd < 0 || nameEnd + 10 > len) return;
-
-        uint16_t rrType  = ((uint16_t)buf[nameEnd]     << 8) | buf[nameEnd + 1];
-        // rrClass at nameEnd+2,+3 (ignored, can be 0x8001 or 0x0001)
-        // TTL    at nameEnd+4,5,6,7
-        uint16_t rdlen   = ((uint16_t)buf[nameEnd + 8] << 8) | buf[nameEnd + 9];
-        int      rdPos   = nameEnd + 10;
-
-        if (rdPos + (int)rdlen > len) return;
-
-        // ── Type A : hostname.local → IP ──────────────────────────────────
-        if (rrType == 1 && rdlen == 4) {
-            char ipStr[16];
-            snprintf(ipStr, sizeof(ipStr), "%u.%u.%u.%u",
-                     buf[rdPos], buf[rdPos+1], buf[rdPos+2], buf[rdPos+3]);
-            String host = rrName;
-            host.toLowerCase();
-            if (_hostToIp.find(host) == _hostToIp.end()) {
-                _hostToIp[host] = String(ipStr);
-                Log::d(TAG, "A: %s → %s", host.c_str(), ipStr);
-            }
-        }
-
-        // ── Type PTR : _service._tcp.local → instance.service.local ──────
-        else if (rrType == 12) {
-            int dummy;
-            String instanceFull = _decodeName(buf, len, rdPos, dummy);
-            if (instanceFull.isEmpty()) { pos = rdPos + rdlen; continue; }
-
-            // Extraire le type de service depuis le nom de l'owner RR
-            // rrName = "_googlecast._tcp.local"
-            String svcType = rrName;
-            svcType.toLowerCase();
-            // Retirer ".local" final
-            if (svcType.endsWith(".local")) svcType = svcType.substring(0, svcType.length() - 6);
-
-            const ServiceEntry* svc = findService(svcType);
-            if (!svc) { pos = rdPos + rdlen; continue; }
-
-            // instanceFull = "Living Room TV._googlecast._tcp.local"
-            // instanceName = "Living Room TV" (tout avant le premier "._")
-            String instanceName = instanceFull;
-            int underDot = instanceFull.indexOf("._");
-            if (underDot > 0) instanceName = instanceFull.substring(0, underDot);
-
-            String key = instanceName + "|" + svcType;
-            if (_instances.find(key) == _instances.end()) {
-                _Instance inst;
-                inst.serviceType  = svcType;
-                inst.serviceLabel = svc->label;
-                inst.instanceName = instanceName;
-                inst.categoryHint = svc->category;
-                _instances[key]   = inst;
-                Log::d(TAG, "PTR: %s → %s (%s)", svcType.c_str(),
-                       instanceName.c_str(), svc->label);
-            }
-        }
-
-        // ── Type SRV : instance → priority + weight + port + hostname ─────
-        else if (rrType == 33 && rdlen >= 7) {
-            uint16_t port = ((uint16_t)buf[rdPos + 4] << 8) | buf[rdPos + 5];
-            int dummy;
-            String target = _decodeName(buf, len, rdPos + 6, dummy);
-            target.toLowerCase();
-
-            // Associer ce SRV à toutes les instances avec ce nom
-            for (auto& kv : _instances) {
-                if (rrName.startsWith(kv.second.instanceName)) {
-                    if (kv.second.port == 0) kv.second.port = port;
-                    if (kv.second.hostname.isEmpty()) kv.second.hostname = target;
-                }
-            }
-        }
-
-        // ── Type TXT : instance → métadonnées key=value ───────────────────
-        else if (rrType == 16 && rdlen > 0) {
-            for (auto& kv : _instances) {
-                if (rrName.startsWith(kv.second.instanceName)) {
-                    if (kv.second.model.isEmpty()) {
-                        _parseTxt(buf + rdPos, rdlen, kv.second);
-                    }
-                }
-            }
-        }
-
-        pos = rdPos + rdlen;
-    }
+static String _ip4ToString(const esp_ip4_addr_t& ip) {
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+             (unsigned)(ip.addr & 0xFF),
+             (unsigned)((ip.addr >> 8) & 0xFF),
+             (unsigned)((ip.addr >> 16) & 0xFF),
+             (unsigned)((ip.addr >> 24) & 0xFF));
+    return String(buf);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -365,7 +106,6 @@ void DnsSdScanner::_processPacket(const uint8_t* buf, int len) {
 // ════════════════════════════════════════════════════════════════════════════
 
 String DnsSdScanner::_inferCategory(const String& services) {
-    // Ordre de priorité : le premier match gagne
     static const struct { const char* svc; const char* cat; } RULES[] = {
         { "HomeKit",  "SmartHome"  },
         { "AirPlay",  "TV"         },
@@ -392,106 +132,96 @@ String DnsSdScanner::_inferCategory(const String& services) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Construction du résultat final : IP → DnsSdInfo
+// Point d'entrée public
 // ════════════════════════════════════════════════════════════════════════════
 
-std::map<String, DnsSdInfo> DnsSdScanner::_buildResult() const {
+// Plancher de fenêtre d'attente par type de service.
+//
+// La RFC 6762 §6 impose aux répondeurs un délai aléatoire de 20 à 120 ms
+// avant de répondre à une question portant sur un enregistrement partagé
+// (cas des PTR de découverte de service) afin d'éviter une rafale de
+// réponses simultanées. Un plancher de 100 ms laissait une marge quasi
+// nulle pour l'aller-retour réseau au-delà de ce délai — résultat observé :
+// zéro IP résolue malgré la présence d'objets DNS-SD réels sur le réseau
+// (Hue, Echo, Synology…). Porter le plancher à 300 ms absorbe ce délai
+// aléatoire avec une marge confortable.
+static constexpr uint32_t MIN_QUERY_TIMEOUT_MS = 300;
+
+std::map<String, DnsSdInfo> DnsSdScanner::scan(uint32_t timeout_ms) {
     std::map<String, DnsSdInfo> result;
 
-    for (const auto& kv : _instances) {
-        const _Instance& inst = kv.second;
+    int typeCount = 0;
+    for (int i = 0; SERVICE_TYPES[i].type != nullptr; i++) typeCount++;
+    if (typeCount == 0) return result;
 
-        // Résoudre l'IP : depuis le record A capturé ou depuis le hostname
-        String ip;
-        if (!inst.ip.isEmpty()) {
-            ip = inst.ip;
-        } else if (!inst.hostname.isEmpty()) {
-            auto it = _hostToIp.find(inst.hostname);
-            if (it != _hostToIp.end()) ip = it->second;
+    uint32_t perTypeTimeout = timeout_ms / (uint32_t)typeCount;
+    if (perTypeTimeout < MIN_QUERY_TIMEOUT_MS) perTypeTimeout = MIN_QUERY_TIMEOUT_MS;
+
+    Log::i(TAG, "Démarrer le scan DNS-SD (%d type(s) de service, %ums chacun, ~%ums au total)",
+           typeCount, (unsigned)perTypeTimeout, (unsigned)(perTypeTimeout * (uint32_t)typeCount));
+
+    for (int i = 0; SERVICE_TYPES[i].type != nullptr; i++) {
+        String service, proto;
+        _splitServiceType(SERVICE_TYPES[i].type, service, proto);
+
+        mdns_result_t* results = nullptr;
+        esp_err_t err = mdns_query_ptr(service.c_str(), proto.c_str(),
+                                        perTypeTimeout, 16, &results);
+        if (err != ESP_OK) {
+            Log::w(TAG, "Requête %s.%s échouée : %s",
+                   service.c_str(), proto.c_str(), esp_err_to_name(err));
+            continue;
         }
-        // Fallback : chercher le hostname de l'instance dans _hostToIp
-        if (ip.isEmpty()) {
-            String h = inst.instanceName;
-            h.toLowerCase();
-            h.replace(' ', '-');
-            h += ".local";
-            auto it = _hostToIp.find(h);
-            if (it != _hostToIp.end()) ip = it->second;
+        if (results == nullptr) continue;
+
+        for (mdns_result_t* r = results; r != nullptr; r = r->next) {
+            String hostname;
+            if (r->hostname != nullptr) hostname = String(r->hostname);
+
+            String model;
+            for (size_t t = 0; t < r->txt_count; t++) {
+                if (r->txt[t].key == nullptr || r->txt[t].value == nullptr) continue;
+                String key = String(r->txt[t].key);
+                String val = String(r->txt[t].value);
+                key.toLowerCase();
+                if (val.isEmpty()) continue;
+                if (model.isEmpty() &&
+                    (key == "md" || key == "model" || key == "fn" || key == "am")) {
+                    model = val;
+                }
+            }
+
+            for (mdns_ip_addr_t* a = r->addr; a != nullptr; a = a->next) {
+                if (a->addr.type != ESP_IPADDR_TYPE_V4) continue;
+                String ip = _ip4ToString(a->addr.u_addr.ip4);
+                if (ip.isEmpty()) continue;
+
+                DnsSdInfo& info = result[ip];
+                if (info.services.isEmpty()) {
+                    info.services = SERVICE_TYPES[i].label;
+                } else if (info.services.indexOf(SERVICE_TYPES[i].label) < 0) {
+                    info.services += "|";
+                    info.services += SERVICE_TYPES[i].label;
+                }
+                if (info.model.isEmpty() && !model.isEmpty()) {
+                    info.model = model;
+                }
+                if (info.hostname.isEmpty() && !hostname.isEmpty()) {
+                    String h = hostname;
+                    if (h.endsWith(".local")) h = h.substring(0, h.length() - 6);
+                    info.hostname = h;
+                }
+            }
         }
 
-        if (ip.isEmpty()) continue;   // Impossible de résoudre l'IP — on ignore
-
-        DnsSdInfo& info = result[ip];
-
-        // Ajouter le service label s'il n'est pas déjà présent
-        if (info.services.isEmpty()) {
-            info.services = inst.serviceLabel;
-        } else if (info.services.indexOf(inst.serviceLabel) < 0) {
-            info.services += "|";
-            info.services += inst.serviceLabel;
-        }
-
-        // Modèle (premier non vide)
-        if (info.model.isEmpty() && !inst.model.isEmpty()) {
-            info.model = inst.model;
-        }
-        // Hostname (premier non vide)
-        if (info.hostname.isEmpty() && !inst.hostname.isEmpty()) {
-            String h = inst.hostname;
-            if (h.endsWith(".local")) h = h.substring(0, h.length() - 6);
-            info.hostname = h;
-        }
+        mdns_query_results_free(results);
     }
 
-    // Déduire les catégories depuis les services
     for (auto& kv : result) {
         kv.second.category = _inferCategory(kv.second.services);
     }
 
-    return result;
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Point d'entrée public
-// ════════════════════════════════════════════════════════════════════════════
-
-std::map<String, DnsSdInfo> DnsSdScanner::scan(uint32_t timeout_ms) {
-    _instances.clear();
-    _hostToIp.clear();
-
-    Log::i(TAG, "Démarrage scan DNS-SD (timeout=%ums)", timeout_ms);
-
-    WiFiUDP udp;
-    // Rejoindre le groupe multicast pour recevoir les réponses mDNS
-    if (!udp.beginMulticast(MDNS_GROUP, MDNS_PORT)) {
-        Log::e(TAG, "Impossible de rejoindre 224.0.0.251:5353");
-        return {};
-    }
-
-    _sendQueries(udp);
-
-    // Écoute pendant timeout_ms
-    uint32_t deadline = millis() + timeout_ms;
-    while (millis() < deadline) {
-        int psize = udp.parsePacket();
-        if (psize > 0) {
-            const int MAXPKT = 1024;
-            uint8_t* buf = (uint8_t*)malloc(MAXPKT);
-            if (buf) {
-                int len = udp.read(buf, MAXPKT);
-                if (len > 0) _processPacket(buf, len);
-                free(buf);
-            }
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(10));
-        }
-    }
-
-    udp.stop();
-
-    auto result = _buildResult();
-    Log::i(TAG, "DNS-SD terminé — %d instance(s), %d IP(s) résolue(s)",
-           (int)_instances.size(), (int)result.size());
+    Log::i(TAG, "DNS-SD terminé — %d IP(s) résolue(s)", (int)result.size());
 
 #if LOG_LEVEL >= 4
     for (const auto& kv : result) {

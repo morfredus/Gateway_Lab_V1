@@ -10,7 +10,6 @@
 #include <ArduinoOTA.h>
 #include <Update.h>
 #include "app_config.h"         // ENABLE_OTA
-#include "../../include/web_interface_ota.h"  // Page HTML de mise à jour (PROGMEM)
 #include "../utils/logger.h"
 
 static const char* TAG = "OTA";
@@ -54,11 +53,8 @@ void OtaManager::loop() {
 }
 
 void OtaManager::registerRoutes(WebServer& server) {
-    // Affichage du formulaire d'upload
-    server.on("/update", HTTP_GET, [&server]() {
-        server.send_P(200, "text/html", OTA_PAGE);
-    });
-
+    // Le formulaire d'upload est intégré à la page /wifi (Système) —
+    // seule la réception du fichier reste gérée ici.
     // Réception du fichier firmware .bin uploadé depuis le navigateur
     // Deux handlers : le premier s'exécute à la fin, le second pendant l'upload
     server.on("/update", HTTP_POST,

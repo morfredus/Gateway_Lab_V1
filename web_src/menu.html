@@ -1,0 +1,17 @@
+  <nav>
+    <a href="/">Accueil</a>
+    <a href="/scan">Équipements</a>
+    <a href="/history">Historique</a>
+    <a href="/topology">Topologie</a>
+    <a href="/wifi">Système</a>
+  </nav>
+  <script>
+    (function() {
+      var links = document.querySelectorAll('nav a');
+      for (var i = 0; i < links.length; i++) {
+        if (links[i].getAttribute('href') === window.location.pathname) {
+          links[i].classList.add('active');
+        }
+      }
+    })();
+  </script>
