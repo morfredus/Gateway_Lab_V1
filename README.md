@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.6.0-blue)
+![Version](https://img.shields.io/badge/version-0.6.2-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -97,7 +97,11 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Effacement de l'historique | Vide le journal après téléchargement automatique d'une sauvegarde JSON |
 | OTA Web                  | Upload firmware depuis le navigateur                              |
 | ArduinoOTA               | Mise à jour réseau depuis PlatformIO                              |
-| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/devices/rescan/status`, `/api/scan`, `/api/alias`, `/api/history`, `/api/backup`, `/api/restore`, `/api/wifi` |
+| Favoris et notes d'inventaire | Marquer un équipement en favori et lui attacher des notes libres datées (entretien, firmware, etc.) |
+| Cartouche diagnostics    | Heap libre, PSRAM libre, espace LittleFS, temps moyen d'un scan / d'une passe précise |
+| NeoPixel d'état          | Bleu pulsé (démarrage), bleu fixe (prêt), vert clignotant (scan), jaune clignotant (nouvel équipement), violet (portail WiFi), cyan (sauvegarde) — luminosité réglable depuis la page Paramètres, persistée |
+| Bouton BOOT               | Appui court = lance un scan, maintien 3 s = sauvegarde immédiate |
+| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/devices/rescan/status`, `/api/scan`, `/api/alias`, `/api/favorite`, `/api/notes`, `/api/diagnostics`, `/api/history`, `/api/backup`, `/api/restore`, `/api/wifi`, `/api/led/brightness` |
 
 ---
 
@@ -462,6 +466,39 @@ les 500 ms par l'interface) :
 `running` repasse à `false` une fois la passe terminée ; `ok` indique si
 l'équipement a répondu.
 
+### POST /api/favorite
+
+Marque ou démarque un équipement comme favori (paramètres `mac` ou `ip`,
+et `favorite` : `1` pour marquer, `0` pour démarquer).
+
+### POST /api/notes
+
+Ajoute une note libre datée à un équipement (paramètres `mac` ou `ip`, et
+`text`). Le timestamp (`ts`, epoch NTP) est attribué côté serveur — `0` si
+l'horloge n'est pas encore synchronisée.
+
+### DELETE /api/notes
+
+Supprime une note d'un équipement (paramètres `mac` ou `ip`, et `ts` —
+le timestamp de la note à supprimer).
+
+### GET /api/diagnostics
+
+Retourne l'état mémoire/stockage et les temps de scan moyens :
+
+```json
+{
+  "freeHeap": 184320,
+  "freePsram": 7340032,
+  "fsUsedBytes": 12480,
+  "fsTotalBytes": 1474560,
+  "lastScanMs": 4210,
+  "avgScanMs": 3980,
+  "lastRescanMs": 1850,
+  "avgRescanMs": 1720
+}
+```
+
 ### GET /api/history
 
 Retourne le journal chronologique des événements (les plus récents en premier).
@@ -482,6 +519,14 @@ Restaure l'inventaire depuis un export JSON précédemment généré par `/api/b
 ### POST /update
 
 Upload d'un firmware `.bin`.
+
+### GET /api/led/brightness
+
+Retourne la luminosité courante de la NeoPixel d'état : `{"brightness": 15}`.
+
+### POST /api/led/brightness
+
+Définit la luminosité (paramètre `value`, 0-100), persistée en NVS.
 
 ### GET /api/wifi
 

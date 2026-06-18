@@ -19,6 +19,11 @@
 #include "modules/device_store.h"      // Persistance LittleFS
 #include "modules/device_history.h"    // Journal chronologique des evenements
 #include "modules/time_sync.h"         // Synchronisation NTP (firstSeen/lastSeen)
+#include "modules/status_led.h"        // Pilotage de la NeoPixel d'etat
+#include "modules/boot_button.h"       // Gestes du bouton BOOT (court/maintien 3s)
+
+// Suit les transitions du scan en cours pour piloter la LED (Scanning -> Ready)
+static bool _ledScanInProgress = false;
 
 void setup() {
     Serial.begin(115200);
@@ -28,10 +33,35 @@ void setup() {
     deviceStore.begin();
     deviceHistory.begin();
 
+    // NeoPixel d'etat — initialisee tot pour afficher le pulse bleu de demarrage
+    // pendant toute la phase de connexion WiFi
+    statusLed.begin();
+    statusLed.setState(LedState::Boot);
+
+    // Scanner reseau — le mutex doit exister avant que le bouton BOOT (qui
+    // peut declencher un scan) ne soit actif ; la tache de scan elle-meme
+    // n'est lancee qu'a la demande (startScan())
+    netScanner.begin();
+
+    // Bouton BOOT — appui court (scan) / maintien 3s (sauvegarde)
+    bootButton.begin({
+        .onShortPress = [] { netScanner.startScan(); },
+        .onHold       = [] {
+            statusLed.setState(LedState::Saving, 1500);
+            netScanner.saveNow();
+        },
+    });
+
     // Connexion WiFi — le callback est appelé une fois la connexion établie
     // (ou en cas d'échec après WIFI_CONNECT_TIMEOUT millisecondes)
     wifiMgr.begin([](bool connected) {
-        if (!connected) return;   // Pas de WiFi = pas de services réseau
+        if (!connected) {
+            // Echec de connexion -> portail de configuration WiFi actif
+            statusLed.setState(LedState::WifiPortal);
+            return;
+        }
+
+        statusLed.setState(LedState::Ready);
 
         // Synchronisation NTP - necessaire pour l'historique (firstSeen/lastSeen)
         timeSync.begin();
@@ -42,8 +72,8 @@ void setup() {
         otaMgr.begin(MDNS_HOSTNAME);
 #endif
 
-        // Initialisation du scanner réseau (table ARP + tâche FreeRTOS)
-        netScanner.begin();
+        // Scan automatique a la connexion WiFi
+        netScanner.startScan();
 
 #ifdef ENABLE_WEB_SERVER
         // Enregistrement du fournisseur de données scanner auprès du serveur web.
@@ -96,6 +126,20 @@ void setup() {
             .clearHistory    = [] { deviceHistory.clear(); },
             .getBackupJson   = [] { return netScanner.backupToJson(); },
             .restoreFromJson = [](const String& json) { return netScanner.restoreFromJson(json); },
+            .setFavorite     = [](const String& macOrIp, bool favorite) {
+                return netScanner.setFavorite(macOrIp, favorite);
+            },
+            .addNote         = [](const String& macOrIp, const String& text) {
+                return netScanner.addNote(macOrIp, text);
+            },
+            .deleteNote      = [](const String& macOrIp, uint32_t ts) {
+                return netScanner.deleteNote(macOrIp, ts);
+            },
+            .getDiagnosticsJson = [] { return netScanner.diagnosticsToJson(); },
+            .acknowledgeNewDevices = [] {
+                netScanner.acknowledgeNewDevices();
+                if (statusLed.state() == LedState::NewDevice) statusLed.setState(LedState::Ready);
+            },
         });
         webSrv.begin(WEB_SERVER_PORT);
 #endif
@@ -117,4 +161,20 @@ void loop() {
 #endif
 
     // NetworkScanner n'a pas de loop() : il tourne en tâche FreeRTOS sur Core 0
+    // — on suit ses transitions ici pour piloter la LED d'etat
+    bool scanning = netScanner.isScanRunning();
+    if (scanning && !_ledScanInProgress) {
+        statusLed.setState(LedState::Scanning);
+    } else if (!scanning && _ledScanInProgress) {
+        if (netScanner.hasNewDevices()) {
+            statusLed.setState(LedState::NewDevice);   // Reste en NewDevice jusqu'a l'acquittement
+        } else {
+            statusLed.setState(LedState::Ready);
+        }
+    }
+    _ledScanInProgress = scanning;
+
+    // Anime la NeoPixel et lit le bouton BOOT (non bloquant)
+    statusLed.loop();
+    bootButton.loop();
 }

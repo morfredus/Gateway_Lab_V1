@@ -10,6 +10,7 @@
 #include "web_server.h"
 #include "ota_manager.h"         // Enregistrement des routes /update
 #include "wifi_manager.h"        // Gestion des reseaux WiFi enregistres (NVS)
+#include "status_led.h"          // Luminosite NeoPixel - reglable depuis /wifi (Parametres)
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
@@ -40,7 +41,10 @@ void WebServerModule::begin(uint16_t port) {
     // HTTP_GET = le navigateur demande une ressource
     // HTTP_POST = le navigateur envoie des données (formulaire, upload...)
     _server.on("/",           HTTP_GET,  [this]() { _handleRoot(); });
-    _server.on("/scan",       HTTP_GET,  [this]() { _server.send_P(200, "text/html", SCAN_PAGE); });
+    _server.on("/scan",       HTTP_GET,  [this]() {
+        if (_hasScan && _scan.acknowledgeNewDevices) _scan.acknowledgeNewDevices();
+        _server.send_P(200, "text/html", SCAN_PAGE);
+    });
     _server.on("/history",    HTTP_GET,  [this]() { _server.send_P(200, "text/html", HISTORY_PAGE); });
     _server.on("/api/status", HTTP_GET,  [this]() { _handleApiStatus(); });
     _server.on("/api/devices",HTTP_GET,  [this]() { _handleApiDevices(); });
@@ -53,10 +57,27 @@ void WebServerModule::begin(uint16_t port) {
     _server.on("/api/history",HTTP_DELETE, [this]() { _handleApiHistoryClear(); });
     _server.on("/api/backup", HTTP_GET,  [this]() { _handleApiBackup(); });
     _server.on("/api/restore",HTTP_POST, [this]() { _handleApiRestore(); });
+    _server.on("/api/favorite", HTTP_POST,   [this]() { _handleApiSetFavorite(); });
+    _server.on("/api/notes",    HTTP_POST,   [this]() { _handleApiAddNote(); });
+    _server.on("/api/notes",    HTTP_DELETE, [this]() { _handleApiDeleteNote(); });
+    _server.on("/api/diagnostics", HTTP_GET, [this]() { _handleApiDiagnostics(); });
     _server.on("/wifi",       HTTP_GET,  [this]() { _server.send_P(200, "text/html", WIFI_PAGE); });
     _server.on("/api/wifi",   HTTP_GET,  [this]() { _handleApiWifiGet(); });
     _server.on("/api/wifi",   HTTP_POST, [this]() { _handleApiWifiPost(); });
     _server.on("/api/wifi",   HTTP_DELETE, [this]() { _handleApiWifiDelete(); });
+    _server.on("/api/led/brightness", HTTP_GET,  [this]() {
+        String j = "{\"brightness\":";
+        j += statusLed.getBrightness();
+        j += "}";
+        _server.send(200, "application/json", j);
+    });
+    _server.on("/api/led/brightness", HTTP_POST, [this]() {
+        if (!_server.hasArg("value")) { _server.send(400, "application/json", "{\"error\":\"value manquant\"}"); return; }
+        int v = _server.arg("value").toInt();
+        if (v < 0 || v > 100) { _server.send(400, "application/json", "{\"error\":\"valeur hors plage (0-100)\"}"); return; }
+        statusLed.setBrightness((uint8_t)v);
+        _server.send(200, "application/json", "{\"status\":\"ok\"}");
+    });
     _server.onNotFound(       [this]()  { _handleNotFound(); });
 
     // Délégation des routes OTA à OtaManager (/update GET + POST)
@@ -267,6 +288,89 @@ void WebServerModule::_handleApiRestore() {
     bool ok = _scan.restoreFromJson(body);
     _server.send(ok ? 200 : 400, "application/json",
                  ok ? "{\"status\":\"ok\"}" : "{\"error\":\"JSON invalide\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : marque/demarque un equipement comme favori
+// Parametres (form-urlencoded) : mac (ou ip) + favorite (1/0)
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiSetFavorite() {
+    if (!_hasScan || !_scan.setFavorite) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String key = _server.arg("mac");
+    if (key.isEmpty()) key = _server.arg("ip");
+    bool favorite = _server.arg("favorite") == "1";
+
+    if (key.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"mac ou ip requis\"}");
+        return;
+    }
+
+    bool ok = _scan.setFavorite(key, favorite);
+    _server.send(ok ? 200 : 404, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : ajoute une note datee a un equipement (inventaire utilisateur)
+// Parametres (form-urlencoded) : mac (ou ip) + text
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiAddNote() {
+    if (!_hasScan || !_scan.addNote) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String key  = _server.arg("mac");
+    if (key.isEmpty()) key = _server.arg("ip");
+    String text = _server.arg("text");
+
+    if (key.isEmpty() || text.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"mac/ip et text requis\"}");
+        return;
+    }
+
+    bool ok = _scan.addNote(key, text);
+    _server.send(ok ? 200 : 404, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : supprime une note d'un equipement par son timestamp
+// Parametres (form-urlencoded) : mac (ou ip) + ts
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiDeleteNote() {
+    if (!_hasScan || !_scan.deleteNote) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String key = _server.arg("mac");
+    if (key.isEmpty()) key = _server.arg("ip");
+    uint32_t ts = (uint32_t) _server.arg("ts").toInt();
+
+    if (key.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"mac ou ip requis\"}");
+        return;
+    }
+
+    bool ok = _scan.deleteNote(key, ts);
+    _server.send(ok ? 200 : 404, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"note introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : heap/PSRAM libres, espace LittleFS utilise, temps de scan moyens
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiDiagnostics() {
+    String json = (_hasScan && _scan.getDiagnosticsJson)
+        ? _scan.getDiagnosticsJson()
+        : "{\"error\":\"non disponible\"}";
+    _server.sendHeader("Cache-Control", "no-cache");
+    _server.send(200, "application/json", json);
 }
 
 // ---------------------------------------------------------------------------

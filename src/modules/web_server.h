@@ -15,6 +15,12 @@
  *   GET  /api/history   — Journal chronologique des evenements en JSON
  *   GET  /api/backup    — Telechargement de la sauvegarde complete (JSON)
  *   POST /api/restore   — Restauration depuis une sauvegarde JSON
+ *   POST /api/favorite  — Marque/demarque un equipement comme favori
+ *   POST /api/notes     — Ajoute une note datee a un equipement
+ *   DELETE /api/notes   — Supprime une note d'un equipement (parametre ts)
+ *   GET  /api/diagnostics — Heap/PSRAM/LittleFS + temps de scan moyens (JSON)
+ *   GET  /api/led/brightness  — Luminosite NeoPixel courante (JSON)
+ *   POST /api/led/brightness  — Definit la luminosite NeoPixel (parametre value, 0-100)
  *   GET  /wifi          — Page Parametres > Reseau WiFi (HTML embarque en PROGMEM)
  *   GET  /api/wifi      — Etat de connexion + reseaux enregistres (sans mots de passe)
  *   POST /api/wifi      — Ajoute ou met a jour un reseau (ssid + password)
@@ -48,6 +54,12 @@ struct ScanProvider {
     std::function<void()>   clearHistory;     // Vide le journal d'historique
     std::function<String()> getBackupJson;    // Sauvegarde complete en JSON
     std::function<bool(const String& json)>   restoreFromJson;   // Restauration depuis JSON
+
+    std::function<bool(const String& macOrIp, bool favorite)> setFavorite;          // Favori utilisateur
+    std::function<bool(const String& macOrIp, const String& text)> addNote;         // Ajoute une note datee
+    std::function<bool(const String& macOrIp, uint32_t ts)> deleteNote;             // Supprime une note par timestamp
+    std::function<String()> getDiagnosticsJson;   // Heap/PSRAM/LittleFS/temps de scan en JSON
+    std::function<void()>   acknowledgeNewDevices; // Acquitte les nouveaux equipements (visite de /scan)
 };
 
 class WebServerModule {
@@ -74,6 +86,10 @@ private:
     void _handleApiHistoryClear();  // Vide le journal chronologique
     void _handleApiBackup();        // Retourne la sauvegarde complete en JSON
     void _handleApiRestore();       // Restaure depuis une sauvegarde JSON envoyee
+    void _handleApiSetFavorite();   // Marque/demarque un equipement comme favori
+    void _handleApiAddNote();       // Ajoute une note datee a un equipement
+    void _handleApiDeleteNote();    // Supprime une note d'un equipement
+    void _handleApiDiagnostics();   // Heap/PSRAM/LittleFS/temps de scan en JSON
     void _handleApiWifiGet();       // Retourne l'etat WiFi + reseaux enregistres
     void _handleApiWifiPost();      // Ajoute ou met a jour un reseau enregistre
     void _handleApiWifiDelete();    // Supprime un reseau enregistre

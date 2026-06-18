@@ -103,7 +103,7 @@ function renderDevices(devices) {
   var tbody = document.getElementById('devices-body');
   var meta  = document.getElementById('scan-meta');
   if (!devices || devices.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-msg">Aucun équipement détecté</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">Aucun équipement détecté</td></tr>';
     meta.textContent = '0 équipement';
     return;
   }
@@ -161,7 +161,17 @@ function renderDevices(devices) {
       ? '<button class="rescan-btn" title="Réinterroger cet équipement (sans relancer un scan complet)" ' +
         'data-ip="' + esc(d.ip) + '" onclick="rescanDevice(this)">⟲</button>'
       : '';
-    return '<tr' + (d.online ? '' : ' class="row-offline"') + '>' +
+    var favKey = d.mac || d.ip;
+    var favBtn = '<button class="fav-btn ' + (d.favorite ? 'fav-on' : '') + '" ' +
+      'title="' + (d.favorite ? 'Retirer des favoris' : 'Marquer comme favori') + '" ' +
+      'data-key="' + esc(favKey) + '" data-fav="' + (d.favorite ? '1' : '0') + '" ' +
+      'onclick="toggleFavorite(this)">' + (d.favorite ? '★' : '☆') + '</button>';
+    var noteCount = (d.notes && d.notes.length) || 0;
+    var notesBtn = '<button class="notes-btn" title="Notes (' + noteCount + ')" ' +
+      'data-key="' + esc(favKey) + '" onclick="toggleNotesRow(this)">📝' +
+      (noteCount ? '<span class="notes-count">' + noteCount + '</span>' : '') + '</button>';
+    var notesData = 'data-notes=\'' + esc(JSON.stringify(d.notes || [])) + '\'';
+    return '<tr' + (d.online ? '' : ' class="row-offline"') + ' ' + notesData + '>' +
       '<td class="status-cell">' + statusHtml + '</td>' +
       '<td class="ip-cell">'     + esc(d.ip) + rescanBtn + '</td>' +
       '<td>'                     + nameHtml    + '</td>' +
@@ -169,6 +179,7 @@ function renderDevices(devices) {
       '<td>'                     + catHtml     + '</td>' +
       '<td class="mac-cell">'    + esc(d.mac)  + '</td>' +
       '<td class="seen-cell">'   + seenHtml    + '</td>' +
+      '<td class="actions-cell">' + favBtn + notesBtn + '</td>' +
       '</tr>';
   }).join('');
 }
@@ -226,6 +237,105 @@ function editAlias(btn) {
   var body = 'mac=' + encodeURIComponent(key) + '&alias=' + encodeURIComponent(value);
   fetch('/api/alias', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
     .then(function() { fetchDevices(); });
+}
+
+function toggleFavorite(btn) {
+  var key = btn.getAttribute('data-key');
+  var fav = btn.getAttribute('data-fav') === '1';
+  var body = 'mac=' + encodeURIComponent(key) + '&favorite=' + (fav ? '0' : '1');
+  fetch('/api/favorite', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+    .then(function() { fetchDevices(); });
+}
+
+var NOTES_ROW_ID = 'notes-row';
+
+function fmtNoteDate(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleString('fr-FR');
+}
+
+function toggleNotesRow(btn) {
+  var row = btn.closest('tr');
+  var existing = document.getElementById(NOTES_ROW_ID);
+  if (existing) {
+    var wasForRow = existing.previousSibling === row;
+    existing.remove();
+    if (wasForRow) return;
+  }
+  var key = btn.getAttribute('data-key');
+  var notes = [];
+  try { notes = JSON.parse(row.getAttribute('data-notes') || '[]'); } catch (e) {}
+
+  var newRow = document.createElement('tr');
+  newRow.id = NOTES_ROW_ID;
+  var nCols = row.children.length || 8;
+  var listHtml = notes.length
+    ? notes.map(function(n) {
+        return '<li class="note-item">' +
+          '<span class="note-date">' + esc(fmtNoteDate(n.ts)) + '</span>' +
+          '<span class="note-text">' + esc(n.text) + '</span>' +
+          '<button class="note-del" data-key="' + esc(key) + '" data-ts="' + n.ts + '" onclick="deleteNote(this)">✕</button>' +
+        '</li>';
+      }).join('')
+    : '<li class="note-empty">Aucune note</li>';
+  newRow.innerHTML =
+    '<td colspan="' + nCols + '">' +
+      '<div class="notes-panel">' +
+        '<ul class="notes-list">' + listHtml + '</ul>' +
+        '<div class="notes-add">' +
+          '<input type="text" class="notes-input" placeholder="Ajouter une note (ex: cartouche changée le 12/05)" />' +
+          '<button class="notes-add-btn" data-key="' + esc(key) + '" onclick="addNote(this)">Ajouter</button>' +
+        '</div>' +
+      '</div>' +
+    '</td>';
+  row.parentNode.insertBefore(newRow, row.nextSibling);
+}
+
+function addNote(btn) {
+  var key   = btn.getAttribute('data-key');
+  var input = btn.parentNode.querySelector('.notes-input');
+  var text  = (input.value || '').trim();
+  if (!text) return;
+  var body = 'mac=' + encodeURIComponent(key) + '&text=' + encodeURIComponent(text);
+  fetch('/api/notes', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+    .then(function() { fetchDevices(); });
+}
+
+function deleteNote(btn) {
+  var key = btn.getAttribute('data-key');
+  var ts  = btn.getAttribute('data-ts');
+  var body = 'mac=' + encodeURIComponent(key) + '&ts=' + encodeURIComponent(ts);
+  fetch('/api/notes', { method: 'DELETE', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+    .then(function() { fetchDevices(); });
+}
+
+function fmtMs(ms) {
+  if (!ms) return '—';
+  if (ms < 1000) return ms + ' ms';
+  return (ms / 1000).toFixed(1) + ' s';
+}
+
+function fmtBytes(b) {
+  if (b === undefined || b === null) return '—';
+  if (b < 1024) return b + ' o';
+  return (b / 1024).toFixed(0) + ' Ko';
+}
+
+function fetchDiagnostics() {
+  fetch('/api/diagnostics')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) return;
+      var bar = document.getElementById('diag-bar');
+      if (!bar) return;
+      bar.style.display = 'flex';
+      document.getElementById('diag-heap').textContent  = 'Heap libre : '  + fmtBytes(d.freeHeap);
+      document.getElementById('diag-psram').textContent = 'PSRAM libre : ' + fmtBytes(d.freePsram);
+      document.getElementById('diag-fs').textContent     = 'LittleFS : '   + fmtBytes(d.fsUsedBytes) + ' / ' + fmtBytes(d.fsTotalBytes);
+      document.getElementById('diag-scan').textContent   = 'Scan moyen : ' + fmtMs(d.avgScanMs);
+      document.getElementById('diag-rescan').textContent = 'Passe précise moyenne : ' + fmtMs(d.avgRescanMs);
+    })
+    .catch(function() {});
 }
 
 var RESCAN_ROW_ID = 'rescan-progress-row';
@@ -340,4 +450,6 @@ function resetDevices(keepAlias, keepManufacturer) {
 }
 
 fetchDevices();
+fetchDiagnostics();
 setInterval(function() { if (!pollTimer) fetchDevices(); }, 60000);
+setInterval(fetchDiagnostics, 30000);

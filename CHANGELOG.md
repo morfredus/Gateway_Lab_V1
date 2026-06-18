@@ -5,10 +5,57 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.6.2] - 2026-06-18
+
+### Modifie
+
+- **Simplification de la NeoPixel d'état et du bouton BOOT** (`src/modules/status_led.*`,
+  `src/modules/boot_button.*`) : le comportement est réduit au strict
+  minimum utile. La NeoPixel n'a plus que 6 états (bleu pulsé au démarrage,
+  bleu fixe une fois prête, vert clignotant pendant un scan, jaune clignotant
+  tant qu'un nouvel équipement n'a pas été consulté, violet pendant le
+  portail WiFi, cyan pendant une sauvegarde) — les états avertissement/erreur
+  et les effets de flash en surimpression sont retirés. Le bouton BOOT n'a
+  plus que deux gestes : appui court = lance un scan, maintien 3 s =
+  sauvegarde immédiate. Le double appui et les rescans automatiques des
+  équipements inconnus sont retirés.
+- **Réglage de la luminosité dans la page Paramètres** (`web_src/wifi.html`,
+  `web_src/wifi.js`) : un curseur (0-100 %) permet désormais de régler la
+  luminosité de la NeoPixel directement depuis l'interface web, au lieu de
+  passer uniquement par l'API (`GET`/`POST /api/led/brightness`, déjà
+  existante).
+
 ## [0.6.0] - 2026-06-18
 
 ### Ajoute
 
+- **NeoPixel d'état et gestes du bouton BOOT** (`src/modules/status_led.*`,
+  `src/modules/boot_button.*`) : une NeoPixel unique (`board_config.h::NEOPIXEL_PIN`)
+  affiche en continu l'état de la passerelle — bleu pulsé au démarrage, bleu
+  fixe une fois prête, vert clignotant pendant un scan, jaune clignotant tant
+  qu'un nouvel équipement n'a pas été consulté (page Équipements), violet
+  pendant le portail WiFi de première configuration, cyan pendant une
+  sauvegarde. Luminosité réglable de 0 à 100 %
+  (`GET`/`POST /api/led/brightness`), persistée en NVS (`Preferences`,
+  namespace `led`), 15 % par défaut au premier démarrage. Le bouton BOOT
+  (`board_config.h::BUTTON_BOOT_PIN`) pilote le scanner sans passer par
+  l'interface web : appui court = lance un scan, maintien 3 s = sauvegarde
+  immédiate (`saveNow()`).
+- **Cartouche diagnostics** (`GET /api/diagnostics`, `NetworkScanner::diagnosticsToJson()`)
+  : nouvelle barre d'information sur la page Équipements affichant heap libre,
+  PSRAM libre, espace LittleFS utilisé/total, et le temps moyen d'un scan
+  complet / d'une passe précise — pour suivre l'impact mémoire et performance
+  du scan dans la durée. Les temps moyens sont calculés à partir de compteurs
+  cumulés (durée totale / nombre d'exécutions), réinitialisés au redémarrage.
+- **Favoris et notes d'inventaire par équipement** (`POST /api/favorite`,
+  `POST /api/notes`, `DELETE /api/notes`) : chaque équipement peut désormais
+  être marqué comme favori (étoile, bouton dédié sur la page Équipements) et
+  porter une liste de notes libres datées (epoch NTP), par exemple "cartouche
+  d'encre changée le 12/05" ou "firmware mis à jour" — utile pour le suivi
+  d'inventaire personnel. Favoris et notes sont persistés dans
+  `/devices.json` (`DeviceStore::save()`/`load()`) au même titre que le reste
+  de la fiche équipement, et inclus dans la sauvegarde/restauration complète
+  (`/api/backup`, `/api/restore`).
 - **Champ `type` (sous-catégorie)** (`src/modules/network_scanner.cpp`,
   `device_store.cpp`, `oui_table.h`) : les équipements peuvent désormais
   porter un sous-type au sein de leur catégorie (ex. "Smart Speaker", "Smart

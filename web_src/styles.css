@@ -582,6 +582,120 @@ tr:hover td      { background: #ffffff06; }
 tr.row-offline td { opacity: 0.55; }
 
 /* ════════════════════════════════════════════════════
+   13b. PAGE ÉQUIPEMENTS — Cartouche diagnostics (heap/PSRAM/FS/temps)
+   ════════════════════════════════════════════════════ */
+
+.diag-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.45rem 0.75rem;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.74rem;
+  color: #9aacc2;
+}
+.diag-item { white-space: nowrap; }
+
+/* ════════════════════════════════════════════════════
+   13c. PAGE ÉQUIPEMENTS — Favoris et notes utilisateur
+   ════════════════════════════════════════════════════ */
+
+.actions-cell { white-space: nowrap; text-align: right; }
+
+.fav-btn {
+  font-size: 0.95rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #475569;
+  padding: 0 0.2rem;
+  vertical-align: middle;
+}
+.fav-btn:hover { color: #fbbf24; }
+.fav-btn.fav-on { color: #fbbf24; }
+
+.notes-btn {
+  font-size: 0.8rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9aacc2;
+  padding: 0 0.2rem;
+  vertical-align: middle;
+  position: relative;
+}
+.notes-btn:hover { color: #38bdf8; }
+.notes-count {
+  font-size: 0.6rem;
+  background: #0ea5e9;
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 0.3rem;
+  margin-left: 0.2rem;
+  font-weight: 700;
+}
+
+#notes-row td {
+  padding: 0.5rem 0.5rem 0.7rem;
+  border-bottom: 1px solid #ffffff0a;
+  background: #0c1a2a40;
+}
+
+.notes-panel {
+  background: #0c1a2a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+.notes-list { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+.note-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #ffffff0a;
+  font-size: 0.8rem;
+}
+.note-item:last-child { border-bottom: none; }
+.note-date { color: #64748b; font-size: 0.7rem; white-space: nowrap; }
+.note-text { flex: 1; color: #e2e8f0; }
+.note-del {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+.note-del:hover { color: #f87171; }
+.note-empty { color: #475569; font-size: 0.8rem; font-style: italic; }
+
+.notes-add { display: flex; gap: 0.5rem; }
+.notes-input {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+}
+.notes-add-btn {
+  padding: 0.4rem 0.8rem;
+  background: #0891b2;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.notes-add-btn:hover { background: #06b6d4; }
+
+/* ════════════════════════════════════════════════════
    14. PAGE OTA — Formulaire upload firmware
    ════════════════════════════════════════════════════ */
 

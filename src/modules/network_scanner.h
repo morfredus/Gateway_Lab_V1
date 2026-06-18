@@ -44,6 +44,21 @@ struct RescanStatus {
     int    percent = 0;       // Avancement estime (0-100)
 };
 
+// Note libre datee, ajoutee par l'utilisateur sur un equipement de son
+// inventaire (ex: "Cartouche d'encre noir changee le 12/05", "Firmware mis a jour")
+struct DeviceNote {
+    uint32_t ts = 0;   // Epoch NTP au moment de l'ajout (0 si horloge non synchronisee)
+    String   text;
+};
+
+// Temps moyens/derniers d'execution, pour le cartouche diagnostics de l'UI
+struct ScanTimings {
+    uint32_t lastScanMs    = 0;
+    uint32_t avgScanMs     = 0;
+    uint32_t lastRescanMs  = 0;
+    uint32_t avgRescanMs   = 0;
+};
+
 
 // ---------------------------------------------------------------------------
 // Informations collectées pour chaque équipement découvert
@@ -67,6 +82,9 @@ struct NetworkDevice {
     uint32_t firstSeenEpoch = 0;   // Epoch NTP de la premiere detection (0 = inconnu, pas d'heure synchronisee)
     uint32_t lastSeenEpoch  = 0;   // Epoch NTP de la derniere detection (0 = inconnu)
     uint32_t seenCount      = 0;   // Nombre de scans ou l'equipement a ete vu en ligne
+
+    bool     favorite = false;        // Equipement marque comme favori par l'utilisateur
+    std::vector<DeviceNote> notes;    // Notes libres datees, saisies par l'utilisateur
 
     uint32_t lastSeen;      // millis() du dernier scan — converti en elapsed côté client
     bool     online;        // true si détecté lors du dernier scan
@@ -97,6 +115,21 @@ public:
     // Retourne false si aucun equipement correspondant n'a ete trouve
     bool setAlias(const String& macOrIp, const String& alias);
 
+    // Marque/demarque un equipement comme favori - retourne false si introuvable
+    bool setFavorite(const String& macOrIp, bool favorite);
+
+    // Ajoute une note datee (epoch NTP courant) a un equipement - retourne false si introuvable ou texte vide
+    bool addNote(const String& macOrIp, const String& text);
+
+    // Supprime une note par son timestamp - retourne false si equipement ou note introuvable
+    bool deleteNote(const String& macOrIp, uint32_t ts);
+
+    // Temps moyens/derniers (ms) d'un scan complet et d'une passe precise - cartouche diagnostics UI
+    ScanTimings getTimings() const;
+
+    // Etat memoire/stockage + temps de scan, serialise en JSON pour /api/diagnostics
+    String diagnosticsToJson() const;
+
     // RAZ de la liste des equipements connus, pour repartir sur une base vide.
     // keepAlias        : conserve les equipements ayant un alias defini par l'utilisateur
     // keepManufacturer : conserve les equipements dont le fabricant a ete resolu (OUI)
@@ -121,6 +154,15 @@ public:
 
     // Serialisation JSON de getRescanStatus() pour l'API /api/devices/rescan/status
     String rescanStatusToJson() const;
+
+    // Sauvegarde immediate de _results dans DeviceStore (appui 5s du bouton BOOT)
+    void saveNow();
+
+    // true si le dernier scan a revele au moins un equipement absent du scan precedent
+    bool hasNewDevices() const;
+
+    // Acquitte les nouveaux equipements (visite de la page /scan) - remet hasNewDevices() a false
+    void acknowledgeNewDevices();
 
 private:
     // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
@@ -211,6 +253,15 @@ private:
     std::vector<NetworkDevice>  _results;
     volatile bool               _scanning   = false;
     RescanStatus                _rescanStatus;   // Protege par _mutex (lecture/ecriture)
+    volatile bool               _newDevicesPending = false;   // true si le dernier scan a revele un nouvel equipement
+
+    // Cumuls pour le calcul des temps moyens (cartouche diagnostics) - proteges par _mutex
+    uint32_t _lastScanMs      = 0;
+    uint32_t _scanMsTotal     = 0;
+    uint32_t _scanCount       = 0;
+    uint32_t _lastRescanMs    = 0;
+    uint32_t _rescanMsTotal   = 0;
+    uint32_t _rescanCount     = 0;
 };
 
 // Instance globale

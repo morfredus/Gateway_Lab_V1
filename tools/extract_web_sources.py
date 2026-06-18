@@ -54,19 +54,14 @@ try:
     import jsbeautifier
     HAS_JSBEAUTIFIER = True
 except ImportError:
+    jsbeautifier = None
     HAS_JSBEAUTIFIER = False
 
 
 def _beautify_html(html: str) -> str:
-    if not HAS_JSBEAUTIFIER:
-        return html
-    opts = jsbeautifier.default_options()
-    opts.indent_size = 2
-    opts.end_with_newline = True
-    try:
-        return jsbeautifier.beautify_html(html, opts)
-    except Exception:
-        return html  # fallback silencieux
+    # jsbeautifier n'expose pas de beautificateur HTML (seulement JS/CSS) -
+    # le HTML est laisse tel quel, deja indente dans web_src/*.html.
+    return html
 
 
 def _beautify_js(js: str) -> str:
@@ -76,7 +71,7 @@ def _beautify_js(js: str) -> str:
     opts.indent_size = 2
     opts.end_with_newline = True
     try:
-        return jsbeautifier.beautify(js, opts)
+        return str(jsbeautifier.beautify(js, opts))
     except Exception:
         return js  # fallback silencieux
 

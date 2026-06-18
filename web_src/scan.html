@@ -55,6 +55,14 @@
       <span class="stat-item stat-offline" id="stat-offline">— hors ligne</span>
     </div>
 
+    <div class="diag-bar" id="diag-bar" style="display:none">
+      <span class="diag-item" id="diag-heap">Heap libre : —</span>
+      <span class="diag-item" id="diag-psram">PSRAM libre : —</span>
+      <span class="diag-item" id="diag-fs">LittleFS : —</span>
+      <span class="diag-item" id="diag-scan">Scan moyen : —</span>
+      <span class="diag-item" id="diag-rescan">Passe précise moyenne : —</span>
+    </div>
+
     <div class="progress-wrap" id="progress-wrap">
       <div class="progress-bar" id="progress-bar"></div>
     </div>
@@ -72,10 +80,11 @@
             <th>Catégorie</th>
             <th>MAC</th>
             <th>Vu il y a</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="devices-body">
-          <tr><td colspan="7" class="empty-msg">Cliquez sur "Scanner" pour détecter les équipements</td></tr>
+          <tr><td colspan="8" class="empty-msg">Cliquez sur "Scanner" pour détecter les équipements</td></tr>
         </tbody>
       </table>
     </div>
