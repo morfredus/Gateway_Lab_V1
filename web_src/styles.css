@@ -377,6 +377,7 @@ tr:hover td      { background: #ffffff06; }
 .name-cell { color: #7dd3fc; }
 .mfr-model { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
 .mfr-os    { font-size: 0.7rem;  color: #64748b; margin-top: 0.1rem; font-style: italic; }
+.subtype-tag { display: block; font-size: 0.7rem; color: #94a3b8; margin-top: 0.2rem; }
 .seen-cell { color: #94a3b8; white-space: nowrap; }
 
 .empty-msg { color: #94a3b8; font-size: 0.875rem; text-align: center; padding: 1.5rem 0; }

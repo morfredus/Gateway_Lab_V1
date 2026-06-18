@@ -144,7 +144,8 @@ function renderDevices(devices) {
         svcHtml + portsHtml
       : (svcHtml + portsHtml || '<span class="none">—</span>');
     var catHtml = d.category
-      ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>' + confBadge(d)
+      ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>' +
+        (d.type ? '<div class="subtype-tag">' + esc(d.type) + '</div>' : '') + confBadge(d)
       : '<span class="none">—</span>' + confBadge(d);
     var seenHtml = d.online
       ? fmtSeen(d.elapsedMs)

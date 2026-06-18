@@ -290,6 +290,12 @@
     "category": "Smart Home"
   },
   {
+    "oui": "0C:DC:91",
+    "manufacturer": "Amazon",
+    "category": "Smart Home",
+    "type": "Smart Display"
+  },
+  {
     "oui": "FC:A1:83",
     "manufacturer": "Amazon",
     "category": "Smart Home"

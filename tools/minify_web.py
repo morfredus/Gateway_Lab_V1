@@ -180,6 +180,7 @@ struct OuiEntry {{
     const char* oui;
     const char* manufacturer;
     const char* category;
+    const char* type;
 }};
 
 static const OuiEntry OUI_TABLE[] = {{
@@ -198,7 +199,8 @@ def generate_oui_header(src_path: Path, entries: list) -> str:
         seen.add(oui)
         mfr = e["manufacturer"].replace('"', '\\"')
         cat = e["category"].replace('"', '\\"')
-        lines.append(f'    {{"{oui}", "{mfr}", "{cat}"}},')
+        typ = e.get("type", "").replace('"', '\\"')
+        lines.append(f'    {{"{oui}", "{mfr}", "{cat}", "{typ}"}},')
     return OUI_HEADER_TEMPLATE.format(
         src=src_path.relative_to(PROJECT_ROOT),
         count=len(lines),

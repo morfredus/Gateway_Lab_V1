@@ -112,6 +112,7 @@ void NetworkScanner::_readArpTable() {
                 if (oui) {
                     h.manufacturer = oui->manufacturer;
                     h.category     = oui->category;   // "Router", "IoT", "SBC"…
+                    h.type         = oui->type;        // "Smart Speaker", "Smart Display"… ("" si non renseigné)
                 }
             }
             _results.push_back(h);
@@ -976,6 +977,7 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous) 
             checkChange("ip",           prev->ip,           d.ip);
             checkChange("manufacturer", prev->manufacturer, d.manufacturer);
             checkChange("category",     prev->category,     d.category);
+            checkChange("type",         prev->type,          d.type);
             checkChange("hostname",     prev->hostname,      d.hostname);
             checkChange("openPorts",    prev->openPorts,     d.openPorts);
         } else if (prev->online) {
@@ -1081,6 +1083,7 @@ String NetworkScanner::resultsToJson() const {
         obj["manufacturer"] = d.manufacturer;
         obj["hostname"]     = d.hostname;
         obj["category"]     = d.category;
+        obj["type"]         = d.type;
         obj["model"]        = d.model;
         obj["os"]           = d.os;
         obj["source"]       = d.source;
@@ -1312,6 +1315,7 @@ String NetworkScanner::backupToJson() const {
         obj["manufacturer"] = d.manufacturer;
         obj["hostname"]     = d.hostname;
         obj["category"]     = d.category;
+        obj["type"]         = d.type;
         obj["model"]        = d.model;
         obj["os"]           = d.os;
         obj["source"]       = d.source;
@@ -1350,6 +1354,7 @@ bool NetworkScanner::restoreFromJson(const String& json) {
         d.manufacturer  = obj["manufacturer"] | "";
         d.hostname      = obj["hostname"]     | "";
         d.category      = obj["category"]     | "";
+        d.type          = obj["type"]         | "";
         d.model         = obj["model"]        | "";
         d.os            = obj["os"]           | "";
         d.source        = obj["source"]       | "";

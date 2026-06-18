@@ -44,6 +44,7 @@ struct NetworkDevice {
     String   hostname;      // Nom résolu (ex: "mon-pc", "livebox") — vide si inconnu
 
     String   category;      // Type d'équipement : "Router", "IoT", "Mobile", "SBC"…
+    String   type;          // Sous-type au sein de la catégorie : "Smart Speaker", "Smart Display"… ("" si non renseigné)
     String   model;         // Modèle détaillé si disponible (ex: "Freebox Ultra", "")
     String   os;            // Système d'exploitation — usage futur, vide en v0.0.7
     String   source;        // Source de résolution : "mDNS" | "PTR" | "MAC" | "Self" | ""
