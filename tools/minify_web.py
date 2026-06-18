@@ -76,22 +76,20 @@ PAGES = [
 # ---------------------------------------------------------------------------
 try:
     import rcssmin
-    HAS_RCSSMIN = True
 except ImportError:
-    HAS_RCSSMIN = False
+    rcssmin = None
 
 try:
     import rjsmin
-    HAS_RJSMIN = True
 except ImportError:
-    HAS_RJSMIN = False
+    rjsmin = None
 
 # ---------------------------------------------------------------------------
 # HTML minification helpers
 # ---------------------------------------------------------------------------
 def _minify_css_block(css: str) -> str:
-    if HAS_RCSSMIN:
-        return rcssmin.cssmin(css)
+    if rcssmin is not None:
+        return str(rcssmin.cssmin(css))
     css = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
     css = re.sub(r'\s*([{}:;,>~+])\s*', r'\1', css)
     css = re.sub(r'\s+', ' ', css).strip()
@@ -99,8 +97,8 @@ def _minify_css_block(css: str) -> str:
 
 
 def _minify_js_block(js: str) -> str:
-    if HAS_RJSMIN:
-        return rjsmin.jsmin(js)
+    if rjsmin is not None:
+        return str(rjsmin.jsmin(js))
     js = re.sub(r'//[^\n]*', '', js)
     js = re.sub(r'\s+', ' ', js).strip()
     return js
@@ -180,6 +178,7 @@ struct OuiEntry {{
     const char* oui;
     const char* manufacturer;
     const char* category;
+    const char* type;
 }};
 
 static const OuiEntry OUI_TABLE[] = {{
@@ -198,7 +197,8 @@ def generate_oui_header(src_path: Path, entries: list) -> str:
         seen.add(oui)
         mfr = e["manufacturer"].replace('"', '\\"')
         cat = e["category"].replace('"', '\\"')
-        lines.append(f'    {{"{oui}", "{mfr}", "{cat}"}},')
+        typ = e.get("type", "").replace('"', '\\"')
+        lines.append(f'    {{"{oui}", "{mfr}", "{cat}", "{typ}"}},')
     return OUI_HEADER_TEMPLATE.format(
         src=src_path.relative_to(PROJECT_ROOT),
         count=len(lines),

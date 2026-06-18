@@ -213,6 +213,25 @@ Fonctionnement :
 
 ---
 
+### `src/modules/snmp_scanner.*`, `ws_discovery_scanner.*`, `media_api_scanner.*` — Passe précise
+
+**Rôle** : enrichir un seul équipement (réinterrogation ciblée) avec des
+protocoles plus coûteux, non utilisés lors du scan complet.
+
+- `SnmpScanner` : GetRequest SNMP v1 (ASN.1 BER manuel) sur `sysDescr` (UDP 161)
+- `WsDiscoveryScanner` : Probe SOAP/ONVIF multicast (`239.255.255.250:3702`) —
+  caméras, imprimantes, NAS
+- `MediaApiScanner` : sondes HTTP séquentielles Cast (`:8008`), Sonos (`:1400`),
+  Roku (`:8060`), Samsung Smart TV (`:8001`)
+
+Ces trois scanners sont appelés uniquement depuis `_runRescan(ip)` dans
+`network_scanner.cpp`, exécuté dans une tâche FreeRTOS dédiée
+(`_rescanTask`) avec progression exposée via `RescanStatus`
+(`GET /api/devices/rescan/status`, polling 500 ms côté UI). Voir
+`docs/PROTOCOLS.md` pour le détail de chaque protocole.
+
+---
+
 ### `src/modules/web_server.*` — Serveur HTTP
 
 **Rôle** : servir l'interface web et l'API REST.
@@ -348,5 +367,6 @@ Le scan réseau est sur le Core 0 pour co-localiser les appels lwIP (ARP, DNS, s
 | Ajouter une box FAI | `src/modules/isp_detector.h` |
 | Ajouter un device UPnP | `src/modules/ssdp_scanner.cpp` (`_categorize()` ou `_enrich*()`) |
 | Ajouter un type de service DNS-SD | `src/modules/dns_sd_scanner.cpp` (table `SERVICE_TYPES[]`) |
+| Ajouter une sonde à la passe précise | `src/modules/network_scanner.cpp` (`_runRescan()`) + nouveau scanner dans `src/modules/` |
 | Modifier la version | `platformio.ini` (`PROJECT_VERSION`) — uniquement ici |
 | Ajouter un module entier | `src/modules/nouveau.*` + include dans `network_scanner.cpp` ou `main.cpp` |

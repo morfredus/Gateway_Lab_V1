@@ -68,6 +68,7 @@ static const ServiceEntry SERVICE_TYPES[] = {
     // Domotique / IoT (suite)
     { "_privet._tcp",           "Privet",   "IoT"       },
     { "_matter._tcp",           "Matter",   "SmartHome" },
+    { "_matterc._udp",          "Matter",   "SmartHome" },
     { "_sleep-proxy._tcp",      "SleepPxy", ""          },
     { nullptr, nullptr, nullptr }
 };

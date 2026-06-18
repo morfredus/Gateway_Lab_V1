@@ -48,6 +48,7 @@ void WebServerModule::begin(uint16_t port) {
     _server.on("/api/alias",  HTTP_POST, [this]() { _handleApiSetAlias(); });
     _server.on("/api/devices/reset", HTTP_POST, [this]() { _handleApiDevicesReset(); });
     _server.on("/api/devices/rescan", HTTP_POST, [this]() { _handleApiDeviceRescan(); });
+    _server.on("/api/devices/rescan/status", HTTP_GET, [this]() { _handleApiDeviceRescanStatus(); });
     _server.on("/api/history",HTTP_GET,  [this]() { _handleApiHistory(); });
     _server.on("/api/history",HTTP_DELETE, [this]() { _handleApiHistoryClear(); });
     _server.on("/api/backup", HTTP_GET,  [this]() { _handleApiBackup(); });
@@ -198,9 +199,20 @@ void WebServerModule::_handleApiDeviceRescan() {
         return;
     }
 
-    bool ok = _scan.rescanDevice(ip);
-    _server.send(ok ? 200 : 409, "application/json",
-                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement inconnu ou scan en cours\"}");
+    bool started = _scan.rescanDevice(ip);
+    _server.send(started ? 200 : 409, "application/json",
+                 started ? "{\"status\":\"started\"}" : "{\"error\":\"equipement inconnu ou scan en cours\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : avancement de la passe precise en cours (polling cote UI)
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiDeviceRescanStatus() {
+    String json = (_hasScan && _scan.getRescanStatusJson)
+        ? _scan.getRescanStatusJson()
+        : "{\"running\":false,\"ok\":false,\"ip\":\"\",\"step\":\"\",\"percent\":0}";
+    _server.sendHeader("Cache-Control", "no-cache");
+    _server.send(200, "application/json", json);
 }
 
 // ---------------------------------------------------------------------------

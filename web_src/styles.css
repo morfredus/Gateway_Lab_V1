@@ -89,7 +89,7 @@ body {
 
 .site-tag {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: #c3d0e0;
 }
 
 /* ════════════════════════════════════════════════════
@@ -110,7 +110,7 @@ nav a {
   padding: 0.35rem 0.9rem;
   border-radius: 6px;
   text-decoration: none;
-  color: #94a3b8;
+  color: #c3d0e0;
   transition: background 0.15s, color 0.15s;
 }
 
@@ -152,14 +152,14 @@ nav a.active { background: #0c4a6e; color: #38bdf8; font-weight: 600; }
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: #94a3b8;
+  color: #c3d0e0;
   font-weight: 600;
 }
 
 /* Sous-titre de carte (page scan) */
 .card-meta {
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: #c3d0e0;
   margin-top: 0.2rem;
 }
 
@@ -175,7 +175,7 @@ footer {
   border-top: 1px solid #ffffff0a;
   margin-top: auto;
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: #c3d0e0;
 }
 
 footer a { color: #38bdf8; text-decoration: none; font-weight: 500; }
@@ -195,7 +195,7 @@ footer a:hover { text-decoration: underline; }
 }
 .info-row:last-child { border-bottom: none; }
 
-.info-label { color: #94a3b8; font-size: 0.9rem; }
+.info-label { color: #c3d0e0; font-size: 0.9rem; }
 .info-value { color: #f1f5f9; font-size: 0.9rem; font-weight: 600; text-align: right; }
 
 /* Badges statut (Connecté / Erreur) */
@@ -224,7 +224,7 @@ footer a:hover { text-decoration: underline; }
   flex: 1;
   padding: 0.875rem 0.5rem;
   background: #1e293b;
-  color: #94a3b8;
+  color: #c3d0e0;
   border: 1px solid #ffffff0a;
   border-radius: 10px;
   font-size: 0.9rem;
@@ -253,7 +253,7 @@ footer a:hover { text-decoration: underline; }
   transition: background 0.2s;
 }
 .scan-btn:hover    { background: #06b6d4; }
-.scan-btn:disabled { background: #334155; color: #64748b; cursor: default; }
+.scan-btn:disabled { background: #334155; color: #9aacc2; cursor: default; }
 
 .header-actions {
   display: flex;
@@ -324,6 +324,46 @@ footer a:hover { text-decoration: underline; }
 
 .scan-info { font-size: 0.85rem; color: #38bdf8; margin-bottom: 0.75rem; }
 
+/* Bandeau de progression — passe précise, insérée sous la ligne de l'IP ciblée */
+#rescan-progress-row td {
+  padding: 0.4rem 0.5rem 0.6rem;
+  border-bottom: 1px solid #ffffff0a;
+  background: #0c2a3a40;
+}
+.rescan-row-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #0c2a3a;
+  border: 1px solid #0e7490;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.8rem;
+  color: #7dd3fc;
+  font-weight: 600;
+}
+.rescan-row-text { white-space: nowrap; }
+.rescan-row-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: #082030;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.rescan-row-bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #06b6d4, #38bdf8);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.rescan-row-pct {
+  font-family: monospace;
+  color: #e0f2fe;
+  min-width: 2.6em;
+  text-align: right;
+}
+
 
 /* ════════════════════════════════════════════════════
    10. PAGE ÉQUIPEMENTS — Tableau
@@ -340,7 +380,7 @@ table {
 
 th {
   text-align: left;
-  color: #94a3b8;
+  color: #c3d0e0;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -363,7 +403,7 @@ tr:hover td      { background: #ffffff06; }
 
 .rescan-btn {
   font-size: 0.75rem;
-  color: #64748b;
+  color: #9aacc2;
   background: none;
   border: none;
   cursor: pointer;
@@ -373,13 +413,14 @@ tr:hover td      { background: #ffffff06; }
 }
 .rescan-btn:hover    { color: #38bdf8; }
 .rescan-btn:disabled { color: #334155; cursor: default; }
-.mac-cell  { font-family: monospace; font-size: 0.78rem; color: #94a3b8; white-space: nowrap; }
+.mac-cell  { font-family: monospace; font-size: 0.78rem; color: #c3d0e0; white-space: nowrap; }
 .name-cell { color: #7dd3fc; }
-.mfr-model { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
-.mfr-os    { font-size: 0.7rem;  color: #64748b; margin-top: 0.1rem; font-style: italic; }
-.seen-cell { color: #94a3b8; white-space: nowrap; }
+.mfr-model { font-size: 0.75rem; color: #c3d0e0; margin-top: 0.2rem; }
+.mfr-os    { font-size: 0.7rem;  color: #9aacc2; margin-top: 0.1rem; font-style: italic; }
+.subtype-tag { display: block; font-size: 0.7rem; color: #c3d0e0; margin-top: 0.2rem; }
+.seen-cell { color: #c3d0e0; white-space: nowrap; }
 
-.empty-msg { color: #94a3b8; font-size: 0.875rem; text-align: center; padding: 1.5rem 0; }
+.empty-msg { color: #c3d0e0; font-size: 0.875rem; text-align: center; padding: 1.5rem 0; }
 .none      { color: #334155; }
 
 
@@ -416,6 +457,11 @@ tr:hover td      { background: #ffffff06; }
 .source-synology{ background: #10182a; color: #60a5fa; }
 .source-freebox { background: #1a102a; color: #c084fc; }
 .source-netbios { background: #102a1c; color: #34d399; }
+.source-snmp    { background: #1a1c10; color: #d9f99d; }
+.source-cast    { background: #142a18; color: #86efac; }
+.source-sonos   { background: #1c1c1c; color: #e5e5e5; }
+.source-roku    { background: #2a1530; color: #e9a6ff; }
+.source-samsung { background: #10202a; color: #7dd3fc; }
 
 /* Catégorie (IoT, Mobile, Router…) */
 .type-badge {
@@ -476,7 +522,7 @@ tr:hover td      { background: #ffffff06; }
 .svc-music  { background: #1a1030; color: #c084fc; }
 .svc-iot    { background: #0c2218; color: #34d399; }
 .svc-print  { background: #102018; color: #86efac; }
-.svc-other  { background: #1e293b; color: #94a3b8; }
+.svc-other  { background: #1e293b; color: #c3d0e0; }
 
 /* Badges ports TCP ouverts */
 .port-list {
@@ -504,7 +550,7 @@ tr:hover td      { background: #ffffff06; }
 .port-print  { background: #0a1a10; color: #86efac; border-color: #14532d; }
 .port-ha     { background: #1a0f00; color: #fdba74; border-color: #431407; }
 .port-legacy { background: #1a1010; color: #fca5a5; border-color: #450a0a; }
-.port-other  { background: #111827; color: #6b7280; border-color: #1f2937; }
+.port-other  { background: #111827; color: #9aacc2; border-color: #1f2937; }
 
 /* ════════════════════════════════════════════════════
    13. PAGE ÉQUIPEMENTS — Barre de statistiques
@@ -523,14 +569,14 @@ tr:hover td      { background: #ffffff06; }
 }
 .stat-sep     { color: #334155; font-weight: 300; }
 .stat-item    { font-weight: 600; letter-spacing: 0.02em; }
-.stat-known   { color: #94a3b8; }
+.stat-known   { color: #c3d0e0; }
 .stat-online  { color: #4ade80; }
 .stat-offline { color: #f87171; }
 
 /* Colonne statut en ligne / hors ligne */
 .status-cell    { text-align: center; width: 1.5rem; padding: 0 0.25rem; }
 .status-online  { color: #4ade80; font-size: 0.9rem; line-height: 1; cursor: default; }
-.status-offline { color: #475569; font-size: 0.9rem; line-height: 1; cursor: default; }
+.status-offline { color: #64748b; font-size: 0.9rem; line-height: 1; cursor: default; }
 
 /* Ligne de device hors ligne — atténuée */
 tr.row-offline td { opacity: 0.55; }
@@ -541,7 +587,7 @@ tr.row-offline td { opacity: 0.55; }
 
 label {
   display: block;
-  color: #94a3b8;
+  color: #c3d0e0;
   font-size: 0.9rem;
   margin-bottom: 0.75rem;
 }
@@ -583,7 +629,7 @@ input[type=file] {
 }
 .bar { height: 100%; background: #06b6d4; width: 0; transition: width 0.2s; }
 
-#msg { margin-top: 1rem; font-size: 0.9rem; color: #94a3b8; min-height: 1.25rem; }
+#msg { margin-top: 1rem; font-size: 0.9rem; color: #c3d0e0; min-height: 1.25rem; }
 
 /* OTA — titre dans la carte (margin spécifique) */
 .card-center .card-title { margin-bottom: 1.25rem; }
@@ -617,7 +663,7 @@ input[type=file] {
 .hist-icon { font-size: 1.1rem; line-height: 1.4; }
 .hist-body { flex: 1; }
 .hist-title { font-size: 0.9rem; font-weight: 600; color: #e2e8f0; }
-.hist-detail { font-size: 0.8rem; color: #94a3b8; margin-top: 0.15rem; }
+.hist-detail { font-size: 0.8rem; color: #c3d0e0; margin-top: 0.15rem; }
 .hist-old     { color: #f87171; text-decoration: line-through; }
 .hist-new-val { color: #4ade80; }
 .hist-time { font-size: 0.72rem; color: #aeb9c9; margin-top: 0.2rem; }
@@ -632,7 +678,7 @@ input[type=file] {
 
 .alias-edit {
   font-size: 0.7rem;
-  color: #64748b;
+  color: #9aacc2;
   background: none;
   border: none;
   cursor: pointer;
@@ -647,7 +693,7 @@ input[type=file] {
 }
 .seen-count {
   font-size: 0.68rem;
-  color: #64748b;
+  color: #9aacc2;
   margin-top: 0.1rem;
 }
 
@@ -680,4 +726,4 @@ input[type=file] {
 #wifi-list .alias-edit:hover { color: #ef4444; }
 
 #wifi-form input { margin-bottom: 0.9rem; }
-#wifi-msg { margin-top: 0.75rem; font-size: 0.85rem; color: #94a3b8; min-height: 1.1rem; }
+#wifi-msg { margin-top: 0.75rem; font-size: 0.85rem; color: #c3d0e0; min-height: 1.1rem; }

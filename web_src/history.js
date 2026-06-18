@@ -6,7 +6,7 @@ var EVENT_LABEL = {
 };
 
 var FIELD_LABEL = {
-  'ip': 'Adresse IP', 'manufacturer': 'Fabricant', 'category': 'Catégorie',
+  'ip': 'Adresse IP', 'manufacturer': 'Fabricant', 'category': 'Catégorie', 'type': 'Type',
   'hostname': 'Nom d\'hôte', 'openPorts': 'Ports ouverts'
 };
 

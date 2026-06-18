@@ -20,6 +20,9 @@
 #include "icmp_scanner.h"        // Sonde ICMP pour IPs non trouvées par ARP
 #include "port_scanner.h"        // Scan TCP ports communs + banner HTTP/SSH/FTP + API IoT
 #include "netbios_scanner.h"     // Node Status NetBIOS (UDP 137) - hostnames Windows/Samba
+#include "snmp_scanner.h"        // SNMP sysDescr (UDP 161) - fabricant/modele en texte clair
+#include "ws_discovery_scanner.h" // WS-Discovery (ONVIF) - cameras IP, imprimantes
+#include "media_api_scanner.h"   // API HTTP proprietaires : Cast, Sonos, Roku, Samsung TV
 #include "device_enricher.h"     // Enrichissement par pattern matching sur le hostname
 #include "device_history.h"      // Journal chronologique des evenements (nouveaux/changements)
 #include "time_sync.h"           // Epoch NTP pour firstSeen/lastSeen
@@ -112,6 +115,7 @@ void NetworkScanner::_readArpTable() {
                 if (oui) {
                     h.manufacturer = oui->manufacturer;
                     h.category     = oui->category;   // "Router", "IoT", "SBC"…
+                    h.type         = oui->type;        // "Smart Speaker", "Smart Display"… ("" si non renseigné)
                 }
             }
             _results.push_back(h);
@@ -336,6 +340,28 @@ void NetworkScanner::_addSelfEntry() {
 //   - S'il n'est pas encore dans la liste, on l'ajoute (équipement UPnP
 //     sans réponse ARP — cas rare mais possible sur certains réseaux)
 // ---------------------------------------------------------------------------
+void NetworkScanner::_applySsdpResult(NetworkDevice& d, const NetworkDevice& sdev) {
+    // Enrichissement des champs vides uniquement (ne pas écraser
+    // les données déjà résolues par ARP/mDNS/PTR/ISP)
+    if (d.manufacturer.isEmpty() && !sdev.manufacturer.isEmpty())
+        d.manufacturer = sdev.manufacturer;
+    if (d.model.isEmpty() && !sdev.model.isEmpty())
+        d.model = sdev.model;
+    if (d.category.isEmpty() || d.category == "IoT")
+        if (!sdev.category.isEmpty()) d.category = sdev.category;
+    if (d.os.isEmpty() && !sdev.os.isEmpty())
+        d.os = sdev.os;
+    if (d.hostname.isEmpty() && !sdev.hostname.isEmpty())
+        d.hostname = sdev.hostname;
+    // La source SSDP est ajoutée en suffixe si une autre source existe déjà
+    if (d.source.isEmpty()) {
+        d.source = sdev.source;
+    } else if (d.source.indexOf("SSDP") < 0 &&
+               d.source.indexOf("API")  < 0) {
+        d.source = sdev.source;   // Remplace MAC/PTR par source enrichie
+    }
+}
+
 void NetworkScanner::_mergeSsdp() {
     auto ssdpResults = ssdpScanner.scan(4000);
     if (ssdpResults.empty()) return;
@@ -346,25 +372,7 @@ void NetworkScanner::_mergeSsdp() {
         for (auto& d : _results) {
             if (d.ip != sdev.ip) continue;
             found = true;
-            // Enrichissement des champs vides uniquement (ne pas écraser
-            // les données déjà résolues par ARP/mDNS/PTR/ISP)
-            if (d.manufacturer.isEmpty() && !sdev.manufacturer.isEmpty())
-                d.manufacturer = sdev.manufacturer;
-            if (d.model.isEmpty() && !sdev.model.isEmpty())
-                d.model = sdev.model;
-            if (d.category.isEmpty() || d.category == "IoT")
-                if (!sdev.category.isEmpty()) d.category = sdev.category;
-            if (d.os.isEmpty() && !sdev.os.isEmpty())
-                d.os = sdev.os;
-            if (d.hostname.isEmpty() && !sdev.hostname.isEmpty())
-                d.hostname = sdev.hostname;
-            // La source SSDP est ajoutée en suffixe si une autre source existe déjà
-            if (d.source.isEmpty()) {
-                d.source = sdev.source;
-            } else if (d.source.indexOf("SSDP") < 0 &&
-                       d.source.indexOf("API")  < 0) {
-                d.source = sdev.source;   // Remplace MAC/PTR par source enrichie
-            }
+            _applySsdpResult(d, sdev);
             break;
         }
         if (!found && !sdev.ip.isEmpty()) {
@@ -388,6 +396,39 @@ void NetworkScanner::_mergeSsdp() {
 //   - hostname  : injecté si vide
 //   - category  : injecté si vide ou "IoT" (catégorie par défaut trop générique)
 // ---------------------------------------------------------------------------
+void NetworkScanner::_applyDnsSdResult(NetworkDevice& d, const DnsSdInfo& info) {
+    // Services : on accumule (DNS-SD peut découvrir des services complémentaires)
+    if (d.services.isEmpty()) {
+        d.services = info.services;
+    } else {
+        // Ajouter uniquement les services absents
+        String remaining = info.services;
+        int idx;
+        while ((idx = remaining.indexOf('|')) >= 0) {
+            String svc = remaining.substring(0, idx);
+            remaining  = remaining.substring(idx + 1);
+            if (!svc.isEmpty() && d.services.indexOf(svc) < 0) {
+                d.services += "|"; d.services += svc;
+            }
+        }
+        if (!remaining.isEmpty() && d.services.indexOf(remaining) < 0) {
+            d.services += "|"; d.services += remaining;
+        }
+    }
+
+    // Modèle depuis DNS-SD TXT records (souvent plus précis que SSDP)
+    if (d.model.isEmpty() && !info.model.isEmpty())
+        d.model = info.model;
+
+    // Hostname depuis SRV record (nom canonique, souvent plus propre)
+    if (d.hostname.isEmpty() && !info.hostname.isEmpty())
+        d.hostname = info.hostname;
+
+    // Catégorie DNS-SD (plus fine que "IoT" par défaut)
+    if ((d.category.isEmpty() || d.category == "IoT") && !info.category.isEmpty())
+        d.category = info.category;
+}
+
 void NetworkScanner::_mergeDnsSd() {
     auto dnssdResults = dnsSdScanner.scan(4000);
     if (dnssdResults.empty()) return;
@@ -401,38 +442,7 @@ void NetworkScanner::_mergeDnsSd() {
         for (auto& d : _results) {
             if (d.ip != ip) continue;
             found = true;
-
-            // Services : on accumule (DNS-SD peut découvrir des services complémentaires)
-            if (d.services.isEmpty()) {
-                d.services = info.services;
-            } else {
-                // Ajouter uniquement les services absents
-                String remaining = info.services;
-                int idx;
-                while ((idx = remaining.indexOf('|')) >= 0) {
-                    String svc = remaining.substring(0, idx);
-                    remaining  = remaining.substring(idx + 1);
-                    if (!svc.isEmpty() && d.services.indexOf(svc) < 0) {
-                        d.services += "|"; d.services += svc;
-                    }
-                }
-                if (!remaining.isEmpty() && d.services.indexOf(remaining) < 0) {
-                    d.services += "|"; d.services += remaining;
-                }
-            }
-
-            // Modèle depuis DNS-SD TXT records (souvent plus précis que SSDP)
-            if (d.model.isEmpty() && !info.model.isEmpty())
-                d.model = info.model;
-
-            // Hostname depuis SRV record (nom canonique, souvent plus propre)
-            if (d.hostname.isEmpty() && !info.hostname.isEmpty())
-                d.hostname = info.hostname;
-
-            // Catégorie DNS-SD (plus fine que "IoT" par défaut)
-            if ((d.category.isEmpty() || d.category == "IoT") && !info.category.isEmpty())
-                d.category = info.category;
-
+            _applyDnsSdResult(d, info);
             break;
         }
 
@@ -592,20 +602,56 @@ String NetworkScanner::_osFromTtl(uint8_t ttl) {
 }
 
 // ---------------------------------------------------------------------------
+// Fabricants dont l'OUI est partage entre PC, portables, tablettes,
+// smartphones, ecrans connectes et stations de travail. Pour ces marques,
+// le seul prefixe MAC ne permet pas de deduire la categorie de l'equipement
+// avec la meme fiabilite qu'un OUI dedie a une seule famille de produits
+// (Espressif, Raspberry Pi, Amazon, Sonos...). On abaisse donc la confiance
+// accordee a une identification basee uniquement sur l'OUI pour ces marques.
+// ---------------------------------------------------------------------------
+static const char* AMBIGUOUS_OUI_BRANDS[] = {
+    "Apple", "Samsung", "Xiaomi", "Huawei", "Intel",
+    "HP", "Dell", "Lenovo", "Microsoft", nullptr
+};
+
+static bool _isAmbiguousOuiBrand(const String& manufacturer) {
+    for (int i = 0; AMBIGUOUS_OUI_BRANDS[i] != nullptr; i++) {
+        if (manufacturer == AMBIGUOUS_OUI_BRANDS[i]) return true;
+    }
+    return false;
+}
+
+// Score de fiabilite generique associe a la source ayant produit une donnee
+// (reutilise pour la marque, la categorie, le modele et le type - cf. tableau
+// dans le commentaire de _confidenceFor).
+static int _sourceTier(const String& source) {
+    if (source == "Self")                                              return 100;
+    if (source == "HueAPI" || source == "SynologyAPI" || source == "FreeboxAPI") return 95;
+    if (source == "Cast" || source == "Sonos" || source == "Roku" || source == "SamsungTV") return 92;
+    if (source == "mDNS")                                              return 90;
+    if (source == "SNMP")                                              return 85;
+    if (source.indexOf("SSDP") >= 0)                                   return 80;
+    if (source == "PTR")                                               return 70;
+    if (source == "NetBIOS")                                           return 65;
+    if (source == "MAC")                                               return 60;
+    return 40;   // Heuristiques : pattern matching hostname/ports/services
+}
+
+// ---------------------------------------------------------------------------
 // Niveau de confiance de l'identification - explique a l'utilisateur d'ou
-// vient la deduction manufacturer/category affichee dans l'UI.
+// vient la deduction manufacturer/category/model/type affichee dans l'UI.
 //
-// Ponderation par fiabilite decroissante de la source ayant produit
-// l'identification (la plus forte deja appliquee gagne) :
-//   Box FAI (DHCP local)         : 100 - hostname confirme par le routeur lui-meme
-//   API specifique (Hue/DSM/...) : 95  - reponse authentifiee de l'equipement
-//   mDNS                         : 90  - annonce .local active de l'equipement
-//   SSDP/UPnP                    : 80  - descripteur XML fourni par l'equipement
-//   PTR DNS                      : 70  - resolution DNS inverse via le routeur
-//   NetBIOS                      : 65  - Node Status (UDP 137)
-//   OUI (adresse MAC)            : 60  - fabricant deduit, pas le modele exact
-//   Heuristiques                 : 40  - pattern matching hostname/ports/services
-//   Aucun signal                 : 20  - aucune source fiable n'a contribue
+// Le score affiche est volontairement prudent : plutot que de retenir le
+// meilleur signal disponible, on retient le plus faible parmi marque et
+// categorie (le maillon le plus incertain determine la confiance globale).
+// Une OUI ambigue (Apple, Samsung, Xiaomi, Huawei, Intel, HP, Dell, Lenovo,
+// Microsoft) ne suffit jamais a elle seule a justifier une confiance elevee,
+// car le meme prefixe MAC peut designer un PC, un portable, une tablette,
+// un smartphone, un ecran connecte ou une station de travail.
+//
+// L'infobulle (label) detaille la confiance par champ : Marque / Categorie /
+// Modele / Type, pour que l'utilisateur comprenne quelle partie de la fiche
+// est solide et laquelle reste une supposition.
 // ---------------------------------------------------------------------------
 int NetworkScanner::_confidenceFor(const NetworkDevice& d, String& label) {
     if (d.source == "Self") {
@@ -616,39 +662,42 @@ int NetworkScanner::_confidenceFor(const NetworkDevice& d, String& label) {
                   (d.manufacturer == "Free" || d.manufacturer == "Orange" ||
                    d.manufacturer == "SFR"  || d.manufacturer == "Bouygues Telecom");
     if (ispBox) {
-        label = "Box FAI (DHCP)";
+        label = "Box FAI (DHCP) — Marque 100% · Categorie 100%";
         return 100;
     }
-    if (d.source == "HueAPI" || d.source == "SynologyAPI" || d.source == "FreeboxAPI") {
-        label = "API " + d.source;
-        return 95;
-    }
-    if (d.source == "mDNS") {
-        label = "mDNS";
-        return 90;
-    }
-    if (d.source.indexOf("SSDP") >= 0) {
-        label = "SSDP";
-        return 80;
-    }
-    if (d.source == "PTR") {
-        label = "PTR DNS";
-        return 70;
-    }
-    if (d.source == "NetBIOS") {
-        label = "NetBIOS";
-        return 65;
-    }
+
+    bool ambiguousOui = (d.source == "MAC") && _isAmbiguousOuiBrand(d.manufacturer);
+
+    int mfrConf = 0;
     if (!d.manufacturer.isEmpty()) {
-        label = "OUI";
-        return 60;
+        mfrConf = ambiguousOui ? 35 : _sourceTier(d.source);
     }
+
+    int catConf = 0;
     if (!d.category.isEmpty()) {
-        label = "Heuristiques";
-        return 40;
+        catConf = ambiguousOui ? 35 : _sourceTier(d.source);
+        // Categorie "IoT" par defaut, sans port/service detecte : signal faible
+        if (d.category == "IoT" && d.openPorts.isEmpty() && d.services.isEmpty())
+            catConf = min(catConf, 30);
     }
-    label = "Aucun signal";
-    return 20;
+
+    int modelConf = d.model.isEmpty() ? 0 : _sourceTier(d.source);
+    int typeConf  = d.type.isEmpty()  ? 0 : _sourceTier(d.source);
+
+    // Score global prudent : le maillon le plus faible entre marque et
+    // categorie (s'ils existent tous les deux), sinon celui qui existe.
+    int overall;
+    if (mfrConf > 0 && catConf > 0) overall = min(mfrConf, catConf);
+    else                            overall = max(mfrConf, catConf);
+    if (overall == 0) overall = 20;   // Aucun signal
+
+    label  = "Marque "     + String(mfrConf)  + "%";
+    label += " · Categorie " + String(catConf) + "%";
+    if (modelConf > 0) label += " · Modele " + String(modelConf) + "%";
+    if (typeConf  > 0) label += " · Type "   + String(typeConf)  + "%";
+    if (ambiguousOui) label += " (OUI partage entre plusieurs familles d'appareils)";
+
+    return overall;
 }
 
 // ---------------------------------------------------------------------------
@@ -703,6 +752,29 @@ static String _bannerToMfr(const String& banner) {
     if (b.indexOf("mikrotik") >= 0)  return "MikroTik";
     if (b.indexOf("goahead")  >= 0)  return "IP Camera";   // GoAhead = firmware caméra IP
     if (b.indexOf("homeassistant") >= 0) return "Home Assistant";
+    return "";
+}
+
+// Heuristiques sysDescr SNMP → fabricant (texte libre, generalement explicite :
+// "HP LaserJet...", "Cisco IOS...", "MikroTik RouterOS...")
+static String _sysDescrToMfr(const String& descr) {
+    String b = descr;
+    b.toLowerCase();
+    if (b.indexOf("hp ") >= 0 || b.indexOf("hewlett") >= 0) return "HP";
+    if (b.indexOf("brother")  >= 0) return "Brother";
+    if (b.indexOf("canon")    >= 0) return "Canon";
+    if (b.indexOf("epson")    >= 0) return "Epson";
+    if (b.indexOf("cisco")    >= 0) return "Cisco";
+    if (b.indexOf("mikrotik") >= 0) return "MikroTik";
+    if (b.indexOf("ubiquiti") >= 0) return "Ubiquiti";
+    if (b.indexOf("synology") >= 0) return "Synology";
+    if (b.indexOf("qnap")     >= 0) return "QNAP";
+    if (b.indexOf("zyxel")    >= 0) return "Zyxel";
+    if (b.indexOf("tp-link")  >= 0) return "TP-Link";
+    if (b.indexOf("netgear")  >= 0) return "Netgear";
+    if (b.indexOf("d-link")   >= 0) return "D-Link";
+    if (b.indexOf("aruba")    >= 0) return "Aruba";
+    if (b.indexOf("juniper")  >= 0) return "Juniper";
     return "";
 }
 
@@ -976,6 +1048,7 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous) 
             checkChange("ip",           prev->ip,           d.ip);
             checkChange("manufacturer", prev->manufacturer, d.manufacturer);
             checkChange("category",     prev->category,     d.category);
+            checkChange("type",         prev->type,          d.type);
             checkChange("hostname",     prev->hostname,      d.hostname);
             checkChange("openPorts",    prev->openPorts,     d.openPorts);
         } else if (prev->online) {
@@ -1081,6 +1154,7 @@ String NetworkScanner::resultsToJson() const {
         obj["manufacturer"] = d.manufacturer;
         obj["hostname"]     = d.hostname;
         obj["category"]     = d.category;
+        obj["type"]         = d.type;
         obj["model"]        = d.model;
         obj["os"]           = d.os;
         obj["source"]       = d.source;
@@ -1165,6 +1239,14 @@ int NetworkScanner::resetDevices(bool keepAlias, bool keepManufacturer) {
 // repond - resolution de nom, scan de ports et NetBIOS limites a cette IP.
 // Refuse si un scan complet est en cours (_scanning).
 // ---------------------------------------------------------------------------
+void NetworkScanner::_setRescanProgress(const String& step, int percent) {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _rescanStatus.step    = step;
+    _rescanStatus.percent = percent;
+    xSemaphoreGive(_mutex);
+    Log::i(TAG, "Rescan %s — %s (%d%%)", _rescanStatus.ip.c_str(), step.c_str(), percent);
+}
+
 bool NetworkScanner::rescanDevice(const String& ip) {
     if (_scanning) return false;
 
@@ -1178,8 +1260,45 @@ bool NetworkScanner::rescanDevice(const String& ip) {
     }
     if (!known) return false;
 
-    _scanning = true;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _rescanStatus.running = true;
+    _rescanStatus.ok      = false;
+    _rescanStatus.ip      = ip;
+    _rescanStatus.step    = "Démarrage";
+    _rescanStatus.percent = 0;
+    xSemaphoreGive(_mutex);
 
+    _scanning = true;
+    // Meme empreinte stack que le scan complet : SSDP/DNS-SD parcourent tout
+    // le sous-reseau en interne avant filtrage sur l'IP visee (multicast,
+    // pas de requete unicast ciblee possible avec ces protocoles).
+    xTaskCreatePinnedToCore(_rescanTask, "net_rescan", 24576, this, 1, &_rescanTaskHandle, 0);
+    Log::i(TAG, "Passe précise lancée — %s", ip.c_str());
+    return true;
+}
+
+void NetworkScanner::_rescanTask(void* selfPtr) {
+    NetworkScanner* self = static_cast<NetworkScanner*>(selfPtr);
+    String ip;
+    {
+        xSemaphoreTake(self->_mutex, portMAX_DELAY);
+        ip = self->_rescanStatus.ip;
+        xSemaphoreGive(self->_mutex);
+    }
+    self->_runRescan(ip);
+
+    xSemaphoreTake(self->_mutex, portMAX_DELAY);
+    self->_rescanStatus.running = false;
+    self->_rescanStatus.step    = "Terminé";
+    self->_rescanStatus.percent = 100;
+    xSemaphoreGive(self->_mutex);
+
+    self->_scanning         = false;
+    self->_rescanTaskHandle = nullptr;
+    vTaskDelete(nullptr);
+}
+
+void NetworkScanner::_runRescan(const String& ip) {
     std::vector<NetworkDevice> previousState;
     {
         xSemaphoreTake(_mutex, portMAX_DELAY);
@@ -1188,6 +1307,7 @@ bool NetworkScanner::rescanDevice(const String& ip) {
     }
 
     // ── Sonde ARP directe sur l'IP ───────────────────────────────────────
+    _setRescanProgress("ARP", 5);
     IPAddress target;
     target.fromString(ip);
     ip4_addr_t ip4target;
@@ -1210,6 +1330,7 @@ bool NetworkScanner::rescanDevice(const String& ip) {
 
     // ── Repli ICMP si l'ARP n'a pas repondu ──────────────────────────────
     if (!isOnline) {
+        _setRescanProgress("ICMP", 10);
         auto pings = icmpScanner.pingWithTtl({ ip }, 300);
         if (!pings.empty() && pings[0].ttl > 0) {
             isOnline = true;
@@ -1234,6 +1355,7 @@ bool NetworkScanner::rescanDevice(const String& ip) {
 
     // ── Enrichissement, uniquement si l'equipement repond ────────────────
     if (isOnline) {
+        _setRescanProgress("Hostname (PTR)", 20);
         hostnameResolver.batchPtrDns({ ip });
         HostnameSource src = HostnameSource::None;
         String name = hostnameResolver.resolve(ip, src);
@@ -1250,7 +1372,10 @@ bool NetworkScanner::rescanDevice(const String& ip) {
         }
         xSemaphoreGive(_mutex);
 
-        auto portResults = portScanner.scan({ ip }, 250);
+        // Scan de ports plus long qu'en scan complet (500 ms vs 250 ms) :
+        // une seule cible, on peut se permettre d'attendre des banners lents.
+        _setRescanProgress("Ports TCP", 35);
+        auto portResults = portScanner.scan({ ip }, 500);
         auto prIt = portResults.find(ip);
         if (prIt != portResults.end()) {
             xSemaphoreTake(_mutex, portMAX_DELAY);
@@ -1269,6 +1394,7 @@ bool NetworkScanner::rescanDevice(const String& ip) {
             xSemaphoreGive(_mutex);
         }
         if (needsHostname) {
+            _setRescanProgress("NetBIOS", 45);
             auto nbResults = netBiosScanner.scan({ ip }, 250);
             auto nbIt = nbResults.find(ip);
             if (nbIt != nbResults.end()) {
@@ -1279,6 +1405,107 @@ bool NetworkScanner::rescanDevice(const String& ip) {
                 xSemaphoreGive(_mutex);
             }
         }
+
+        // ── SSDP/UPnP + DNS-SD ────────────────────────────────────────────
+        // Ces protocoles reposent sur de la diffusion multicast (pas de requete
+        // ciblee sur une seule IP) : on relance la decouverte complete avec un
+        // delai genereux, et on ne fusionne que la reponse de l'IP visee.
+        // Justifie ici car l'utilisateur attend explicitement le resultat
+        // d'une seule fiche, contrairement au scan complet ou ce cout serait
+        // paye pour chaque equipement.
+        _setRescanProgress("SSDP/UPnP", 60);
+        auto ssdpResults = ssdpScanner.scan(5000);
+        for (const auto& sdev : ssdpResults) {
+            if (sdev.ip != ip) continue;
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (auto& d : _results) {
+                if (d.ip == ip) { _applySsdpResult(d, sdev); break; }
+            }
+            xSemaphoreGive(_mutex);
+            break;
+        }
+
+        _setRescanProgress("DNS-SD", 80);
+        auto dnssdResults = dnsSdScanner.scan(5000);
+        auto ddIt = dnssdResults.find(ip);
+        if (ddIt != dnssdResults.end()) {
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (auto& d : _results) {
+                if (d.ip == ip) { _applyDnsSdResult(d, ddIt->second); break; }
+            }
+            xSemaphoreGive(_mutex);
+        }
+
+        // ── WS-Discovery (ONVIF) ──────────────────────────────────────────
+        // Protocole utilise par la quasi-totalite des cameras IP et
+        // imprimantes ONVIF pour s'annoncer, independamment de SSDP. Comme
+        // SSDP/DNS-SD, c'est une decouverte multicast non ciblable par IP :
+        // on relance la decouverte complete et on ne garde que l'IP visee.
+        _setRescanProgress("WS-Discovery", 72);
+        auto wsdResults = wsDiscoveryScanner.scan(2000);
+        auto wsdIt = wsdResults.find(ip);
+        if (wsdIt != wsdResults.end()) {
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (auto& d : _results) {
+                if (d.ip != ip) continue;
+                if (!wsdIt->second.category.isEmpty() &&
+                    (d.category.isEmpty() || _isAmbiguousOuiBrand(d.manufacturer))) {
+                    d.category = wsdIt->second.category;
+                }
+                if (d.type.isEmpty() && !wsdIt->second.types.isEmpty()) {
+                    d.type = wsdIt->second.types;
+                }
+                if (d.source.isEmpty() || d.source == "MAC") d.source = "SSDP";
+                break;
+            }
+            xSemaphoreGive(_mutex);
+        }
+
+        // ── API HTTP proprietaires (Cast / Sonos / Roku / Samsung TV) ───────
+        // Outils non utilises jusqu'ici : ces ports fixes ne sont pas dans la
+        // liste du scan de ports standard, mais repondent en clair avec le
+        // modele et le nom convivial exact de l'appareil multimedia.
+        _setRescanProgress("API multimédia", 86);
+        MediaApiResult mediaRes = mediaApiScanner.probe(ip, 600);
+        if (!mediaRes.apiType.isEmpty()) {
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (auto& d : _results) {
+                if (d.ip != ip) continue;
+                if (!mediaRes.manufacturer.isEmpty() &&
+                    (d.manufacturer.isEmpty() || _isAmbiguousOuiBrand(d.manufacturer))) {
+                    d.manufacturer = mediaRes.manufacturer;
+                }
+                if (!mediaRes.model.isEmpty()) d.model = mediaRes.model;
+                if (!mediaRes.category.isEmpty() && d.category.isEmpty()) d.category = mediaRes.category;
+                if (!mediaRes.friendlyName.isEmpty() && d.hostname.isEmpty()) d.hostname = mediaRes.friendlyName;
+                d.source = mediaRes.apiType;
+                break;
+            }
+            xSemaphoreGive(_mutex);
+        }
+
+        // ── SNMP sysDescr ─────────────────────────────────────────────────
+        // Outil non utilise jusqu'ici dans le projet : de nombreux routeurs,
+        // switches, imprimantes et NAS exposent SNMP en lecture publique et
+        // y renseignent fabricant + modele en texte clair, plus fiable qu'un
+        // OUI MAC ambigu ou qu'un banner HTTP succinct.
+        _setRescanProgress("SNMP", 95);
+        auto snmpResults = snmpScanner.querySysDescr({ ip }, 400);
+        auto snIt = snmpResults.find(ip);
+        if (snIt != snmpResults.end()) {
+            xSemaphoreTake(_mutex, portMAX_DELAY);
+            for (auto& d : _results) {
+                if (d.ip != ip) continue;
+                if (d.model.isEmpty()) d.model = snIt->second;
+                String mfr = _sysDescrToMfr(snIt->second);
+                if (!mfr.isEmpty() && (d.manufacturer.isEmpty() || _isAmbiguousOuiBrand(d.manufacturer))) {
+                    d.manufacturer = mfr;
+                }
+                if (d.source.isEmpty() || d.source == "MAC") d.source = "SNMP";
+                break;
+            }
+            xSemaphoreGive(_mutex);
+        }
     }
 
     _enrichDevices();
@@ -1288,8 +1515,29 @@ bool NetworkScanner::rescanDevice(const String& ip) {
 
     Log::i(TAG, "Rafraichissement cible terminé — %s (%s)", ip.c_str(), isOnline ? "en ligne" : "hors ligne");
 
-    _scanning = false;
-    return true;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _rescanStatus.ok = isOnline;
+    xSemaphoreGive(_mutex);
+}
+
+RescanStatus NetworkScanner::getRescanStatus() const {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    RescanStatus s = _rescanStatus;
+    xSemaphoreGive(_mutex);
+    return s;
+}
+
+String NetworkScanner::rescanStatusToJson() const {
+    RescanStatus s = getRescanStatus();
+    JsonDocument doc;
+    doc["running"] = s.running;
+    doc["ok"]      = s.ok;
+    doc["ip"]      = s.ip;
+    doc["step"]    = s.step;
+    doc["percent"] = s.percent;
+    String json;
+    serializeJson(doc, json);
+    return json;
 }
 
 // ---------------------------------------------------------------------------
@@ -1312,6 +1560,7 @@ String NetworkScanner::backupToJson() const {
         obj["manufacturer"] = d.manufacturer;
         obj["hostname"]     = d.hostname;
         obj["category"]     = d.category;
+        obj["type"]         = d.type;
         obj["model"]        = d.model;
         obj["os"]           = d.os;
         obj["source"]       = d.source;
@@ -1350,6 +1599,7 @@ bool NetworkScanner::restoreFromJson(const String& json) {
         d.manufacturer  = obj["manufacturer"] | "";
         d.hostname      = obj["hostname"]     | "";
         d.category      = obj["category"]     | "";
+        d.type          = obj["type"]         | "";
         d.model         = obj["model"]        | "";
         d.os            = obj["os"]           | "";
         d.source        = obj["source"]       | "";

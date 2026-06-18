@@ -2,7 +2,7 @@
  * DeviceStore — Implémentation
  *
  * Format de stockage : tableau JSON dans /devices.json sur LittleFS
- * Chaque objet : ip, mac, manufacturer, hostname, category, model, os, source, services
+ * Chaque objet : ip, mac, manufacturer, hostname, category, type, model, os, source, services
  *
  * Limitation mémoire : ArduinoJson v7 alloue dynamiquement.
  * Un réseau /24 complet (254 devices) = environ 50 Ko de JSON.
@@ -59,6 +59,7 @@ std::vector<NetworkDevice> DeviceStore::load() {
         d.manufacturer = obj["manufacturer"] | "";
         d.hostname     = obj["hostname"]     | "";
         d.category     = obj["category"]     | "";
+        d.type         = obj["type"]         | "";
         d.model        = obj["model"]        | "";
         d.os           = obj["os"]           | "";
         d.source       = obj["source"]       | "";
@@ -97,6 +98,7 @@ void DeviceStore::save(const std::vector<NetworkDevice>& devices) {
         obj["manufacturer"] = d.manufacturer;
         obj["hostname"]     = d.hostname;
         obj["category"]     = d.category;
+        obj["type"]         = d.type;
         obj["model"]        = d.model;
         obj["os"]           = d.os;
         obj["source"]       = d.source;

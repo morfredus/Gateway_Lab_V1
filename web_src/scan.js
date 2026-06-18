@@ -73,7 +73,12 @@ function sourceBadge(source) {
     'HueAPI':       { cls: 'source-hue',       label: 'Hue',       title: 'API Philips Hue Bridge (/api/config)' },
     'SynologyAPI':  { cls: 'source-synology',  label: 'DSM',       title: 'API Synology DSM (non authentifiée)' },
     'FreeboxAPI':   { cls: 'source-freebox',   label: 'Freebox',   title: 'API Freebox (/api_version — non authentifiée)' },
-    'NetBIOS':      { cls: 'source-netbios',   label: 'NetBIOS',   title: 'Nom resolu via NetBIOS Node Status (UDP 137) - PC Windows / Samba' }
+    'NetBIOS':      { cls: 'source-netbios',   label: 'NetBIOS',   title: 'Nom resolu via NetBIOS Node Status (UDP 137) - PC Windows / Samba' },
+    'SNMP':         { cls: 'source-snmp',      label: 'SNMP',      title: 'sysDescr SNMP (UDP 161) — fabricant/modèle en texte clair' },
+    'Cast':         { cls: 'source-cast',      label: 'Cast',      title: 'API Google Cast (/setup/eureka_info)' },
+    'Sonos':        { cls: 'source-sonos',     label: 'Sonos',     title: 'API Sonos (/xml/device_description.xml)' },
+    'Roku':         { cls: 'source-roku',      label: 'Roku',      title: 'API Roku (/query/device-info)' },
+    'SamsungTV':    { cls: 'source-samsung',   label: 'Samsung',   title: 'API Samsung Smart TV (/api/v2/)' }
   };
   var c = cfg[source];
   if (!c) return '';
@@ -144,7 +149,8 @@ function renderDevices(devices) {
         svcHtml + portsHtml
       : (svcHtml + portsHtml || '<span class="none">—</span>');
     var catHtml = d.category
-      ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>' + confBadge(d)
+      ? '<span class="type-badge ' + categoryClass(d.category) + '">' + esc(d.category) + '</span>' +
+        (d.type ? '<div class="subtype-tag">' + esc(d.type) + '</div>' : '') + confBadge(d)
       : '<span class="none">—</span>' + confBadge(d);
     var seenHtml = d.online
       ? fmtSeen(d.elapsedMs)
@@ -222,20 +228,82 @@ function editAlias(btn) {
     .then(function() { fetchDevices(); });
 }
 
+var RESCAN_ROW_ID = 'rescan-progress-row';
+
+function showRescanRow(afterRow, ip, step, percent) {
+  var row = document.getElementById(RESCAN_ROW_ID);
+  if (!row) {
+    row = document.createElement('tr');
+    row.id = RESCAN_ROW_ID;
+    var nCols = afterRow.children.length || 7;
+    row.innerHTML =
+      '<td colspan="' + nCols + '">' +
+        '<div class="rescan-row-banner">' +
+          '<span class="rescan-row-text" id="rescan-row-text"></span>' +
+          '<div class="rescan-row-bar-wrap"><div class="rescan-row-bar" id="rescan-row-bar"></div></div>' +
+          '<span class="rescan-row-pct" id="rescan-row-pct"></span>' +
+        '</div>' +
+      '</td>';
+  }
+  if (afterRow.nextSibling !== row) {
+    afterRow.parentNode.insertBefore(row, afterRow.nextSibling);
+  }
+  document.getElementById('rescan-row-text').textContent = 'Passe précise sur ' + ip + ' — ' + step;
+  document.getElementById('rescan-row-bar').style.width = (percent || 0) + '%';
+  document.getElementById('rescan-row-pct').textContent = (percent || 0) + '%';
+}
+
+function hideRescanRow() {
+  var row = document.getElementById(RESCAN_ROW_ID);
+  if (row) row.remove();
+}
+
+function pollRescanStatus(btn, prevHtml, ip, row) {
+  fetch('/api/devices/rescan/status').then(function(r) { return r.json(); }).then(function(s) {
+    if (s.running) {
+      var pct = s.percent || 0;
+      btn.textContent = pct + '%';
+      btn.title = 'Passe précise en cours — ' + (s.step || '…');
+      showRescanRow(row, ip, s.step || '…', pct);
+      setTimeout(function() { pollRescanStatus(btn, prevHtml, ip, row); }, 500);
+    } else {
+      btn.disabled = false;
+      btn.textContent = prevHtml;
+      btn.removeAttribute('title');
+      hideRescanRow();
+      fetchDevices();
+    }
+  }).catch(function() {
+    btn.disabled = false;
+    btn.textContent = prevHtml;
+    hideRescanRow();
+  });
+}
+
 function rescanDevice(btn) {
   var ip = btn.getAttribute('data-ip');
+  var row = btn.closest('tr');
   btn.disabled = true;
   var prevHtml = btn.textContent;
   btn.textContent = '…';
+  btn.title = 'Passe précise en cours — Démarrage';
+  showRescanRow(row, ip, 'Démarrage', 0);
   fetch('/api/devices/rescan', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'ip=' + encodeURIComponent(ip) })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      if (d.error) alert('Réinterrogation impossible : ' + d.error);
-      fetchDevices();
+      if (d.error) {
+        alert('Réinterrogation impossible : ' + d.error);
+        btn.disabled = false;
+        btn.textContent = prevHtml;
+        hideRescanRow();
+        return;
+      }
+      pollRescanStatus(btn, prevHtml, ip, row);
     })
     .catch(function() {
       btn.disabled = false;
       btn.textContent = prevHtml;
+      hideRescanRow();
     });
 }
 

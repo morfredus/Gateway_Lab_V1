@@ -301,6 +301,12 @@ void SsdpScanner::_categorize(NetworkDevice& dev, const String& deviceType) {
         dev.category = "Streaming";
         return;
     }
+    // Amazon Fire TV / Fire Stick (protocole DIAL)
+    if (mfr.indexOf("amazon") >= 0) {
+        dev.category = "Streaming";
+        dev.os = "Fire OS";
+        return;
+    }
     // Livebox / Orange
     if (mfr.indexOf("sagemcom") >= 0 || mfr.indexOf("orange") >= 0 ||
         model.indexOf("livebox") >= 0) {
@@ -327,6 +333,7 @@ void SsdpScanner::_categorize(NetworkDevice& dev, const String& deviceType) {
         dtype.indexOf("router")        >= 0) { dev.category = "Router";    return; }
     if (dtype.indexOf("tv")            >= 0) { dev.category = "TV";        return; }
     if (dtype.indexOf("bridge")        >= 0) { dev.category = "SmartHub";  return; }
+    if (dtype.indexOf("dial")          >= 0) { dev.category = "Streaming"; return; }
 
     // Fallback générique
     dev.category = "IoT";

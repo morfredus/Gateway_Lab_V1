@@ -72,6 +72,9 @@ void setup() {
             .rescanDevice    = [](const String& ip) {
                 return netScanner.rescanDevice(ip);
             },
+            .getRescanStatusJson = [] {
+                return netScanner.rescanStatusToJson();
+            },
             .getHistoryJson  = [] {
                 JsonDocument doc;
                 JsonArray arr = doc.to<JsonArray>();

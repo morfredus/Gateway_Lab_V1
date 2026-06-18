@@ -8,7 +8,8 @@
  *   POST /api/scan     — Déclenchement d'un scan réseau
  *   POST /api/alias    — Definit l'alias utilisateur d'un equipement
  *   POST /api/devices/reset — RAZ des equipements connus (base vide)
- *   POST /api/devices/rescan — Rafraichit un seul equipement (parametre ip)
+ *   POST /api/devices/rescan — Rafraichit un seul equipement (parametre ip), asynchrone
+ *   GET  /api/devices/rescan/status — Avancement de la passe precise en cours (polling)
  *   DELETE /api/history — Vide le journal chronologique
  *   GET  /history       — Page vue chronologique (HTML embarque en PROGMEM)
  *   GET  /api/history   — Journal chronologique des evenements en JSON
@@ -42,6 +43,7 @@ struct ScanProvider {
     std::function<bool(const String& macOrIp, const String& alias)> setAlias;  // Alias utilisateur
     std::function<int(bool keepAlias, bool keepManufacturer)> resetDevices;    // RAZ des equipements connus
     std::function<bool(const String& ip)> rescanDevice;   // Rafraichit un seul equipement (sans scan complet)
+    std::function<String()> getRescanStatusJson;          // Avancement de la passe precise en cours (polling UI)
     std::function<String()> getHistoryJson;   // Journal chronologique (evenements) en JSON
     std::function<void()>   clearHistory;     // Vide le journal d'historique
     std::function<String()> getBackupJson;    // Sauvegarde complete en JSON
@@ -67,6 +69,7 @@ private:
     void _handleApiSetAlias();      // Definit l'alias utilisateur d'un equipement
     void _handleApiDevicesReset();  // RAZ des equipements connus (base vide)
     void _handleApiDeviceRescan();  // Rafraichit un seul equipement (sans scan complet)
+    void _handleApiDeviceRescanStatus();  // Avancement de la passe precise en cours
     void _handleApiHistory();       // Retourne le journal chronologique en JSON
     void _handleApiHistoryClear();  // Vide le journal chronologique
     void _handleApiBackup();        // Retourne la sauvegarde complete en JSON
