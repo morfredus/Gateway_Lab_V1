@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gateway Lab V1 — Mise à jour OTA</title>
+  <title>Gateway Lab V1 - Topologie</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="page-scan">
@@ -14,7 +14,7 @@
       Gateway Lab&nbsp;V1
       <span class="site-ver" id="site-ver">v—</span>
     </div>
-    <span class="site-tag">Mise à jour OTA</span>
+    <span class="site-tag">Passerelle réseau locale</span>
   </header>
 
   <!-- ── Navigation ────────────────────────────────────────── -->
@@ -22,31 +22,34 @@
     <a href="/">Accueil</a>
     <a href="/scan">Équipements</a>
     <a href="/history">Historique</a>
-    <a href="/topology">Topologie</a>
-    <a href="/update" class="active">OTA</a>
+    <a href="/topology" class="active">Topologie</a>
+    <a href="/update">OTA</a>
     <a href="/wifi">Paramètres</a>
   </nav>
 
   <!-- ── Contenu ───────────────────────────────────────────── -->
-  <div class="card card-center">
-    <p class="card-title">Mise à jour du firmware</p>
-    <form id="f">
-      <label>Sélectionnez le fichier firmware (.bin)</label>
-      <input type="file" id="fw" accept=".bin">
-      <button type="submit" class="btn">Mettre à jour</button>
-    </form>
-    <div class="progress" id="pg">
-      <div class="bar" id="bar"></div>
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Cartographie du réseau</p>
     </div>
-    <p id="msg"></p>
+    <p class="info-label" style="margin-bottom:0.9rem">
+      Cette page accueillera la cartographie du réseau local : passerelle, points
+      d'accès / répéteurs WiFi détectés et équipements rattachés. Fonctionnalité
+      en préparation (voir la roadmap) — en attendant, une vue simplifiée liste
+      la passerelle et les équipements identifiés comme points d'accès WiFi.
+    </p>
+    <div id="topology-list"></div>
+    <p class="empty-msg" id="topology-empty" style="display:none">
+      Aucune information de topologie disponible pour le moment — lancez un scan
+      depuis la page Équipements.
+    </p>
   </div>
 
   <!-- ── Footer ────────────────────────────────────────────── -->
   <footer>
     <span id="footer-ts">—</span>
-    <a href="/">← Accueil</a>
   </footer>
 
-  <script src="ota.js"></script>
+  <script src="topology.js"></script>
 </body>
 </html>

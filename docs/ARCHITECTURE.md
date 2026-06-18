@@ -49,7 +49,10 @@ et comment les différentes parties s'articulent entre elles.
                     │                 │
                     │  /             │
                     │  /scan         │
+                    │  /history      │
+                    │  /topology     │
                     │  /update       │
+                    │  /wifi         │
                     │  /api/devices  │
                     └─────────────────┘
 ```
@@ -274,11 +277,14 @@ Les pages web ne sont pas stockées sur une carte SD ou en SPIFFS.
 Elles sont **compilées directement dans le firmware** :
 
 ```
-web_src/styles.css   ──┐
-web_src/index.html   ──┤
-web_src/scan.html    ──┼── python tools/minify_web.py ──► include/*.h
-web_src/ota.html     ──┤
-data/oui.json        ──┘
+web_src/styles.css    ──┐
+web_src/index.html    ──┤
+web_src/scan.html     ──┤
+web_src/history.html  ──┼── python tools/minify_web.py ──► include/*.h
+web_src/wifi.html     ──┤
+web_src/topology.html ──┤
+web_src/ota.html      ──┤
+data/oui.json         ──┘
                               │
                               ▼
                     pio run (compilation C++)

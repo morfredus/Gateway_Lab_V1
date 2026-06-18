@@ -69,6 +69,13 @@ PAGES = [
         "WIFI_PAGE",
         None,
     ),
+    (
+        WEB_SRC_DIR / "topology.html",
+        WEB_SRC_DIR / "topology.js",
+        INCLUDE_DIR / "web_interface_topology.h",
+        "TOPOLOGY_PAGE",
+        None,
+    ),
 ]
 
 # ---------------------------------------------------------------------------

@@ -38,7 +38,8 @@ function renderEntry(e) {
          '</div>';
 }
 
-var historyData = [];
+var historyData  = [];
+var favoriteMacs = {};
 
 function activeFilters() {
   var checked = {};
@@ -47,8 +48,13 @@ function activeFilters() {
 }
 
 function renderHistory() {
-  var filters   = activeFilters();
-  var filtered  = historyData.filter(function(e) { return filters[e.event]; });
+  var filters    = activeFilters();
+  var favOnly    = document.getElementById('hist-filter-favorite').checked;
+  var filtered   = historyData.filter(function(e) {
+    if (!filters[e.event]) return false;
+    if (favOnly && !favoriteMacs[e.mac]) return false;
+    return true;
+  });
   var container = document.getElementById('history-list');
   var empty     = document.getElementById('history-empty');
   if (!filtered.length) {
@@ -64,6 +70,18 @@ function renderHistory() {
 document.querySelectorAll('.hist-filter').forEach(function(cb) {
   cb.addEventListener('change', renderHistory);
 });
+document.getElementById('hist-filter-favorite').addEventListener('change', renderHistory);
+
+function loadFavorites() {
+  fetch('/api/devices')
+    .then(function(r) { return r.json(); })
+    .then(function(list) {
+      favoriteMacs = {};
+      (list || []).forEach(function(d) { if (d.favorite) favoriteMacs[d.mac] = true; });
+      renderHistory();
+    })
+    .catch(function() {});
+}
 
 function loadHistory() {
   fetch('/api/history')
@@ -106,5 +124,7 @@ fetch('/api/status').then(function(r) { return r.json(); }).then(function(d) {
   if (d.version) document.getElementById('site-ver').textContent = 'v' + d.version;
 }).catch(function() {});
 
+loadFavorites();
 loadHistory();
 setInterval(loadHistory, 30000);
+setInterval(loadFavorites, 30000);

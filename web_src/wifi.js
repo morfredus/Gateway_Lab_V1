@@ -88,5 +88,23 @@ document.getElementById('wifi-form').addEventListener('submit', function(e) {
     });
 });
 
+function refreshLedBrightness() {
+  fetch('/api/led/brightness', { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(d) {
+    document.getElementById('led-brightness').value = d.brightness;
+    document.getElementById('led-brightness-value').textContent = d.brightness;
+  }).catch(function() {});
+}
+
+var ledBrightnessInput = document.getElementById('led-brightness');
+ledBrightnessInput.addEventListener('input', function() {
+  document.getElementById('led-brightness-value').textContent = ledBrightnessInput.value;
+});
+ledBrightnessInput.addEventListener('change', function() {
+  var fd = new FormData();
+  fd.append('value', ledBrightnessInput.value);
+  fetch('/api/led/brightness', { method: 'POST', body: fd }).catch(function() {});
+});
+
 refreshWifiStatus();
+refreshLedBrightness();
 setInterval(refreshWifiStatus, 10000);
