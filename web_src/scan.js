@@ -167,7 +167,7 @@ function renderDevices(allDevices) {
       'data-key="' + esc(aliasKey) + '" data-alias="' + esc(d.alias || '') + '" ' +
       'onclick="editAlias(this)">✎</button>';
     var nameHtml = displayName
-      ? '<div class="name-cell">' + esc(displayName) +
+      ? '<div class="name-cell" title="' + esc(displayName) + '">' + esc(displayName) +
           (d.alias ? '<span class="alias-tag" title="Alias personnalisé"> ★</span>' : sourceBadge(d.source)) +
           editBtn +
         '</div>'
@@ -255,6 +255,9 @@ function fetchDevices() {
         btn.textContent = 'Scan en cours…';
         info.style.display = 'block';
         info.textContent = '⟳ Scan en cours : ARP → hostnames → UPnP/SSDP → DNS-SD → Ports TCP — résultats progressifs';
+        // Matérialise la barre même si le scan a démarré ailleurs (ex: scan
+        // automatique au boot) et non via un clic sur "Scanner" dans cette page.
+        if (document.getElementById('progress-wrap').style.display !== 'block') startProgressAnim();
         if (!pollTimer) pollTimer = setInterval(fetchDevices, 2000);
       } else {
         btn.disabled = false;

@@ -217,6 +217,10 @@ private:
     // Charge les devices connus depuis DeviceStore et les injecte offline dans _results
     void _mergePersistedDevices();
 
+    // Borne _results à MAX_TRACKED_DEVICES (évince les + anciens hors-ligne non favoris)
+    // Appelée avec _mutex déjà acquis.
+    void _evictOldestLocked();
+
     // Sauvegarde _results dans DeviceStore (fin de scan)
     void _saveToStore();
 

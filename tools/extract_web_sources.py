@@ -42,7 +42,6 @@ EXTRACT_DIR  = WEB_SRC_DIR / "extracted"
 SOURCES = [
     (INCLUDE_DIR / "web_interface.h",         "INDEX_HTML",   EXTRACT_DIR / "index.html",   EXTRACT_DIR / "index.js"),
     (INCLUDE_DIR / "web_interface_scan.h",     "SCAN_PAGE",    EXTRACT_DIR / "scan.html",    EXTRACT_DIR / "scan.js"),
-    (INCLUDE_DIR / "web_interface_ota.h",      "OTA_PAGE",     EXTRACT_DIR / "ota.html",     EXTRACT_DIR / "ota.js"),
     (INCLUDE_DIR / "web_interface_history.h",  "HISTORY_PAGE", EXTRACT_DIR / "history.html", EXTRACT_DIR / "history.js"),
     (INCLUDE_DIR / "web_interface_wifi.h",     "WIFI_PAGE",    EXTRACT_DIR / "wifi.html",    EXTRACT_DIR / "wifi.js"),
 ]

@@ -38,11 +38,11 @@ Le scanner envoie des ARP Request pour **chaque adresse IP possible du réseau**
 192.168.1.254 → "Qui est là ?"
 ```
 
-Les équipements présents répondent. On lit leur IP et leur MAC.
+Les équipements présents répondent. Lire leur IP et leur MAC.
 
 **Limitation** : la table ARP de lwIP (le stack réseau de l'ESP32) ne peut stocker
 que 10 entrées à la fois. C'est pourquoi le scan se fait par lots de 5 : après chaque lot,
-on lit la table avant qu'elle ne soit réécrasée.
+lire la table avant qu'elle ne soit réécrasée.
 
 ---
 
@@ -69,11 +69,14 @@ Raspberry Pi → Tout le réseau (224.0.0.251) :
 
 ### Comment Gateway Lab l'utilise ?
 
-Le module `HostnameResolver` ouvre un socket UDP sur `224.0.0.251:5353` et **écoute
-passivement** pendant le sweep ARP. Quand un device reçoit notre ARP Request,
-il peut annoncer son nom mDNS dans la foulée. On le capture.
-
-C'est passif : on ne demande rien, on capte les annonces spontanées.
+Depuis v0.8.2, `HostnameResolver` n'écoute plus passivement
+`224.0.0.251:5353` : ce port reste détenu exclusivement par le composant
+mDNS d'ESP-IDF (responder `MDNS.begin()`, voir `wifi_manager.cpp`), et il
+n'existe pas d'API publique permettant d'observer ses annonces reçues
+(voir `docs/ARCHITECTURE.md` et `docs/WARNINGS.md`). La résolution de
+hostname repose désormais uniquement sur PTR DNS (ci-dessous) ; `DnsSdScanner`
+(découverte de services, voir plus bas) fournit également un hostname via
+les enregistrements SRV lorsque disponible.
 
 ---
 
@@ -99,7 +102,7 @@ Réponse : "mon-pc"
 
 ### Comment Gateway Lab l'utilise ?
 
-Après le sweep ARP, on dispose d'une liste d'IPs sans hostname.
+Après le sweep ARP, une liste d'IPs sans hostname est disponible.
 `HostnameResolver` envoie **toutes les requêtes PTR en parallèle** au serveur DNS
 de la box, puis attend les réponses pendant 500 ms.
 
@@ -116,7 +119,7 @@ UPnP (Universal Plug and Play) est un ensemble de protocoles qui permettent
 aux équipements d'un réseau de s'annoncer et de décrire leurs capacités automatiquement.
 
 SSDP est la partie "découverte" de UPnP : comment un équipement annonce sa présence
-et comment on peut les trouver.
+et comment les trouver.
 
 Appareils compatibles : box Internet (Freebox, Livebox…), NAS Synology, enceintes Sonos,
 téléviseurs Samsung, Philips Hue Bridge, Chromecast, etc.
@@ -266,7 +269,7 @@ Tout cela arrive souvent dans un **seul paquet mDNS** (section "Additional").
 | | SSDP/UPnP | DNS-SD |
 |---|---|---|
 | Protocole | HTTP over UDP multicast | DNS over UDP multicast |
-| Ce qu'on obtient | 1 identité par device (XML) | N services par device |
+| Résultat obtenu | 1 identité par device (XML) | N services par device |
 | Métadonnées | friendlyName, manufacturer, modelName | TXT records (md=, fn=…) |
 | Devices compatibles | Box, NAS, TV, Smart Home (UPnP) | Apple, Google, Sonos, ESPHome, Linux… |
 | Complémentaires ? | ✅ Oui — sources différentes |
@@ -295,7 +298,7 @@ Le fichier `data/oui.json` contient une base de 151 OUI courants :
 ...
 ```
 
-Lors du scan ARP, pour chaque adresse MAC trouvée, on cherche son OUI dans cette base
+Lors du scan ARP, pour chaque adresse MAC trouvée, chercher son OUI dans cette base
 pour identifier le fabricant et la catégorie, sans aucune requête réseau.
 
 ---

@@ -99,14 +99,14 @@ http://gateway-lab-v1.local
 Si cette adresse ne fonctionne pas (certains réseaux ou certains systèmes
 Windows ne supportent pas mDNS), consultez l'écran de votre routeur/box
 internet pour trouver l'adresse IP attribuée à l'appareil
-`gateway-lab-v1`, ou utilisez la page **Paramètres → Réseau WiFi** une fois
+`gateway-lab-v1`, ou utilisez la page **Système → Réseau WiFi** une fois
 connecté une première fois.
 
 ---
 
 ## Gérer plusieurs réseaux WiFi
 
-Une fois connecté à l'interface web, allez dans le menu **Paramètres**
+Une fois connecté à l'interface web, allez dans le menu **Système**
 (page `/wifi`). Vous pouvez :
 
 | Action | Description |
@@ -129,7 +129,7 @@ C'est utile si l'appareil change parfois d'endroit : par exemple un réseau
 Pour forcer l'ESP32 à oublier tous ses réseaux et revenir au portail de
 configuration :
 
-1. Allez dans **Paramètres → Réseau WiFi**
+1. Allez dans **Système → Réseau WiFi**
 2. Supprimez tous les réseaux enregistrés un par un (bouton **✕ Supprimer**)
 3. Redémarrez la carte (débrancher/rebrancher l'alimentation)
 
@@ -164,7 +164,7 @@ le firmware `.bin` ni partagé publiquement.
 **Le réseau `GatewayLab-Setup` n'apparaît jamais.**
 L'ESP32 a probablement déjà un réseau enregistré (NVS) ou un
 `DEFAULT_WIFI_SSID` valide dans `secrets.h`, et s'y connecte directement.
-Vérifiez la page **Paramètres** une fois connecté, ou réinitialisez la
+Vérifiez la page **Système** une fois connecté, ou réinitialisez la
 configuration (voir ci-dessus).
 
 **Le mot de passe que j'ai saisi semble incorrect.**

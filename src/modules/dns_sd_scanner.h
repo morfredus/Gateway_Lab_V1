@@ -4,18 +4,28 @@
  * DNS-SD (DNS Service Discovery) permet de trouver les *services* exposés par
  * chaque équipement du réseau : HTTP, SSH, SMB, AirPlay, HomeKit, Chromecast…
  *
- * Fonctionnement (v0.0.9) :
- *   1. Construction d'un paquet mDNS multi-question pour N types de services
- *   2. Envoi en multicast → 224.0.0.251:5353 (même canal que mDNS)
- *   3. Écoute des réponses PTR + SRV + TXT + A pendant timeout_ms
- *      • PTR : "ce service existe → nom de l'instance"
- *      • SRV : port et hostname de l'instance
- *      • TXT : métadonnées (model, firmware, friendly name…)
- *      • A   : IP du hostname de l'instance
- *   4. Retourne un map IP → DnsSdInfo (services, modèle, catégorie, hostname)
+ * Fonctionnement (depuis v0.8.2) :
+ *   Interroger directement le composant mDNS d'ESP-IDF (`mdns_query_ptr()`)
+ *   déjà initialisé par `MDNS.begin()` (ESPmDNS, voir wifi_manager.cpp) au
+ *   lieu d'ouvrir un socket multicast dédié. Avant v0.8.2, ce scanner ouvrait
+ *   son propre `WiFiUDP` sur 224.0.0.251:5353, qui entrait en conflit avec le
+ *   socket exclusif du composant mDNS d'ESP-IDF (déjà actif en permanence dès
+ *   que `MDNS.begin()` a réussi) — voir docs/WARNINGS.md.
  *
- * Non bloquant : tous les delais sont bornés par timeout_ms.
- * Mémoire : buffers alloués sur le tas, pas de vecteurs imbriqués profonds.
+ *   1. Pour chaque type de service connu, interroger `mdns_query_ptr()` avec
+ *      une fenêtre d'au moins 300 ms (RFC 6762 §6 : délai aléatoire de
+ *      réponse 20-120 ms sur les enregistrements partagés — voir
+ *      `MIN_QUERY_TIMEOUT_MS` dans dns_sd_scanner.cpp, corrigé en v0.8.3
+ *      après un scan retournant systématiquement zéro résultat)
+ *   2. Chaque résultat fournit directement hostname, port, TXT records et
+ *      adresse(s) IPv4 — pas de parsing DNS manuel nécessaire
+ *   3. Retourner une map IP → DnsSdInfo (services, modèle, catégorie, hostname)
+ *
+ * Non bloquant pour le reste du firmware : le scan tourne dans la tâche
+ * FreeRTOS dédiée du scanner réseau (voir docs/WARNINGS.md). `timeout_ms`
+ * est une cible répartie entre les types de service interrogés, plancher à
+ * 300 ms chacun — la durée réelle peut donc dépasser `timeout_ms` lorsque le
+ * nombre de types de service est élevé.
  *
  * Types de services interrogés (home network) :
  *   Web     : _http._tcp, _https._tcp
@@ -30,9 +40,7 @@
 
 #pragma once
 #include <Arduino.h>
-#include <WiFiUdp.h>
 #include <map>
-#include <vector>
 
 // ─── Résultat DNS-SD pour un équipement ────────────────────────────────────
 // services : labels des services séparés par '|'  ex: "HTTP|SSH|SMB"
@@ -48,55 +56,16 @@ struct DnsSdInfo {
 
 class DnsSdScanner {
 public:
-    // Lance un scan DNS-SD complet.
-    // Retourne un map IP → DnsSdInfo à fusionner dans NetworkDevice.
-    // timeout_ms : fenêtre d'écoute totale après l'envoi des requêtes.
-    std::map<String, DnsSdInfo> scan(uint32_t timeout_ms = 4000);
+    // Lancer un scan DNS-SD complet.
+    // Retourne une map IP → DnsSdInfo à fusionner dans NetworkDevice.
+    // timeout_ms : fenêtre d'écoute totale cible, répartie entre les types de
+    // service (plancher de 300 ms chacun — la durée réelle peut dépasser
+    // timeout_ms, voir dns_sd_scanner.cpp).
+    std::map<String, DnsSdInfo> scan(uint32_t timeout_ms = 9000);
 
 private:
-    // Instance DNS-SD en cours de construction
-    struct _Instance {
-        String serviceType;    // "_googlecast._tcp"
-        String serviceLabel;   // "Cast"
-        String instanceName;   // "Living Room TV"
-        String hostname;       // "livingroom.local"
-        String ip;             // "192.168.1.50" (depuis A record)
-        uint16_t port  = 0;
-        String model;          // depuis TXT md= ou fn=
-        String categoryHint;   // suggestion de catégorie
-    };
-
-    // ── Réseau ─────────────────────────────────────────────────────────────
-
-    // Construit et envoie un paquet mDNS avec N questions PTR (un par service type)
-    void _sendQueries(WiFiUDP& udp);
-
-    // ── Parsing DNS ────────────────────────────────────────────────────────
-
-    // Traite un paquet UDP reçu — extrait PTR, SRV, TXT, A
-    void _processPacket(const uint8_t* buf, int len);
-
-    // Décompression de nom DNS RFC 1035 (gère les pointeurs \xc0\xnn)
-    String _decodeName(const uint8_t* buf, int len, int offset, int& next) const;
-
-    // Extrait les métadonnées utiles des TXT records (model, hostname, firmware…)
-    void _parseTxt(const uint8_t* rdata, int rdlen, _Instance& inst) const;
-
-    // ── Consolidation ──────────────────────────────────────────────────────
-
-    // Reconstruit la map IP → DnsSdInfo depuis les instances collectées
-    std::map<String, DnsSdInfo> _buildResult() const;
-
-    // Déduit la meilleure catégorie depuis une liste de service labels
+    // Déduire la meilleure catégorie depuis une liste de service labels
     static String _inferCategory(const String& services);
-
-    // ── État interne ───────────────────────────────────────────────────────
-
-    // Map hostname.local → IP (peuplée par les records A reçus)
-    std::map<String, String>  _hostToIp;
-
-    // Map (instanceName + serviceType) → _Instance
-    std::map<String, _Instance> _instances;
 };
 
 extern DnsSdScanner dnsSdScanner;

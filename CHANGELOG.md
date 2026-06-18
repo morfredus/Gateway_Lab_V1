@@ -5,6 +5,243 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.8.8] - 2026-06-18
+
+### Corrige
+
+- **Barre de progression de la mise à jour firmware disparaissant juste
+  après le transfert**, sans indication de ce qui se passait ensuite
+  (vérification, flash, redémarrage) : `wifi.js` masquait tout le
+  formulaire `#ota-form` (qui contient aussi la barre et le message) une
+  fois le transfert terminé.
+  - La barre reste désormais affichée à 100% et le message passe par les
+    étapes « Transfert du firmware : X% » → « Vérification du firmware… »
+    → « Firmware vérifié — redémarrage en cours… » → « Redémarrage en
+    cours… » → « Redémarrage terminé — retour à l'accueil… ».
+  - Seuls le sélecteur de fichier et le bouton « Mettre à jour » sont
+    désactivés pendant la mise à jour (au lieu de masquer tout le bloc).
+  - Une fois le redémarrage détecté (`/api/status` répond à nouveau), la
+    page redirige vers l'Accueil (`/`) au lieu de rester sur `/wifi`.
+
+## [0.8.7] - 2026-06-18
+
+### Modifie
+
+- **Restructuration de la page Paramètres, renommée Système** : la page
+  regroupe désormais le réseau (état de connexion, réseaux enregistrés,
+  ajout d'un réseau), la LED d'état, la mise à jour du firmware (OTA, ex
+  page dédiée) et l'état système (heap libre, PSRAM libre, nombre
+  d'équipements / maximum, nombre d'événements d'historique).
+  - `web_src/wifi.html` / `web_src/wifi.js` réécrits pour intégrer le
+    formulaire de mise à jour firmware et le nouveau bloc « État système ».
+  - `src/modules/network_scanner.cpp` : `diagnosticsToJson()` retourne
+    désormais `deviceCount`, `maxDevices` et `historyCount` en plus des
+    champs existants.
+
+### Supprime
+
+- **Page OTA dédiée** (`GET /update`, `web_src/ota.html` / `ota.js`,
+  `include/web_interface_ota.h`) : la fonctionnalité de mise à jour du
+  firmware est intégrée à la page Système. La route `POST /update`
+  (réception du fichier `.bin`) reste inchangée côté backend.
+
+### Ajoute
+
+- **`web_src/menu.html`** : bloc de navigation partagé, inliné dans chaque
+  page via le nouveau marqueur `<!-- include:menu.html -->` (traité par
+  `tools/minify_web.py` et simulé par `tools/validate_html.py`). Le lien
+  actif est désormais marqué au runtime par un script JS embarqué dans
+  `menu.html`, au lieu d'un `class="active"` statique dupliqué par page —
+  simplifie la maintenance du menu sur l'ensemble des pages.
+
+## [0.8.6] - 2026-06-18
+
+### Corrige
+
+- **Compatibilité `.name-cell`** : ajout de la propriété standard
+  `line-clamp: 2` en complément du préfixe `-webkit-line-clamp: 2`
+  (`web_src/styles.css`), pour les navigateurs ayant adopté la version
+  non préfixée de la spécification.
+
+## [0.8.5] - 2026-06-18
+
+### Ajoute
+
+- **Avertissement sur la page Équipements** rappelant que le scan réseau
+  (initial ou global) découvre et identifie automatiquement les équipements
+  présents, mais que certaines informations avancées peuvent nécessiter un
+  scan ciblé de l'équipement pour interroger des services spécifiques ou
+  des API propriétaires — pour clarifier que le scan de départ n'est pas
+  conçu comme « agressif ».
+  - `web_src/scan.html` : nouveau paragraphe `.scan-hint` sous l'en-tête de
+    carte.
+  - `web_src/styles.css` : style `.scan-hint` (texte discret, italique).
+
+## [0.8.4] - 2026-06-18
+
+### Corrige
+
+- **Largeur de la page Équipements incohérente avec le reste de l'UI** et
+  **barre de défilement horizontale** apparaissant en bas de la page lors de
+  l'affichage d'un nom d'hôte long : la colonne « Nom d'hôte » (`.name-cell`)
+  n'avait aucune contrainte de largeur ni de retour à la ligne, contrairement
+  aux colonnes IP/MAC dont le contenu est intrinsèquement borné — un nom
+  d'hôte sans espace pouvait forcer le tableau (`table-layout` auto) à
+  dépasser la largeur de page standard de 960px.
+  - `web_src/styles.css` : `.name-cell` limitée à `max-width: 220px`, repli
+    sur deux lignes maximum (`-webkit-line-clamp: 2`) avec coupure de mot
+    (`word-break`/`overflow-wrap`) plutôt que troncature brutale.
+  - `web_src/scan.js` : ajout d'un attribut `title` sur `.name-cell` pour
+    conserver le nom d'hôte complet au survol.
+  - Commentaire de section 2 de `styles.css` mis à jour : la page Équipements
+    partage désormais une largeur strictement identique aux autres pages
+    (`.page-scan`, 960px), sans exception de « largeur adaptable ».
+
+## [0.8.3] - 2026-06-18
+
+### Corrige
+
+- **Scan DNS-SD systématiquement vide** (`[INF][DNSSD] DNS-SD terminé — 0
+  IP(s) résolue(s)` malgré des services réellement présents : Philips Hue,
+  Echo, Synology…) : la fenêtre d'attente par type de service interrogé via
+  `mdns_query_ptr()` était plancher à 100 ms, trop courte face au délai
+  aléatoire de réponse de 20 à 120 ms imposé par la RFC 6762 §6 sur les
+  enregistrements partagés (cas des PTR de découverte de service) — une
+  marge quasi nulle restait pour l'aller-retour réseau, et la quasi-totalité
+  des réponses arrivait hors fenêtre.
+  - `src/modules/dns_sd_scanner.cpp` : plancher relevé à 300 ms
+    (`MIN_QUERY_TIMEOUT_MS`), valeur par défaut de `scan()` et des deux
+    appelants de `network_scanner.cpp` ajustée de 4000/5000 ms à 9000 ms
+    pour conserver une fenêtre réaliste par type de service sur les ~29
+    types interrogés (le scan tourne dans sa propre tâche FreeRTOS, non
+    bloquant pour le reste du firmware — voir `docs/WARNINGS.md`).
+  - Ajout d'une journalisation des échecs `mdns_query_ptr()`
+    (`esp_err_to_name()`) — silencieusement ignorés auparavant — pour
+    faciliter le diagnostic d'un futur scan vide.
+
+### Documentation
+
+- Reformulation à l'infinitif des commentaires et de la documentation
+  utilisant des tournures « on fait ceci, on regarde cela » (commentaires
+  C++ dans `dns_sd_scanner.*`, `hostname_resolver.cpp`, `network_scanner.cpp`,
+  `ssdp_scanner.cpp`, `netbios_scanner.cpp`, et `docs/PROTOCOLS.md`).
+
+---
+
+## [0.8.2] - 2026-06-18
+
+### Corrige
+
+- **Conflit mDNS persistant après v0.8.1 — cause racine non traitée** :
+  `MdnsManager` (v0.8.1) mutualisait correctement un socket entre
+  `HostnameResolver` et `DnsSdScanner`, mais ne tenait pas compte d'un
+  troisième consommateur, toujours actif : le composant mDNS d'ESP-IDF
+  lui-même (`MDNS.begin()`, appelé dans `wifi_manager.cpp`), qui garde
+  `224.0.0.251:5353` exclusivement pour son responder dès que le Wi-Fi est
+  connecté (log `[INF][WiFi] mDNS actif : http://gateway-lab-v1.local`).
+  Résultat : `MdnsManager::acquire()` échouait systématiquement
+  (`[WRN][MdnsMgr] Impossible de rejoindre 224.0.0.251:5353`) — la
+  découverte DNS-SD et la résolution mDNS passive ne fonctionnaient en
+  réalité jamais dès que le responder mDNS était actif, c'est-à-dire en
+  pratique en permanence.
+  - `DnsSdScanner` (`src/modules/dns_sd_scanner.cpp`) est réécrit pour
+    interroger directement le composant mDNS d'ESP-IDF via son API C
+    (`mdns_query_ptr()` / `mdns_query_results_free()`, `<mdns.h>`) au lieu
+    d'ouvrir un socket multicast applicatif — passe par le service mDNS
+    déjà initialisé par `MDNS.begin()`, donc aucun risque de conflit de
+    bind. Le comportement public (`scan()`, table de services, déduction
+    de catégorie) est inchangé.
+  - `HostnameResolver` (`src/modules/hostname_resolver.h/.cpp`) retire son
+    écoute mDNS passive : il n'existe pas d'API publique ESP-IDF pour
+    observer passivement les annonces reçues par le responder partagé.
+    `begin()`/`update()`/`end()` deviennent des no-op (conservés pour
+    compatibilité des appelants). Seule la résolution PTR DNS (port 53,
+    unicast, sans rapport avec ce conflit) reste active.
+  - `MdnsManager` (`src/modules/mdns_manager.h/.cpp`, introduit en v0.8.1)
+    est supprimé — devenu inutile, plus aucun module n'ouvre de socket
+    multicast applicatif.
+  - Voir `docs/WARNINGS.md` (section « Socket mDNS multicast — conflit
+    avec ESPmDNS ») pour le détail de la cause racine et de la correction.
+
+---
+
+## [0.8.1] - 2026-06-18
+
+### Corrige
+
+- **Conflit de bind mDNS/DNS-SD sur 224.0.0.251:5353**
+  (`src/modules/mdns_manager.h/.cpp`, nouveau) : `HostnameResolver` et
+  `DnsSdScanner` ouvraient chacun leur propre `WiFiUDP` et appelaient
+  indépendamment `beginMulticast(224.0.0.251, 5353)`. Lorsqu'une repasse
+  précise (rescan ciblé d'un équipement) déclenchait `DnsSdScanner::scan()`
+  pendant qu'un scan principal gardait `HostnameResolver` actif (écoute
+  passive pendant tout le sweep ARP), le second appel échouait
+  (`[E][WiFiUdp.cpp:71] begin(): could not bind socket: 112`). Un nouveau
+  module `MdnsManager` mutualise désormais un unique socket multicast,
+  partagé par comptage de références entre les deux scanners et protégé par
+  un mutex FreeRTOS contre les accès concurrents — corrige le conflit de
+  bind et réduit l'empreinte mémoire (un seul `WiFiUDP` au lieu de deux).
+- **LOCATION SSDP invalide pointant vers une adresse inutilisable**
+  (`src/modules/ssdp_scanner.cpp`) : certains équipements UPnP mal
+  configurés annoncent une URL `LOCATION` inutilisable depuis l'ESP32,
+  provoquant une tentative de récupération HTTP du descripteur XML vouée à
+  l'échec (`socket error ... Connection reset by peer sur 127.0.0.1`,
+  `[WRN][SSDP] Pas de réponse XML de 127.0.0.1`). Ces LOCATION sont
+  désormais rejetées avant tout essai de connexion, avec un avertissement
+  journalisé, pour trois cas : boucle locale (`127.0.0.0/8`), adresse non
+  initialisée (`0.0.0.0`) et lien-local APIPA (`169.254.0.0/16`).
+
+---
+
+## [0.8.0] - 2026-06-18
+
+### Ajoute
+
+- **Mode dégradé mémoire** (`src/modules/system_health.h/.cpp`, nouveau) :
+  remplace l'ancien redémarrage automatique sur heap critique par un mode
+  dégradé piloté manuellement. Sous le seuil `HEAP_CRITICAL_BYTES` (20 000
+  octets libres), le mode dégradé s'active : refus des nouveaux scans, des
+  rescans ciblés, des nouvelles notes, de la journalisation d'historique et
+  des modifications de configuration (alias, favoris, réseaux WiFi,
+  réinitialisation/restauration). L'inventaire déjà acquis reste pleinement
+  consultable. Sortie du mode dégradé avec hystérésis (`HEAP_RECOVERY_MARGIN`)
+  une fois la mémoire redevenue suffisante, ou redémarrage manuel via le
+  nouveau bouton « Redémarrer l'appareil » (page Paramètres, cartouche « État
+  système »). Nouvelles routes `GET /api/system/health` et
+  `POST /api/system/restart`.
+- **Bornes mémoire explicites** (`include/app_config.h`) : `MAX_HISTORY_EVENTS`
+  (1000), `MAX_NOTES_PER_DEVICE` (20), `MAX_NOTE_LENGTH` (256 caractères),
+  en plus de `MAX_TRACKED_DEVICES` (300) déjà existant — empêchent toute
+  croissance non bornée du journal d'historique, des notes par équipement et
+  de la liste d'équipements suivis (éviction LRU sous mutex).
+
+### Corrige
+
+- **Barre de progression du scan non affichée lors d'un scan automatique**
+  (`web_src/scan.js`) : la page Équipements n'animait la barre de progression
+  que si le scan avait été déclenché par un clic sur « Scanner » dans cette
+  même page. Le scan automatique lancé à la connexion WiFi (`main.cpp`,
+  `netScanner.startScan()`) n'était donc jamais matérialisé visuellement si
+  l'utilisateur ouvrait/rechargeait la page pendant que ce scan tournait
+  déjà. `fetchDevices()` démarre désormais l'animation dès qu'un scan en
+  cours est détecté (`data.scanning`), quelle que soit son origine.
+- **NeoPixel pouvant repasser à `Ready` pendant un incident** (`src/main.cpp`) :
+  l'acquittement des nouveaux équipements (visite de `/scan`) ramenait
+  toujours la LED de `NewDevice` à `Ready`, y compris en mode dégradé. La
+  LED ne revient désormais à `Ready` que si aucun incident mémoire n'est en
+  cours (`!systemHealth.isDegraded()`).
+- **Croissance mémoire non bornée** : export CSV (`NetworkScanner::devicesToCsv()`)
+  pré-alloue son tampon (`String::reserve()`) au lieu de concaténer sans
+  borne ; journal d'historique et notes par équipement désormais plafonnés
+  (voir ci-dessus) ; suivi du stack FreeRTOS (high-water-mark) ajouté dans
+  les tâches de scan pour détecter tout risque de dépassement de pile.
+
+### Modifie
+
+- **`PROJECT_VERSION`** → `0.8.0` (`platformio.ini`).
+
+---
+
 ## [0.7.4] - 2026-06-18
 
 ### Modifie

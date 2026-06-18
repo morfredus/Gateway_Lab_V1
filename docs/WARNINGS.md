@@ -136,6 +136,24 @@ et champs vides — aucun crash, aucun blocage.
 
 ---
 
+### ℹ️ LOCATION inutilisable rejetée (depuis v0.8.1)
+
+Certains équipements UPnP mal configurés annoncent une `LOCATION` dont
+l'adresse est inutilisable depuis l'ESP32 — la tentative de récupération du
+descripteur XML échoue systématiquement (`Connection reset by peer`) ou ne
+correspond à aucun équipement réellement joignable sur le réseau scanné :
+
+* `127.0.0.0/8` — boucle locale
+* `0.0.0.0` — adresse non initialisée
+* `169.254.0.0/16` — lien-local APIPA (auto-configuration Windows)
+
+**Comportement** : ces LOCATION sont détectées et rejetées avant tout essai
+de connexion HTTP (`SsdpScanner::scan()`, `ssdp_scanner.cpp`), avec un
+avertissement journalisé précisant le cas. Le device n'est tout de même
+découvert que via ARP/mDNS/DNS-SD le cas échéant.
+
+---
+
 ### ℹ️ APIs spécifiques non authentifiées
 
 Les APIs Hue, Synology et Freebox sont appelées sans authentification.
@@ -355,6 +373,119 @@ Les tâches FreeRTOS doivent être surveillées en mode debug via :
 uxTaskGetStackHighWaterMark()
 ```
 
+La tâche de scan (`_task`) et la tâche de passe précise (`_rescanTask`)
+journalisent leur high-water-mark en fin d'exécution (niveau `DEBUG`).
+
+---
+
+## ⚠️ Mémoire critique — mode dégradé plutôt que redémarrage automatique
+
+Depuis la v0.8.0, `SystemHealth` (`src/modules/system_health.*`) ne
+redémarre **jamais** automatiquement l'ESP32 sur condition mémoire basse.
+Sous `HEAP_CRITICAL_BYTES` (20 000 octets libres, `include/app_config.h`),
+le firmware bascule en **mode dégradé** :
+
+* refus des nouveaux scans et rescans ciblés
+* refus des nouvelles notes, modification d'alias/favoris, réinitialisation,
+  restauration
+* refus de la journalisation de nouveaux événements d'historique
+* l'inventaire déjà acquis reste consultable (lecture seule)
+
+Sortie automatique du mode dégradé une fois `HEAP_CRITICAL_BYTES +
+HEAP_RECOVERY_MARGIN` octets à nouveau libres ; sinon, redémarrage manuel
+via `POST /api/system/restart` (bouton dédié, page Système). Ce choix
+évite un redémarrage intempestif qui ferait perdre une session utilisateur
+en cours, au prix d'une disponibilité réduite en cas de fuite mémoire réelle
+— surveiller `GET /api/system/health` / `GET /api/diagnostics` en cas de
+mode dégradé récurrent (signe d'une fuite à corriger plutôt que de
+contourner).
+
+**Bornes complémentaires** pour éviter toute croissance non bornée :
+`MAX_TRACKED_DEVICES` (300), `MAX_HISTORY_EVENTS` (1000),
+`MAX_NOTES_PER_DEVICE` (20), `MAX_NOTE_LENGTH` (256 caractères) — au-delà,
+éviction des entrées les plus anciennes (devices, historique FIFO) ou refus
+silencieux côté API (notes).
+
+---
+
+## ⚠️ Socket mDNS multicast — conflit avec ESPmDNS (résolu en v0.8.2)
+
+### Historique du problème
+
+Avant v0.8.1, `HostnameResolver` (écoute passive pendant tout le sweep ARP)
+et `DnsSdScanner` (requêtes/réponses PTR ponctuelles) ouvraient chacun leur
+propre `WiFiUDP` multicast sur `224.0.0.251:5353` : un rescan ciblé
+déclenchant `DnsSdScanner::scan()` pendant qu'un scan principal gardait
+`HostnameResolver` actif provoquait un échec de bind
+(`could not bind socket: 112`).
+
+La v0.8.1 a introduit `MdnsManager`, qui mutualisait un unique socket entre
+ces deux modules — mais cette correction ne traitait que le conflit ENTRE
+ces deux modules applicatifs. Elle ne prenait pas en compte un troisième
+consommateur, toujours actif : le composant mDNS d'ESP-IDF lui-même
+(`MDNS.begin()`, appelé dans `wifi_manager.cpp` au démarrage Wi-Fi, log
+`[INF][WiFi] mDNS actif : http://gateway-lab-v1.local`), qui garde
+`224.0.0.251:5353` exclusivement pour son responder. En conséquence,
+`MdnsManager::acquire()` échouait systématiquement dès que le responder
+mDNS était actif (log `[WRN][MdnsMgr] Impossible de rejoindre
+224.0.0.251:5353`) — c'est-à-dire en pratique en permanence.
+
+### Résolution (v0.8.2)
+
+* **`DnsSdScanner`** a été réécrit pour interroger directement le composant
+  mDNS d'ESP-IDF via son API C (`mdns_query_ptr()` / `mdns_query_results_free()`,
+  `<mdns.h>`), qui passe par le service mDNS déjà initialisé par
+  `MDNS.begin()` — aucun socket applicatif dédié, donc aucun risque de
+  conflit de bind.
+* **`HostnameResolver`** ne tente plus d'écoute mDNS passive : il n'existe
+  pas d'API publique ESP-IDF pour observer passivement les annonces reçues
+  par le responder partagé. `begin()`/`update()`/`end()` sont conservés
+  comme no-op (compatibilité des appelants) ; seule la résolution PTR DNS
+  (port 53, unicast, sans rapport avec ce conflit) reste active.
+* `MdnsManager` (`src/modules/mdns_manager.h/.cpp`) est supprimé — devenu
+  inutile, plus aucun module n'ouvre de socket multicast applicatif.
+
+**Limite résiduelle** : la résolution de noms d'hôtes via mDNS passif
+(`.local`) n'est plus disponible ; seule la résolution PTR DNS (dépendante
+du DNS du routeur) fournit désormais un hostname. `DnsSdScanner` continue
+de fournir le hostname cible du SRV record en complément, lorsque
+disponible.
+
+---
+
+## ⚠️ Scan DNS-SD systématiquement vide (résolu en v0.8.3)
+
+### Symptôme
+
+`[INF][DNSSD] DNS-SD terminé — 0 IP(s) résolue(s)` à chaque scan, malgré la
+présence réelle d'objets exposant des services DNS-SD sur le réseau
+(Philips Hue, Echo, Synology, etc.).
+
+### Cause
+
+La correction v0.8.2 (ci-dessus) avait éliminé le conflit de bind, mais la
+fenêtre d'attente par type de service interrogé via `mdns_query_ptr()`
+restait calculée en divisant `timeout_ms` par le nombre de types de service
+(~29), avec un plancher de seulement 100 ms. Or la RFC 6762 §6 impose aux
+répondeurs un délai aléatoire de 20 à 120 ms avant de répondre à une
+question portant sur un enregistrement partagé — cas des PTR de découverte
+de service — afin d'éviter une rafale de réponses simultanées. Une fenêtre
+de 100 ms (déjà réduite par l'appel précédent du minuteur lwIP/mDNS) ne
+laissait quasiment aucune marge pour l'aller-retour réseau au-delà de ce
+délai : la quasi-totalité des réponses arrivait hors fenêtre, d'où un scan
+vide en pratique.
+
+### Résolution (v0.8.3)
+
+Plancher relevé à 300 ms (`MIN_QUERY_TIMEOUT_MS`, `dns_sd_scanner.cpp`),
+valeur par défaut de `DnsSdScanner::scan()` et des deux appels dans
+`network_scanner.cpp` ajustée à 9000 ms pour conserver une fenêtre réaliste
+sur l'ensemble des types de service interrogés. Sans impact sur le reste du
+firmware : le scan DNS-SD tourne dans la tâche FreeRTOS dédiée du scanner
+réseau. Les échecs de requête (`mdns_query_ptr()` retournant une erreur)
+sont désormais journalisés (`esp_err_to_name()`) pour faciliter un futur
+diagnostic.
+
 ---
 
 ## ⚠️ Changement d'adresse IP
@@ -384,7 +515,6 @@ Les fichiers :
 ```text
 include/web_interface.h
 include/web_interface_scan.h
-include/web_interface_ota.h
 include/oui_table.h
 ```
 
@@ -395,7 +525,6 @@ Ils doivent être mis à jour après modification de :
 ```text
 web_src/index.html
 web_src/scan.html
-web_src/ota.html
 web_src/topology.html
 data/oui.json
 ```

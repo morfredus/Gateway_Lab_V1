@@ -2,8 +2,9 @@
  * DeviceHistory - Implementation
  *
  * Le fichier est entierement relu/reecrit a chaque ajout (FIFO simple).
- * Le volume reste petit (MAX_ENTRIES = 300 evenements compacts) donc le
- * cout I/O est negligeable face a la frequence des scans (minutes).
+ * MAX_ENTRIES (app_config.h) borne le volume relu/reecrit a chaque appel —
+ * en mode degrade (systemHealth.isDegraded()), les nouveaux evenements sont
+ * refuses pour ne pas aggraver la pression memoire.
  */
 
 #include "device_history.h"
@@ -11,6 +12,7 @@
 #include <ArduinoJson.h>
 #include <algorithm>
 #include "time_sync.h"
+#include "system_health.h"
 #include "../utils/logger.h"
 
 static const char* TAG = "History";
@@ -79,6 +81,10 @@ void DeviceHistory::addEvent(const String& mac, const String& ip, const String& 
                               const String& event, const String& field,
                               const String& oldValue, const String& newValue) {
     if (!_mounted) return;
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Evenement ignore — mode degrade (%s)", systemHealth.reason().c_str());
+        return;
+    }
 
     auto entries = _readAll();
 

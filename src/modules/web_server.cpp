@@ -8,9 +8,10 @@
  */
 
 #include "web_server.h"
-#include "ota_manager.h"         // Enregistrement des routes /update
+#include "ota_manager.h"         // Enregistrement de la route POST /update
 #include "wifi_manager.h"        // Gestion des reseaux WiFi enregistres (NVS)
-#include "status_led.h"          // Luminosite NeoPixel - reglable depuis /wifi (Parametres)
+#include "status_led.h"          // Luminosite NeoPixel - reglable depuis /wifi (Systeme)
+#include "system_health.h"       // Etat memoire / mode degrade + redemarrage manuel
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
@@ -18,7 +19,7 @@
 #include "../../include/web_interface.h"      // INDEX_HTML (page d'accueil en PROGMEM)
 #include "../../include/web_interface_scan.h" // SCAN_PAGE (page équipements en PROGMEM)
 #include "../../include/web_interface_history.h" // HISTORY_PAGE (vue chronologique en PROGMEM)
-#include "../../include/web_interface_wifi.h" // WIFI_PAGE (parametres reseau WiFi en PROGMEM)
+#include "../../include/web_interface_wifi.h" // WIFI_PAGE (page Systeme en PROGMEM)
 #include "../../include/web_interface_topology.h" // TOPOLOGY_PAGE (topologie reseau en PROGMEM)
 #include "../utils/logger.h"
 
@@ -70,6 +71,19 @@ void WebServerModule::begin(uint16_t port) {
     _server.on("/api/wifi",   HTTP_DELETE, [this]() { _handleApiWifiDelete(); });
     _server.on("/api/system/backup",  HTTP_GET,  [this]() { _handleApiSystemBackup(); });
     _server.on("/api/system/restore", HTTP_POST, [this]() { _handleApiSystemRestore(); });
+    _server.on("/api/system/health",  HTTP_GET,  [this]() {
+        String j = "{\"degraded\":";
+        j += systemHealth.isDegraded() ? "true" : "false";
+        j += ",\"reason\":\"" + systemHealth.reason() + "\",\"freeHeap\":";
+        j += ESP.getFreeHeap();
+        j += "}";
+        _server.sendHeader("Cache-Control", "no-cache");
+        _server.send(200, "application/json", j);
+    });
+    _server.on("/api/system/restart", HTTP_POST, [this]() {
+        _server.send(200, "application/json", "{\"ok\":true}");
+        systemHealth.restartNow();
+    });
     _server.on("/api/led/brightness", HTTP_GET,  [this]() {
         String j = "{\"brightness\":";
         j += statusLed.getBrightness();

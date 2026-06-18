@@ -93,7 +93,7 @@ NetBiosInfo NetBiosScanner::_queryOne(const String& ip, uint32_t timeout_ms) {
     if (atype != 0x0021) return info;   // pas une reponse NBSTAT
     offset += 2;   // ACLASS
     offset += 4;   // TTL
-    offset += 2;   // RDLENGTH (non utilise - on parcourt jusqu'a la fin du buffer)
+    offset += 2;   // RDLENGTH (non utilise - parcourir jusqu'a la fin du buffer)
 
     if (offset >= n) return info;
     uint8_t numNames = buf[offset++];

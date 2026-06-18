@@ -13,6 +13,7 @@
 
 #include "network_scanner.h"
 #include <time.h>                // strftime() pour l'export CSV (dates lisibles)
+#include <algorithm>             // std::sort (éviction LRU des équipements)
 #include "hostname_resolver.h"   // mDNS passif + PTR DNS batch
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include "ssdp_scanner.h"        // Découverte UPnP/SSDP
@@ -27,6 +28,7 @@
 #include "device_enricher.h"     // Enrichissement par pattern matching sur le hostname
 #include "device_history.h"      // Journal chronologique des evenements (nouveaux/changements)
 #include "time_sync.h"           // Epoch NTP pour firstSeen/lastSeen
+#include "system_health.h"       // Mode degrade — refuse scans/notes/config si heap critique
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>            // Diagnostics : espace utilise/libre
@@ -289,8 +291,8 @@ void NetworkScanner::_resolveHostnames() {
 // ---------------------------------------------------------------------------
 // Entrée propre de l'ESP32 dans la liste des équipements
 //
-// Le protocole ARP ne peut pas découvrir sa propre adresse IP : on ne
-// reçoit jamais de réponse ARP pour soi-même. On injecte donc manuellement
+// Le protocole ARP ne peut pas découvrir sa propre adresse IP : aucune
+// réponse ARP n'est jamais reçue pour soi-même. Injecter donc manuellement
 // une entrée représentant cet appareil, identifiable par son hostname mDNS
 // et son adresse MAC. La source "Self" distingue cette entrée dans l'UI.
 // ---------------------------------------------------------------------------
@@ -432,7 +434,7 @@ void NetworkScanner::_applyDnsSdResult(NetworkDevice& d, const DnsSdInfo& info) 
 }
 
 void NetworkScanner::_mergeDnsSd() {
-    auto dnssdResults = dnsSdScanner.scan(4000);
+    auto dnssdResults = dnsSdScanner.scan(9000);
     if (dnssdResults.empty()) return;
 
     xSemaphoreTake(_mutex, portMAX_DELAY);
@@ -464,6 +466,9 @@ void NetworkScanner::_mergeDnsSd() {
 void NetworkScanner::_task(void* self) {
     NetworkScanner* s = static_cast<NetworkScanner*>(self);
     s->_run();
+    // Marge de pile restante au plus bas — surveille le risque de stack overflow
+    // sans avoir à deviner une taille de pile a priori (TAG "NetScan" sur Serial)
+    Log::i("NetScan", "Marge pile min. tache scan: %u octets", (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     vTaskDelete(nullptr);
 }
 
@@ -1103,7 +1108,27 @@ void NetworkScanner::_mergePersistedDevices() {
         }
         if (!found) _results.push_back(s);
     }
+    _evictOldestLocked();
     xSemaphoreGive(_mutex);
+}
+
+// ---------------------------------------------------------------------------
+// Borne haute du nombre d'équipements suivis — évite une croissance illimitée
+// du heap (ex: appareils à MAC aléatoire vus une seule fois). Appelée avec
+// _mutex déjà acquis. Évince les entrées hors-ligne les moins récemment vues,
+// jamais les favoris ni les équipements actuellement en ligne.
+// ---------------------------------------------------------------------------
+void NetworkScanner::_evictOldestLocked() {
+    if (_results.size() <= MAX_TRACKED_DEVICES) return;
+
+    std::sort(_results.begin(), _results.end(), [](const NetworkDevice& a, const NetworkDevice& b) {
+        if (a.favorite != b.favorite) return !a.favorite && b.favorite; // favoris en dernier
+        if (a.online != b.online) return !a.online && b.online;        // en ligne en dernier
+        return a.lastSeenEpoch < b.lastSeenEpoch;                       // plus ancien en premier
+    });
+
+    size_t excess = _results.size() - MAX_TRACKED_DEVICES;
+    _results.erase(_results.begin(), _results.begin() + excess);
 }
 
 // ---------------------------------------------------------------------------
@@ -1143,6 +1168,10 @@ void NetworkScanner::begin() {
 void NetworkScanner::startScan() {
     if (_scanning) {
         Log::w(TAG, "Scan déjà en cours — ignoré");
+        return;
+    }
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Scan refusé — mode dégradé (%s)", systemHealth.reason().c_str());
         return;
     }
     _scanning = true;
@@ -1243,6 +1272,10 @@ String NetworkScanner::resultsToJson() const {
 // Alias utilisateur : identifie l'equipement par MAC (priorite) ou IP
 // ---------------------------------------------------------------------------
 bool NetworkScanner::setAlias(const String& macOrIp, const String& alias) {
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Modification d'alias refusée — mode dégradé (%s)", systemHealth.reason().c_str());
+        return false;
+    }
     bool found = false;
     xSemaphoreTake(_mutex, portMAX_DELAY);
     for (auto& d : _results) {
@@ -1261,6 +1294,10 @@ bool NetworkScanner::setAlias(const String& macOrIp, const String& alias) {
 // Favori utilisateur : identifie l'equipement par MAC (priorite) ou IP
 // ---------------------------------------------------------------------------
 bool NetworkScanner::setFavorite(const String& macOrIp, bool favorite) {
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Modification de favori refusée — mode dégradé (%s)", systemHealth.reason().c_str());
+        return false;
+    }
     bool found = false;
     xSemaphoreTake(_mutex, portMAX_DELAY);
     for (auto& d : _results) {
@@ -1280,14 +1317,22 @@ bool NetworkScanner::setFavorite(const String& macOrIp, bool favorite) {
 // ---------------------------------------------------------------------------
 bool NetworkScanner::addNote(const String& macOrIp, const String& text) {
     if (text.isEmpty()) return false;
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Note refusée — mode dégradé (%s)", systemHealth.reason().c_str());
+        return false;
+    }
+    String trimmed = text.substring(0, MAX_NOTE_LENGTH);   // borne la taille d'une note
     bool found = false;
     xSemaphoreTake(_mutex, portMAX_DELAY);
     for (auto& d : _results) {
         if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
             DeviceNote n;
             n.ts   = timeSync.nowEpoch();
-            n.text = text;
+            n.text = trimmed;
             d.notes.push_back(n);
+            // FIFO : borne le nombre de notes par equipement
+            while (d.notes.size() > MAX_NOTES_PER_DEVICE)
+                d.notes.erase(d.notes.begin());
             found = true;
             break;
         }
@@ -1342,6 +1387,11 @@ String NetworkScanner::diagnosticsToJson() const {
     doc["avgScanMs"]     = t.avgScanMs;
     doc["lastRescanMs"]  = t.lastRescanMs;
     doc["avgRescanMs"]   = t.avgRescanMs;
+    doc["degraded"]      = systemHealth.isDegraded();
+    doc["degradedReason"]= systemHealth.reason();
+    doc["deviceCount"]   = _results.size();
+    doc["maxDevices"]    = MAX_TRACKED_DEVICES;
+    doc["historyCount"]  = deviceHistory.load(0).size();
     String json;
     serializeJson(doc, json);
     return json;
@@ -1352,6 +1402,10 @@ String NetworkScanner::diagnosticsToJson() const {
 // en conservant optionnellement les equipements alias / a fabricant resolu
 // ---------------------------------------------------------------------------
 int NetworkScanner::resetDevices(bool keepAlias, bool keepManufacturer) {
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Reset des équipements refusé — mode dégradé (%s)", systemHealth.reason().c_str());
+        return 0;
+    }
     int removed = 0;
     xSemaphoreTake(_mutex, portMAX_DELAY);
     std::vector<NetworkDevice> kept;
@@ -1383,6 +1437,10 @@ void NetworkScanner::_setRescanProgress(const String& step, int percent) {
 
 bool NetworkScanner::rescanDevice(const String& ip) {
     if (_scanning) return false;
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Rescan refusé — mode dégradé (%s)", systemHealth.reason().c_str());
+        return false;
+    }
 
     bool known = false;
     {
@@ -1430,6 +1488,7 @@ void NetworkScanner::_rescanTask(void* selfPtr) {
 
     self->_scanning         = false;
     self->_rescanTaskHandle = nullptr;
+    Log::i("NetScan", "Marge pile min. tache rescan: %u octets", (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     vTaskDelete(nullptr);
 }
 
@@ -1509,7 +1568,7 @@ void NetworkScanner::_runRescan(const String& ip) {
         xSemaphoreGive(_mutex);
 
         // Scan de ports plus long qu'en scan complet (500 ms vs 250 ms) :
-        // une seule cible, on peut se permettre d'attendre des banners lents.
+        // une seule cible, peut se permettre d'attendre des banners lents.
         _setRescanProgress("Ports TCP", 35);
         auto portResults = portScanner.scan({ ip }, 500);
         auto prIt = portResults.find(ip);
@@ -1544,8 +1603,8 @@ void NetworkScanner::_runRescan(const String& ip) {
 
         // ── SSDP/UPnP + DNS-SD ────────────────────────────────────────────
         // Ces protocoles reposent sur de la diffusion multicast (pas de requete
-        // ciblee sur une seule IP) : on relance la decouverte complete avec un
-        // delai genereux, et on ne fusionne que la reponse de l'IP visee.
+        // ciblee sur une seule IP) : relancer la decouverte complete avec un
+        // delai genereux, puis ne fusionner que la reponse de l'IP visee.
         // Justifie ici car l'utilisateur attend explicitement le resultat
         // d'une seule fiche, contrairement au scan complet ou ce cout serait
         // paye pour chaque equipement.
@@ -1562,7 +1621,7 @@ void NetworkScanner::_runRescan(const String& ip) {
         }
 
         _setRescanProgress("DNS-SD", 80);
-        auto dnssdResults = dnsSdScanner.scan(5000);
+        auto dnssdResults = dnsSdScanner.scan(9000);
         auto ddIt = dnssdResults.find(ip);
         if (ddIt != dnssdResults.end()) {
             xSemaphoreTake(_mutex, portMAX_DELAY);
@@ -1576,7 +1635,7 @@ void NetworkScanner::_runRescan(const String& ip) {
         // Protocole utilise par la quasi-totalite des cameras IP et
         // imprimantes ONVIF pour s'annoncer, independamment de SSDP. Comme
         // SSDP/DNS-SD, c'est une decouverte multicast non ciblable par IP :
-        // on relance la decouverte complete et on ne garde que l'IP visee.
+        // relancer la decouverte complete et ne garder que l'IP visee.
         _setRescanProgress("WS-Discovery", 72);
         auto wsdResults = wsDiscoveryScanner.scan(2000);
         auto wsdIt = wsdResults.find(ip);
@@ -1729,6 +1788,10 @@ String NetworkScanner::backupToJson() const {
 }
 
 bool NetworkScanner::restoreFromJson(const String& json) {
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Restauration refusée — mode dégradé (%s)", systemHealth.reason().c_str());
+        return false;
+    }
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) {
@@ -1765,8 +1828,11 @@ bool NetworkScanner::restoreFromJson(const String& json) {
         for (JsonObject no : notesArr) {
             DeviceNote n;
             n.ts   = no["ts"]   | 0;
-            n.text = no["text"] | "";
+            String text = no["text"] | "";
+            n.text = text.substring(0, MAX_NOTE_LENGTH);
             d.notes.push_back(n);
+            while (d.notes.size() > MAX_NOTES_PER_DEVICE)
+                d.notes.erase(d.notes.begin());
         }
         d.online        = false;
         d.lastSeen      = 0;
@@ -1822,7 +1888,9 @@ String NetworkScanner::devicesToCsv() const {
     copy = _results;
     xSemaphoreGive(_mutex);
 
-    String csv = "ip,mac,hostname,alias,manufacturer,model,category,type,os,services,openPorts,online,favorite,confidence,notes,firstSeen,lastSeenAt,seenCount\n";
+    String csv;
+    csv.reserve(96 + copy.size() * 200);   // évite les réallocations répétées (fragmentation heap)
+    csv = "ip,mac,hostname,alias,manufacturer,model,category,type,os,services,openPorts,online,favorite,confidence,notes,firstSeen,lastSeenAt,seenCount\n";
     for (const auto& d : copy) {
         if (d.ip.isEmpty() && d.mac.isEmpty()) continue;
         String confLabel;

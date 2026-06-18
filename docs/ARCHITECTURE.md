@@ -51,7 +51,6 @@ et comment les différentes parties s'articulent entre elles.
                     │  /scan         │
                     │  /history      │
                     │  /topology     │
-                    │  /update       │
                     │  /wifi         │
                     │  /api/devices  │
                     └─────────────────┘
@@ -115,9 +114,7 @@ Phase 1 : ARP sweep
   → Envoie des ARP Request sur chaque IP du sous-réseau (par lots de 5)
   → Lit la table ARP lwIP après chaque lot (capacité max : 10 entrées)
 
-Phase 2 : mDNS passif
-  → HostnameResolver écoute les annonces multicast pendant le sweep ARP
-  → Capture les enregistrements A (.local) des devices compatibles
+Phase 2 : (retirée en v0.8.2 — voir HostnameResolver ci-dessous)
 
 Phase 3 : PTR DNS batch
   → Envoie des requêtes DNS inverse pour chaque IP découverte
@@ -137,8 +134,8 @@ Phase 6 : Fusion SSDP
   → Ajoute les devices UPnP-only (non détectés par ARP)
 
 Phase 7 : DNS-SD (DnsSdScanner)
-  → Envoie 22 requêtes PTR dans un seul paquet mDNS multicast
-  → Écoute 4 s : PTR → instance, SRV → port/hostname, TXT → modèle, A → IP
+  → Interroge mdns_query_ptr() (ESP-IDF) pour chaque type de service connu
+  → Chaque résultat fournit hostname, TXT (modèle), adresse(s) IPv4
   → Fusionne services, model, hostname, category dans chaque NetworkDevice
 
 Phase 8 : Self entry
@@ -154,20 +151,22 @@ FreeRTOS. `getResults()` retourne une copie — jamais une référence.
 
 **Rôle** : trouver le nom d'hôte de chaque équipement découvert par ARP.
 
-Deux mécanismes complémentaires :
+Depuis v0.8.2, un seul mécanisme :
 
-**mDNS passif** (priorité haute) :
-- Ouvre un socket UDP sur `224.0.0.251:5353` (multicast mDNS)
-- Écoute les annonces spontanées pendant le sweep ARP
-- Pas de requête active — les devices annoncent leur présence
-
-**PTR DNS batch** (fallback) :
+**PTR DNS batch** (seul mécanisme actif) :
 - Pour chaque IP sans hostname mDNS, envoie une requête DNS inverse
 - Format : `d.c.b.a.in-addr.arpa` au serveur DNS de la box
 - Toutes les requêtes envoyées en parallèle, réponses attendues 500 ms max
 
 Raison du batch : 50 requêtes DNS séquentielles × 500 ms = 25 secondes.
 Avec le batch : 50 requêtes simultanées × 500 ms = 0,5 seconde.
+
+**mDNS passif (retiré en v0.8.2)** : `224.0.0.251:5353` reste détenu
+exclusivement par le composant mDNS d'ESP-IDF (responder `MDNS.begin()`,
+voir `wifi_manager.cpp`) dès que le Wi-Fi est connecté — en pratique en
+permanence. Aucune API ESP-IDF publique ne permet d'observer passivement
+les annonces reçues par ce service partagé. `begin()`/`update()`/`end()`
+sont conservés comme no-op pour compatibilité. Voir `docs/WARNINGS.md`.
 
 ---
 
@@ -207,12 +206,19 @@ Fonctionnement :
 
 Voir `docs/PROTOCOLS.md` pour le détail du protocole DNS-SD.
 
-Fonctionnement :
-1. Construit un paquet mDNS avec 22 questions PTR (un par type de service)
-2. Envoie en multicast → `224.0.0.251:5353` (même canal que mDNS)
-3. Écoute pendant 4 s les réponses PTR + SRV + TXT + A
-4. Construit une map IP → {services, model, hostname, category}
-5. Fusionne dans les NetworkDevice existants
+Fonctionnement (depuis v0.8.2) :
+1. Pour chaque type de service connu, appelle `mdns_query_ptr()` (API C du
+   composant mDNS d'ESP-IDF, `<mdns.h>`) — passe par le service mDNS déjà
+   initialisé par `MDNS.begin()`, aucun socket applicatif dédié
+2. Chaque résultat fournit directement hostname, TXT records et adresse(s)
+   IPv4 — pas de parsing DNS manuel
+3. Construit une map IP → {services, model, hostname, category}
+4. Fusionne dans les NetworkDevice existants
+
+Avant v0.8.2, ce scanner ouvrait son propre socket multicast (mutualisé via
+`MdnsManager` depuis v0.8.1), qui entrait en conflit avec le socket
+exclusif du responder mDNS d'ESP-IDF — voir `docs/WARNINGS.md`. `MdnsManager`
+est supprimé depuis v0.8.2, devenu inutile.
 
 ---
 
@@ -256,6 +262,33 @@ Ce découplage permet de tester ou de remplacer le scanner sans modifier le serv
 
 ---
 
+### `src/modules/system_health.*` — Mode dégradé mémoire
+
+**Rôle** : surveiller le heap libre et basculer en mode dégradé plutôt que
+de redémarrer automatiquement.
+
+Appelé depuis `loop()` (`systemHealth.loop()`, non bloquant) :
+- Sous `HEAP_CRITICAL_BYTES` (20 000 octets libres) → `isDegraded() == true`
+- Hystérésis : la sortie du mode dégradé exige `HEAP_CRITICAL_BYTES +
+  HEAP_RECOVERY_MARGIN` octets libres, pour éviter une oscillation rapide
+  autour du seuil
+- `restartNow()` : redémarrage **manuel uniquement**, déclenché par
+  `POST /api/system/restart` (bouton « Redémarrer l'appareil » de la page
+  Système) — le firmware ne redémarre jamais de lui-même sur condition
+  mémoire
+
+En mode dégradé, les points d'entrée suivants vérifient `systemHealth.isDegraded()`
+et refusent l'opération (retour d'erreur explicite côté API) :
+- `NetworkScanner::startScan()`, `rescanDevice()`
+- `NetworkScanner::addNote()`, `setAlias()`, `setFavorite()`, `resetDevices()`, `restoreFromJson()`
+- `DeviceHistory::addEvent()` (journalisation suspendue)
+
+L'inventaire déjà acquis reste consultable (`GET /api/devices`, `/api/history`,
+exports CSV/JSON) — seules les écritures et les opérations coûteuses en
+mémoire/CPU sont bloquées.
+
+---
+
 ### `src/utils/logger.h` — Journalisation (header-only)
 
 **Rôle** : afficher des logs sur le port série avec niveaux de sévérité.
@@ -283,7 +316,6 @@ web_src/scan.html     ──┤
 web_src/history.html  ──┼── python tools/minify_web.py ──► include/*.h
 web_src/wifi.html     ──┤
 web_src/topology.html ──┤
-web_src/ota.html      ──┤
 data/oui.json         ──┘
                               │
                               ▼

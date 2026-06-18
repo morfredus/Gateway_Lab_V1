@@ -18,14 +18,7 @@
   </header>
 
   <!-- ── Navigation ────────────────────────────────────────── -->
-  <nav>
-    <a href="/">Accueil</a>
-    <a href="/scan" class="active">Équipements</a>
-    <a href="/history">Historique</a>
-    <a href="/topology">Topologie</a>
-    <a href="/update">OTA</a>
-    <a href="/wifi">Paramètres</a>
-  </nav>
+  <!-- include:menu.html -->
 
   <!-- ── Contenu ───────────────────────────────────────────── -->
   <div class="card">
@@ -58,6 +51,13 @@
         </div>
       </div>
     </div>
+
+    <p class="scan-hint">
+      Le scan réseau découvre et identifie automatiquement les équipements
+      présents. Certaines informations avancées peuvent nécessiter un scan
+      ciblé de l'équipement afin d'interroger des services spécifiques ou
+      des API propriétaires.
+    </p>
 
     <p class="card-meta" id="restore-msg" style="display:none"></p>
 

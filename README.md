@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.7.4-blue)
+![Version](https://img.shields.io/badge/version-0.8.8-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -52,18 +52,13 @@ Vue simplifiée de la passerelle, des points d'accès détectés et des équipem
 ![Topologie](docs/pictures/Gateway_Lab_V1_Topologie.png)
 
 
-### OTA
+### Système
 
-Mise à jour du firmware directement depuis l'interface web.
+Configuration WiFi, gestion des réseaux enregistrés, réglage de la NeoPixel
+d'état, mise à jour du firmware (OTA) et état système (mémoire, nombre
+d'équipements, historique).
 
-![OTA](docs/pictures/Gateway_Lab_V1_OTA.png)
-
-
-### Paramètres
-
-Configuration WiFi, gestion des réseaux enregistrés et réglage de la NeoPixel d'état.
-
-![Paramètres](docs/pictures/Gateway_Lab_V1_Parametres.png)
+![Système](docs/pictures/Gateway_Lab_V1_Parametres.png)
 
 ---
 
@@ -120,7 +115,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Portail de configuration | Point d'accès `GatewayLab-Setup` + page web si aucun réseau n'est connu |
 | Persistance NVS          | Réseaux WiFi enregistrés survivant aux redémarrages/coupures      |
 | mDNS                     | Accessible via `gateway-lab-v1.local`                             |
-| Interface web            | Pages Accueil / Équipements / Historique / Topologie / OTA / Paramètres |
+| Interface web            | Pages Accueil / Équipements / Historique / Topologie / Système (réseau WiFi, OTA, état système) |
 | Scan réseau LAN          | Sweep ARP du sous-réseau local                                    |
 | Tâche FreeRTOS dédiée    | Scan asynchrone sur Core 0                                        |
 | Résolution hostnames     | mDNS passif + DNS inverse PTR                                     |
@@ -156,13 +151,15 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | ArduinoOTA               | Mise à jour réseau depuis PlatformIO                              |
 | Favoris et notes d'inventaire | Marquer un équipement en favori et lui attacher des notes libres datées (entretien, firmware, etc.) |
 | Cartouche diagnostics    | Heap libre, PSRAM libre, espace LittleFS, temps moyen d'un scan / d'une passe précise — affichée sur la page Accueil |
-| NeoPixel d'état          | Bleu pulsé (démarrage), bleu fixe (prêt), vert clignotant (scan), jaune clignotant (nouvel équipement), violet (portail WiFi), cyan (sauvegarde) — luminosité réglable depuis la page Paramètres, persistée |
+| NeoPixel d'état          | Bleu pulsé (démarrage), bleu fixe (prêt), vert clignotant (scan), jaune clignotant (nouvel équipement), violet (portail WiFi), cyan (sauvegarde) — luminosité réglable depuis la page Système, persistée |
 | Bouton BOOT               | Appui court = lance un scan, maintien 3 s = sauvegarde immédiate |
 | Filtres équipements      | Filtre par type, fabricant, favoris uniquement, en ligne uniquement (page Équipements, côté client) |
 | Menu Données              | Sur la page Équipements : Export CSV / Export JSON (inventaire) puis, après séparateur, Sauvegarde / Restauration (paramètres de fonctionnement) |
 | Sauvegarde des paramètres | Réseaux WiFi enregistrés, luminosité NeoPixel (`/api/system/backup`, `/api/system/restore`) — distincte de la sauvegarde de l'inventaire |
 | Page Topologie           | Vue simplifiée (passerelle/routeurs vs reste des équipements), première étape avant la cartographie graphique (roadmap v0.4.x) |
-| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/devices/rescan/status`, `/api/scan`, `/api/alias`, `/api/favorite`, `/api/notes`, `/api/diagnostics`, `/api/history`, `/api/backup`, `/api/restore`, `/api/devices/export.csv`, `/api/system/backup`, `/api/system/restore`, `/api/wifi`, `/api/led/brightness` |
+| Mode dégradé mémoire     | Heap critique (< `HEAP_CRITICAL_BYTES`) → refuse scans/rescans/notes/historique/config sans redémarrer ; inventaire déjà acquis consultable ; redémarrage manuel depuis la page Système |
+| Bornes mémoire           | Listes/historique/notes plafonnés (`MAX_TRACKED_DEVICES`, `MAX_HISTORY_EVENTS`, `MAX_NOTES_PER_DEVICE`, `MAX_NOTE_LENGTH`) pour garantir un fonctionnement stable sur la durée |
+| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/devices/rescan/status`, `/api/scan`, `/api/alias`, `/api/favorite`, `/api/notes`, `/api/diagnostics`, `/api/history`, `/api/backup`, `/api/restore`, `/api/devices/export.csv`, `/api/system/backup`, `/api/system/restore`, `/api/system/health`, `/api/system/restart`, `/api/wifi`, `/api/led/brightness` |
 
 ---
 
@@ -224,7 +221,7 @@ pio run --target upload
 http://gateway-lab-v1.local
 ```
 
-ou via l'adresse IP affichée sur la page d'accueil ou la page Paramètres.
+ou via l'adresse IP affichée sur la page d'accueil ou la page Système.
 
 ---
 
@@ -252,6 +249,7 @@ Gateway-Lab-V1/
 │   │   ├── device_enricher.h
 │   │   ├── device_store.*
 │   │   ├── device_history.*
+│   │   ├── system_health.*
 │   │   └── time_sync.*
 │   │
 │   └── utils/
@@ -265,9 +263,8 @@ Gateway-Lab-V1/
 │   ├── oui_table.h              # Généré depuis data/oui.json
 │   ├── web_interface.h          # Généré depuis web_src/index.html
 │   ├── web_interface_scan.h     # Généré depuis web_src/scan.html
-│   ├── web_interface_ota.h      # Généré depuis web_src/ota.html
 │   ├── web_interface_history.h  # Généré depuis web_src/history.html
-│   ├── web_interface_wifi.h     # Généré depuis web_src/wifi.html
+│   ├── web_interface_wifi.h     # Généré depuis web_src/wifi.html (page Système)
 │   └── web_interface_topology.h # Généré depuis web_src/topology.html
 │
 ├── web_src/
@@ -275,14 +272,13 @@ Gateway-Lab-V1/
 │   ├── index.js                  # Script de la page d'accueil (source)
 │   ├── scan.html                 # Page équipements — HTML uniquement (source)
 │   ├── scan.js                   # Script de la page équipements (source)
-│   ├── ota.html                  # Page OTA — HTML uniquement (source)
-│   ├── ota.js                    # Script de la page OTA (source)
 │   ├── history.html              # Page historique — HTML uniquement (source)
 │   ├── history.js                # Script de la page historique (source)
-│   ├── wifi.html                 # Page Paramètres WiFi — HTML uniquement (source)
-│   ├── wifi.js                   # Script de la page Paramètres WiFi (source)
+│   ├── wifi.html                 # Page Système (WiFi, OTA, état système) — HTML uniquement (source)
+│   ├── wifi.js                   # Script de la page Système (source)
 │   ├── topology.html             # Page Topologie — HTML uniquement (source)
 │   ├── topology.js               # Script de la page Topologie (source)
+│   ├── menu.html                 # Bloc <nav> partagé, inliné dans toutes les pages (source)
 │   ├── styles.css                # Feuille de style unique (injectée inline par minify_web.py)
 │   ├── template.html             # Gabarit de référence (documentation)
 │   ├── extracted/                # Sortie de extract_web_sources.py (non versionné)
@@ -404,17 +400,15 @@ Page d'accueil
 
 Inventaire réseau
 
-### GET /update
-
-Interface OTA
-
 ### GET /history
 
 Vue chronologique des événements détectés
 
 ### GET /wifi
 
-Page Paramètres → Réseau WiFi (état de connexion, réseaux enregistrés)
+Page Système : réseau WiFi (état de connexion, réseaux enregistrés), LED
+d'état, mise à jour du firmware (OTA) et état système (mémoire, équipements,
+historique).
 
 ### GET /topology
 
@@ -509,7 +503,8 @@ le timestamp de la note à supprimer).
 
 ### GET /api/diagnostics
 
-Retourne l'état mémoire/stockage et les temps de scan moyens :
+Retourne l'état mémoire/stockage, les temps de scan moyens et les compteurs
+affichés sur la page Système :
 
 ```json
 {
@@ -520,7 +515,12 @@ Retourne l'état mémoire/stockage et les temps de scan moyens :
   "lastScanMs": 4210,
   "avgScanMs": 3980,
   "lastRescanMs": 1850,
-  "avgRescanMs": 1720
+  "avgRescanMs": 1720,
+  "degraded": false,
+  "degradedReason": "",
+  "deviceCount": 23,
+  "maxDevices": 64,
+  "historyCount": 84
 }
 ```
 
@@ -567,9 +567,33 @@ Restaure les paramètres de fonctionnement depuis un export JSON généré par
 (jamais supprimés automatiquement) ; la luminosité NeoPixel est appliquée
 immédiatement.
 
+### GET /api/system/health
+
+Retourne l'état du mode dégradé mémoire :
+
+```json
+{
+  "degraded": false,
+  "reason": "",
+  "freeHeap": 184320
+}
+```
+
+`degraded=true` quand le heap libre est tombé sous `HEAP_CRITICAL_BYTES` —
+les nouveaux scans, rescans, notes, journalisation d'historique et
+modifications de configuration sont alors refusés jusqu'à ce que la mémoire
+se rétablisse (`HEAP_RECOVERY_MARGIN`) ou qu'un redémarrage manuel soit
+effectué.
+
+### POST /api/system/restart
+
+Redémarre l'ESP32 immédiatement (déclenché manuellement depuis le bouton
+« Redémarrer l'appareil » de la page Système — aucun redémarrage
+automatique n'est déclenché par le firmware lui-même).
+
 ### POST /update
 
-Upload d'un firmware `.bin`.
+Upload d'un firmware `.bin` (formulaire intégré à la page Système, `/wifi`).
 
 ### GET /api/led/brightness
 

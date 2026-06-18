@@ -17,12 +17,11 @@ et chaque page a son propre fichier `*.js`.
 
 ```
 web_src/styles.css     ──┐
+web_src/menu.html      ──┤
 web_src/index.html     ──┤
 web_src/index.js       ──┤
 web_src/scan.html      ──┤
 web_src/scan.js         ──┼── python tools/minify_web.py ──► include/*.h ──► pio run
-web_src/ota.html       ──┤
-web_src/ota.js          ──┤
 web_src/history.html   ──┤
 web_src/history.js      ──┤
 web_src/wifi.html       ──┤
@@ -40,13 +39,18 @@ data/oui.json          ──┘
 |---|---|---|
 | `index.html` / `index.js` | Page Accueil (`GET /`) | ✅ → `include/web_interface.h` |
 | `scan.html` / `scan.js` | Page Équipements (`GET /scan`) | ✅ → `include/web_interface_scan.h` |
-| `ota.html` / `ota.js` | Page OTA (`GET /update`) | ✅ → `include/web_interface_ota.h` |
 | `history.html` / `history.js` | Page Historique (`GET /history`) | ✅ → `include/web_interface_history.h` |
-| `wifi.html` / `wifi.js` | Page Paramètres → Réseau WiFi (`GET /wifi`) | ✅ → `include/web_interface_wifi.h` |
+| `wifi.html` / `wifi.js` | Page Système → Réseau WiFi, mise à jour firmware, état système (`GET /wifi`) | ✅ → `include/web_interface_wifi.h` |
 | `topology.html` / `topology.js` | Page Topologie (`GET /topology`) | ✅ → `include/web_interface_topology.h` |
+| `menu.html` | Bloc `<nav>` partagé, inliné via `<!-- include:menu.html -->` | ✅ injecté inline dans chaque page (avant minification) |
 | `styles.css` | CSS commun (reset, body, nav, footer…) | ✅ injecté inline dans chaque page |
 | `template.html` | Gabarit de référence documentaire | ❌ (non listé dans PAGES) |
 | `extracted/` | Sortie de `extract_web_sources.py` (récupération d'urgence) | — (non versionné, ne pas modifier à la main) |
+
+> La page OTA dédiée (`ota.html` / `ota.js` / `GET /update`) a été supprimée :
+> le formulaire de mise à jour firmware est désormais intégré à la page
+> Système (`wifi.html`). Seule la réception du fichier (`POST /update`)
+> reste gérée côté backend (`ota_manager.cpp`).
 
 > Note : la page du **portail de configuration WiFi** (`GatewayLab-Setup`,
 > mode point d'accès uniquement) n'appartient pas à ce dossier. Elle est
@@ -69,7 +73,7 @@ Toutes les pages partagent la même architecture HTML :
     "Gateway Lab V1"  [vX.X.X]       ← version récupérée via /api/status
     <span class="site-tag">…</span>  ← titre contextuel
   </header>
-  <nav> Accueil / Équipements / OTA </nav>
+  <!-- include:menu.html -->            ← inliné par minify_web.py (bloc <nav> partagé)
   <!-- contenu de la page -->
   <footer>
     <span id="footer-ts">…</span>    ← horodatage ou version firmware
@@ -80,8 +84,15 @@ Toutes les pages partagent la même architecture HTML :
 ```
 
 Le CSS de `styles.css` est injecté à la place de `<link rel="stylesheet" href="styles.css">`,
-et le JavaScript de `page.js` est injecté à la place de `<script src="page.js"></script>`.
-Chaque page conserve un bloc `<style>` pour ses règles propres (largeur max, composants).
+le bloc de navigation de `menu.html` est injecté à la place du marqueur
+`<!-- include:menu.html -->`, et le JavaScript de `page.js` est injecté à la
+place de `<script src="page.js"></script>`. Chaque page conserve un bloc
+`<style>` pour ses règles propres (largeur max, composants).
+
+Le fichier `menu.html` contient le bloc `<nav>` (liens identiques sur toutes
+les pages) ainsi qu'un petit script qui marque le lien actif
+(`class="active"`) en comparant `href` à `window.location.pathname` — il n'y
+a donc plus besoin de dupliquer ou de personnaliser ce bloc par page.
 
 ---
 
@@ -90,11 +101,11 @@ Chaque page conserve un bloc `<style>` pour ses règles propres (largeur max, co
 ### 1. Modifier les sources
 
 - **Styles communs** → `web_src/styles.css`
+- **Navigation commune** → `web_src/menu.html` (bloc `<nav>` partagé, inliné dans toutes les pages)
 - **Page Accueil** → `web_src/index.html` + `web_src/index.js`
 - **Page Équipements** → `web_src/scan.html` + `web_src/scan.js`
-- **Page OTA** → `web_src/ota.html` + `web_src/ota.js`
 - **Page Historique** → `web_src/history.html` + `web_src/history.js`
-- **Page Paramètres WiFi** → `web_src/wifi.html` + `web_src/wifi.js`
+- **Page Système** (réseau WiFi, mise à jour firmware, état système) → `web_src/wifi.html` + `web_src/wifi.js`
 - **Page Topologie** → `web_src/topology.html` + `web_src/topology.js`
 
 > Les fichiers HTML ne contiennent que du HTML/PHP (markup) : tout le CSS va
@@ -107,12 +118,13 @@ python tools/minify_web.py
 ```
 
 Le script :
-1. Lit `styles.css`, le minifie et l'injecte inline dans chaque HTML à la place du `<link>`
-2. Lit le `*.js` de chaque page, le minifie et l'injecte inline à la place du `<script src="...">`
-3. Minifie le CSS/JS inline restant
-4. Génère les headers `include/web_interface*.h`
-5. Met à jour `data/index.html` (copie minifiée pour débogage)
-6. Régénère `include/oui_table.h` depuis `data/oui.json`
+1. Lit `menu.html` et l'injecte inline dans chaque HTML à la place du marqueur `<!-- include:menu.html -->`
+2. Lit `styles.css`, le minifie et l'injecte inline dans chaque HTML à la place du `<link>`
+3. Lit le `*.js` de chaque page, le minifie et l'injecte inline à la place du `<script src="...">`
+4. Minifie le CSS/JS inline restant
+5. Génère les headers `include/web_interface*.h`
+6. Met à jour `data/index.html` (copie minifiée pour débogage)
+7. Régénère `include/oui_table.h` depuis `data/oui.json`
 
 ### Récupération d'urgence
 

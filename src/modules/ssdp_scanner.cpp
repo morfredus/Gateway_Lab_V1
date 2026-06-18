@@ -231,11 +231,42 @@ std::vector<SsdpScanner::SsdpResponse> SsdpScanner::_discover(uint32_t timeout_m
             resp.port = _urlPort(loc);
             resp.path = _urlPath(loc);
 
-            if (!resp.ip.isEmpty()) {
-                responses.push_back(resp);
-                Log::d(TAG, "LOCATION trouvée : %s (ip=%s port=%d)",
-                       loc.c_str(), resp.ip.c_str(), resp.port);
+            if (resp.ip.isEmpty()) {
+                continue;
             }
+
+            // Certains équipements UPnP mal configurés annoncent une LOCATION
+            // pointant vers une adresse inutilisable depuis l'ESP32.
+            //
+            // Cas rencontrés :
+            // - 127.0.0.0/8   : boucle locale
+            // - 0.0.0.0       : adresse non initialisée
+            // - 169.254.0.0/16: APIPA / lien-local Windows
+            //
+            // Ces adresses conduisent à des requêtes HTTP vouées à l'échec
+            // ou ne correspondent pas à un équipement réellement joignable
+            // sur le réseau local scanné.
+            if (resp.ip.startsWith("127.")) {
+                Log::w(TAG, "LOCATION rejetée (boucle locale) : %s", loc.c_str());
+                continue;
+            }
+
+            if (resp.ip == "0.0.0.0") {
+                Log::w(TAG, "LOCATION rejetée (adresse invalide) : %s", loc.c_str());
+                continue;
+            }
+
+            if (resp.ip.startsWith("169.254.")) {
+                Log::w(TAG, "LOCATION rejetée (APIPA) : %s", loc.c_str());
+                continue;
+            }
+
+            responses.push_back(resp);
+
+            Log::d(TAG, "LOCATION trouvée : %s (ip=%s port=%d)",
+                   loc.c_str(),
+                   resp.ip.c_str(),
+                   resp.port);
         } else {
             vTaskDelay(pdMS_TO_TICKS(20));
         }
@@ -436,8 +467,8 @@ void SsdpScanner::_enrichSynology(NetworkDevice& dev) {
         }
     }
 
-    // Modèle depuis le XML UPnP (ex: "DiskStation DS224+") — on garde
-    // Si le modèle contient "DS" ou "RS" on l'extrait proprement
+    // Modèle depuis le XML UPnP (ex: "DiskStation DS224+") — conserver
+    // Si le modèle contient "DS" ou "RS", l'extraire proprement
     String model = dev.model;
     if (model.indexOf("DiskStation") >= 0) {
         int idx = model.indexOf("DS");
