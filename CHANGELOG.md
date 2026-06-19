@@ -5,6 +5,45 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.1] - 2026-06-19
+
+### Corrige
+
+- **Passe précise réellement ciblée sur un seul équipement** : la passe
+  approfondie (v0.9.0) lançait encore SSDP/UPnP, DNS-SD et WS-Discovery —
+  des protocoles multicast qui sondent tout le sous-réseau et ne peuvent
+  pas être restreints à une IP — ce qui faisait remonter des informations
+  sur d'autres équipements (ex: « Synology détecté / Imprimante détectée »
+  en scannant un PC) et prenait 20-30s. La logique est entièrement
+  réécrite autour du principe « poser les bonnes questions à l'équipement
+  ciblé » plutôt que « relancer tous les moteurs de découverte réseau » :
+  - **Scan rapide** (1-3s, inchangé dans son objectif) : ARP/ICMP, PTR
+    DNS, mise à jour du hostname, vérification de présence — rien
+    d'autre.
+  - **Scan approfondi** (<3s si rien d'exploitable, sinon quelques
+    secondes au lieu de 20-30s) : étape 1, scan TCP unicast des ports de
+    la cible uniquement (nouvelle liste dédiée `kRescanTargetPorts` :
+    22, 53, 80, 135, 139, 443, 445, 515, 554, 631, 8080, 8443, 9100,
+    5000, `port_scanner.h`/`.cpp`). **Si aucun port/service exploitable
+    n'est trouvé, la passe s'arrête immédiatement** (message « Aucun
+    service exploitable détecté. Passe approfondie terminée. »). Sinon,
+    le profil d'équipement (`_profileFor()`) est réévalué à partir des
+    ports découverts (plus fiable que les informations préexistantes),
+    et seuls les modules pertinents pour ce profil sont lancés, toujours
+    en requête unicast directe sur l'IP visée : NetBIOS (Computer/
+    Unknown), API multimédia Cast/Sonos/Roku/Samsung (Streaming/
+    SmartHome), SNMP (Printer/Unknown). **Plus aucun module SSDP, DNS-SD
+    ou WS-Discovery n'est jamais lancé depuis une passe précise.**
+  - **Fingerprint HTTP enrichi** : `port_scanner.cpp` capture désormais
+    aussi le `<title>` de la page (en plus de l'en-tête `Server:`), et
+    sonde les API constructeur Synology DSM et Philips Hue (en plus de
+    Shelly/Tasmota/FritzBox déjà présents) une fois un port HTTP ouvert
+    identifié.
+  - `network_scanner.h`/`.cpp` : suppression de l'include
+    `ws_discovery_scanner.h` (devenu inutile dans ce fichier), profil
+    déduit enrichi avec des indices issus des ports ouverts (IPP/LPD →
+    Printer, port 5000/Synology/QNAP → NAS, RPC/NetBIOS/RDP → Computer).
+
 ## [0.9.0] - 2026-06-19
 
 ### Ajoute

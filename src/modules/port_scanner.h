@@ -30,20 +30,30 @@
 struct PortScanResult {
     std::vector<uint16_t> openPorts;
     String httpBanner;    // Valeur de l'en-tete Server: HTTP (port 80/8080...)
+    String httpTitle;     // Contenu de <title> de la page HTTP (port 80/8080...)
     String sshBanner;     // Banniere brute SSH (port 22, ex: "SSH-2.0-OpenSSH_8.4")
     String ftpBanner;     // Banniere brute FTP (port 21)
-    String iotType;       // Type d'API IoT detectee (ex: "Shelly", "Tasmota", "FritzBox")
+    String iotType;       // Type d'API IoT detectee (ex: "Shelly", "Tasmota", "FritzBox", "Synology", "Hue")
     String iotModel;      // Modele rapporte par l'API IoT
     String iotFirmware;   // Version de firmware rapportee par l'API IoT
 };
+
+// Ports sondes lors d'une passe precise ciblee (scan rapide/approfondi d'un
+// seul equipement, cf. NetworkScanner::rescanDevice). Liste differente du
+// scan complet : se limite aux services exploitables a la cible et inclut
+// des ports specifiques (53, 135, 139, 515, 631) absents du balayage /24.
+extern const std::vector<uint16_t> kRescanTargetPorts;
 
 class PortScanner {
 public:
     // Scan les ports communs sur chaque IP de la liste.
     // timeout_ms : delai maximum par lot de sockets (recommande : 200-300 ms)
+    // customPorts : liste de ports a sonder a la place de la liste par
+    // defaut (utilise par la passe precise avec kRescanTargetPorts).
     std::map<String, PortScanResult> scan(
         const std::vector<String>& ips,
-        uint32_t timeout_ms = 250);
+        uint32_t timeout_ms = 250,
+        const std::vector<uint16_t>* customPorts = nullptr);
 
 private:
     // Scan un lot de ports sur une IP avec sockets non-bloquants + select()
@@ -52,8 +62,9 @@ private:
                     uint32_t timeout_ms,
                     std::vector<uint16_t>& openPorts);
 
-    // GET HTTP simple pour recuperer Server: header
-    String _httpBanner(const String& ip, uint16_t port, uint32_t timeout_ms);
+    // GET HTTP simple pour recuperer l'en-tete Server: et le <title> de la page
+    void _httpBanner(const String& ip, uint16_t port, uint32_t timeout_ms,
+                      String& serverOut, String& titleOut);
 
     // Lecture de la banniere brute envoyee a la connexion (SSH/FTP/Telnet)
     String _tcpBanner(const String& ip, uint16_t port, uint32_t timeout_ms);

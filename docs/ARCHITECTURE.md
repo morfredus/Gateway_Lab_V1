@@ -222,22 +222,34 @@ est supprimé depuis v0.8.2, devenu inutile.
 
 ---
 
-### `src/modules/snmp_scanner.*`, `ws_discovery_scanner.*`, `media_api_scanner.*` — Passe précise
+### `src/modules/snmp_scanner.*`, `media_api_scanner.*` — Passe précise
 
 **Rôle** : enrichir un seul équipement (réinterrogation ciblée) avec des
-protocoles plus coûteux, non utilisés lors du scan complet.
+protocoles plus coûteux, non utilisés lors du scan complet, et qui peuvent
+être adressés directement à l'IP visée (requête unicast).
 
 - `SnmpScanner` : GetRequest SNMP v1 (ASN.1 BER manuel) sur `sysDescr` (UDP 161)
-- `WsDiscoveryScanner` : Probe SOAP/ONVIF multicast (`239.255.255.250:3702`) —
-  caméras, imprimantes, NAS
 - `MediaApiScanner` : sondes HTTP séquentielles Cast (`:8008`), Sonos (`:1400`),
   Roku (`:8060`), Samsung Smart TV (`:8001`)
 
-Ces trois scanners sont appelés uniquement depuis `_runRescan(ip)` dans
+Ces deux scanners sont appelés uniquement depuis `_runRescan(ip, deep)` dans
 `network_scanner.cpp`, exécuté dans une tâche FreeRTOS dédiée
 (`_rescanTask`) avec progression exposée via `RescanStatus`
 (`GET /api/devices/rescan/status`, polling 500 ms côté UI). Voir
 `docs/PROTOCOLS.md` pour le détail de chaque protocole.
+
+**Architecture depuis v0.9.1** : `_runRescan()` interroge uniquement l'IP
+visée, jamais le reste du réseau. Le scan rapide se limite à ARP/ICMP + PTR
+DNS. Le scan approfondi sonde d'abord les ports de la cible
+(`kRescanTargetPorts`, `port_scanner.cpp`) ; s'il ne trouve aucun port/
+service exploitable, la passe s'arrête immédiatement. Sinon, le profil
+(`_profileFor()`) est réévalué à partir des ports découverts, et seuls les
+modules pertinents pour ce profil sont lancés. `WsDiscoveryScanner`
+(`ws_discovery_scanner.*`) n'est plus invoqué : c'est un protocole de
+diffusion multicast, structurellement incompatible avec une interrogation
+ciblée sur une seule IP — le module reste dans le code pour une éventuelle
+réintégration au scan complet, mais n'est appelé par aucune route
+actuellement (cf. `docs/PROTOCOLS.md`).
 
 ---
 

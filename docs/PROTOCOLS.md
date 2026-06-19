@@ -418,8 +418,10 @@ une description texte libre de l'équipement, généralement explicite
 ### Comment Gateway Lab l'utilise ?
 
 Implémenté entièrement en interne (encodage/décodage ASN.1 BER manuel d'une
-requête `GetRequest` SNMPv1), uniquement lors de la **passe précise** sur un
-équipement (pas pendant le scan complet, pour ne pas l'alourdir) :
+requête `GetRequest` SNMPv1), en requête unicast directe sur l'IP visée,
+uniquement lors de la **passe précise approfondie** (profil Imprimante ou
+Inconnu, une fois un service exploitable confirmé par le scan de ports) —
+jamais pendant le scan complet ni en diffusion réseau :
 
 ```
 Gateway Lab → IP cible:161 :
@@ -444,6 +446,14 @@ contenant ses types (rôle) et ses adresses de service.
 
 ### Comment Gateway Lab l'utilise ?
 
+`WsDiscoveryScanner` (`src/modules/ws_discovery_scanner.*`) implémente le
+probe SOAP multicast, mais **n'est plus invoqué depuis la v0.9.1** : c'est
+un protocole de diffusion (toujours envoyé à `239.255.255.250:3702`, jamais
+restreint à une IP unique), incompatible avec le principe de la passe
+précise qui n'interroge que l'équipement visé. Le module reste dans le code
+en vue d'une éventuelle réintégration au scan complet (cf. `ROADMAP.md`),
+mais n'est actuellement appelé par aucune route ni aucun scan.
+
 ```
 Gateway Lab → Tout le réseau (239.255.255.250:3702) :
   SOAP <d:Probe/>
@@ -451,16 +461,15 @@ Caméra ONVIF → Gateway Lab :
   ProbeMatch — Types: "dn:NetworkVideoTransmitter", XAddrs: "http://192.168.1.x:..."
 ```
 
-Le type annoncé permet de catégoriser automatiquement l'équipement (Caméra,
-Imprimante, NAS). Utilisé lors de la passe précise, en complément de SSDP/DNS-SD.
-
 ---
 
 ## API HTTP propriétaires des appareils multimédia courants
 
 Certains appareils multimédia grand public exposent une API HTTP locale sur
 un port fixe non couvert par le scan de ports standard. Lors de la passe
-précise, Gateway Lab les interroge directement :
+précise approfondie (profil Streaming/Domotique, une fois un service
+exploitable confirmé), Gateway Lab les interroge directement en requête
+unicast sur l'IP visée :
 
 | Appareil | Requête | Champs récupérés |
 |---|---|---|
@@ -502,14 +511,15 @@ juste deux entrées de plus dans la table des services interrogés.
 | DNS-SD | 5353 | UDP multicast 224.0.0.251 | Services (`_matter._tcp`, `_matterc._udp`, `_googlecast._tcp`…) |
 | DNS PTR | 53 | UDP → serveur DNS box | Résolution de noms DHCP |
 | SSDP | 1900 | UDP multicast 239.255.255.250 | Découverte UPnP |
-| WS-Discovery | 3702 | UDP multicast 239.255.255.250 | Découverte ONVIF (caméras, imprimantes) — passe précise |
+| WS-Discovery | 3702 | UDP multicast 239.255.255.250 | Découverte ONVIF — non invoqué actuellement (cf. ci-dessus) |
 | NetBIOS | 137 | UDP | Node Status — nom de machine Windows/Samba |
-| SNMP | 161 | UDP | `sysDescr` (fabricant/modèle) — passe précise |
-| TCP ports (scan) | 21/22/23/80/443/445/554/1883/3389/5000/8080/8123/8443/9100 | TCP | Bannières + API IoT (Shelly, Tasmota, FritzBox) |
-| API Cast | 8008 | TCP | `/setup/eureka_info` — passe précise |
-| API Sonos | 1400 | TCP | `/xml/device_description.xml` — passe précise |
-| API Roku | 8060 | TCP | `/query/device-info` — passe précise |
-| API Samsung TV | 8001 | TCP | `/api/v2/` — passe précise |
+| SNMP | 161 | UDP | `sysDescr` (fabricant/modèle) — passe précise approfondie, unicast |
+| TCP ports (scan) | 21/22/23/80/443/445/554/1883/3389/5000/8080/8123/8443/9100 | TCP | Bannières + API IoT (Shelly, Tasmota, FritzBox, Synology, Hue) |
+| TCP ports (passe précise) | 22/53/80/135/139/443/445/515/554/631/8080/8443/9100/5000 | TCP | `kRescanTargetPorts` — scan ciblé d'une seule IP, passe précise approfondie |
+| API Cast | 8008 | TCP | `/setup/eureka_info` — passe précise approfondie, unicast |
+| API Sonos | 1400 | TCP | `/xml/device_description.xml` — passe précise approfondie, unicast |
+| API Roku | 8060 | TCP | `/query/device-info` — passe précise approfondie, unicast |
+| API Samsung TV | 8001 | TCP | `/api/v2/` — passe précise approfondie, unicast |
 | HTTP | 80/443/49000/… | TCP | Descripteurs XML + APIs spécifiques |
 | ArduinoOTA | 3232 | UDP | Mise à jour firmware réseau |
 | HTTP (OTA web) | 80 | TCP | Mise à jour firmware navigateur |

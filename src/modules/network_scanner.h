@@ -149,16 +149,22 @@ public:
     String devicesToCsv() const;
 
     // Lance la passe precise (asynchrone, tache FreeRTOS dediee) sur un seul
-    // equipement identifie par IP. Un profil d'equipement (Computer, NAS,
-    // Printer, Streaming, SmartHome, Mobile, Network, IoT, Unknown) est
-    // deduit des informations deja connues (fabricant, hostname, modele,
-    // categorie, services, ports, OUI) pour ne lancer que les modules de
-    // decouverte pertinents :
-    //   - deep=false (scan rapide, 2-5s)  : ARP/ICMP, PTR DNS, hostname,
-    //     puis un sous-ensemble cible de modules selon le profil.
-    //   - deep=true  (scan approfondi, 15-60s) : tout le scan rapide, puis
-    //     l'ensemble des modules pertinents pour le profil (ports complets,
-    //     SSDP/UPnP, DNS-SD, WS-Discovery/ONVIF, API multimedia, SNMP).
+    // equipement identifie par IP — pose des questions ciblees a CET
+    // equipement, jamais une decouverte reseau globale : aucun module SSDP,
+    // DNS-SD ou WS-Discovery (multicast, non ciblable par IP) n'est jamais
+    // lance depuis une passe precise.
+    //   - deep=false (scan rapide, 1-3s)  : ARP/ICMP, PTR DNS, mise a jour du
+    //     hostname, verification de presence. Rien d'autre.
+    //   - deep=true  (scan approfondi, vise <3s si rien d'exploitable, sinon
+    //     quelques secondes) : scan rapide, puis scan des ports de la cible
+    //     uniquement (22,53,80,135,139,443,445,515,554,631,8080,8443,9100,5000).
+    //     Si aucun port/service exploitable n'est trouve, la passe s'arrete
+    //     immediatement. Sinon, un profil d'equipement (Computer, NAS,
+    //     Printer, Streaming, SmartHome, Mobile, Unknown) est deduit des
+    //     ports ouverts + informations deja connues, et seuls les modules
+    //     cibles pertinents pour ce profil sont lances (NetBIOS, API
+    //     multimedia Cast/Sonos/Roku/Samsung, SNMP) — toujours en requete
+    //     unicast directe sur l'IP visee.
     // Retourne immediatement (true si la tache a demarre) - suivre
     // l'avancement via getRescanStatus().
     // Retourne false si l'IP est inconnue ou si un scan/rescan est deja en cours.

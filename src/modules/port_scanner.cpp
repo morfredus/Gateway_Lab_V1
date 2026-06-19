@@ -43,9 +43,15 @@ static const uint16_t SCAN_PORTS[] = {
 };
 static const int N_PORTS = sizeof(SCAN_PORTS) / sizeof(SCAN_PORTS[0]);
 
+// Ports sondes lors d'une passe precise ciblee (un seul equipement) : se
+// limite aux services exploitables sur la cible (cf. port_scanner.h).
+const std::vector<uint16_t> kRescanTargetPorts = {
+    22, 53, 80, 135, 139, 443, 445, 515, 554, 631, 8080, 8443, 9100, 5000
+};
+
 // Ports sur lesquels tenter un banner HTTP (non-TLS uniquement)
 static bool isHttpPort(uint16_t p) {
-    return (p == 80 || p == 8080 || p == 8123 || p == 5000);
+    return (p == 80 || p == 8080 || p == 8123 || p == 5000 || p == 631);
 }
 
 // ---------------------------------------------------------------------------
@@ -143,29 +149,43 @@ void PortScanner::_scanBatch(const String& ip,
 // ---------------------------------------------------------------------------
 // Banner grabbing HTTP : GET / → lire l'en-tête Server:
 // ---------------------------------------------------------------------------
-String PortScanner::_httpBanner(const String& ip, uint16_t port, uint32_t timeout_ms) {
+void PortScanner::_httpBanner(const String& ip, uint16_t port, uint32_t timeout_ms,
+                               String& serverOut, String& titleOut) {
     WiFiClient client;
     client.setTimeout(1);
-    if (!client.connect(ip.c_str(), port)) return "";
+    if (!client.connect(ip.c_str(), port)) return;
 
     client.printf("GET / HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLabV1\r\nConnection: close\r\n\r\n",
                   ip.c_str());
 
-    String banner;
+    String body;
     unsigned long start = millis();
+    bool inBody = false;
     while (client.connected() && millis() - start < timeout_ms) {
         if (!client.available()) { delay(5); continue; }
         String line = client.readStringUntil('\n');
-        line.trim();
-        if (line.isEmpty()) break;
-        if (line.startsWith("Server:") || line.startsWith("server:")) {
-            banner = line.substring(7);
-            banner.trim();
-            break;
+        if (!inBody) {
+            String trimmed = line; trimmed.trim();
+            if (trimmed.isEmpty()) { inBody = true; continue; }
+            if (trimmed.startsWith("Server:") || trimmed.startsWith("server:")) {
+                serverOut = trimmed.substring(7);
+                serverOut.trim();
+            }
+            continue;
         }
+        body += line;
+        // <title> arrive generalement dans les 512 premiers octets du <head>
+        if (titleOut.isEmpty() && body.indexOf("<title>") >= 0 && body.indexOf("</title>") >= 0) break;
+        if (body.length() > 1024) break;
     }
     client.stop();
-    return banner;
+
+    int ts = body.indexOf("<title>");
+    if (ts >= 0) {
+        ts += 7;
+        int te = body.indexOf("</title>", ts);
+        if (te > ts) { titleOut = body.substring(ts, te); titleOut.trim(); }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +289,25 @@ void PortScanner::_probeIoTApis(const String& ip, uint16_t httpPort, uint32_t ti
             int e = body.indexOf("</j:Version>", s);
             if (e > s) res.iotFirmware = body.substring(s, e);
         }
+        return;
+    }
+
+    // Synology DSM : GET /webman/info.cgi -> JSON avec "model" et "version"
+    body = _httpGet(ip, httpPort, "/webman/info.cgi", timeout_ms);
+    if (body.indexOf("\"model\"") >= 0 && (body.indexOf("\"is_5dot1\"") >= 0 || body.indexOf("DSM") >= 0)) {
+        res.iotType     = "Synology";
+        res.iotModel    = _extractJsonField(body, "model");
+        res.iotFirmware = _extractJsonField(body, "version");
+        return;
+    }
+
+    // Philips Hue Bridge : GET /api/config -> JSON avec "bridgeid" et "modelid"
+    body = _httpGet(ip, httpPort, "/api/config", timeout_ms);
+    if (body.indexOf("\"bridgeid\"") >= 0) {
+        res.iotType     = "Hue";
+        res.iotModel    = _extractJsonField(body, "modelid");
+        res.iotFirmware = _extractJsonField(body, "swversion");
+        return;
     }
 }
 
@@ -276,13 +315,17 @@ void PortScanner::_probeIoTApis(const String& ip, uint16_t httpPort, uint32_t ti
 // Scan principal : tous les ports sur chaque IP
 // ---------------------------------------------------------------------------
 std::map<String, PortScanResult> PortScanner::scan(
-        const std::vector<String>& ips, uint32_t timeout_ms) {
+        const std::vector<String>& ips, uint32_t timeout_ms,
+        const std::vector<uint16_t>* customPorts) {
 
     std::map<String, PortScanResult> results;
     if (ips.empty()) return results;
 
-    Log::i(TAG, "Scan de %u ports sur %u équipements",
-           (unsigned)N_PORTS, (unsigned)ips.size());
+    const uint16_t* ports  = customPorts ? customPorts->data() : SCAN_PORTS;
+    const int       nPorts = customPorts ? (int)customPorts->size() : N_PORTS;
+
+    Log::i(TAG, "Scan de %u ports sur %u équipement(s)",
+           (unsigned)nPorts, (unsigned)ips.size());
 
     static const int MAX_BATCH = 8;
 
@@ -290,17 +333,17 @@ std::map<String, PortScanResult> PortScanner::scan(
         PortScanResult res;
 
         // Balayer les ports par lots de MAX_BATCH
-        for (int start = 0; start < N_PORTS; start += MAX_BATCH) {
-            int count = min(MAX_BATCH, N_PORTS - start);
-            _scanBatch(ip, SCAN_PORTS + start, count, timeout_ms, res.openPorts);
+        for (int start = 0; start < nPorts; start += MAX_BATCH) {
+            int count = min(MAX_BATCH, nPorts - start);
+            _scanBatch(ip, ports + start, count, timeout_ms, res.openPorts);
             // Petit délai entre lots pour laisser respirer le stack lwIP
             vTaskDelay(pdMS_TO_TICKS(10));
         }
 
-        // Banner HTTP + sondage API IoT sur le premier port HTTP ouvert
+        // Banner HTTP (Server: + <title>) + sondage API IoT sur le premier port HTTP ouvert
         for (uint16_t p : res.openPorts) {
             if (isHttpPort(p)) {
-                res.httpBanner = _httpBanner(ip, p, 1000);
+                _httpBanner(ip, p, 1000, res.httpBanner, res.httpTitle);
                 _probeIoTApis(ip, p, 800, res);
                 break;
             }
@@ -317,7 +360,8 @@ std::map<String, PortScanResult> PortScanner::scan(
         }
 
         bool hasInfo = !res.openPorts.empty() || !res.httpBanner.isEmpty() ||
-                       !res.sshBanner.isEmpty() || !res.ftpBanner.isEmpty();
+                       !res.httpTitle.isEmpty() || !res.sshBanner.isEmpty() ||
+                       !res.ftpBanner.isEmpty();
         if (hasInfo) {
             String portList;
             for (size_t i = 0; i < res.openPorts.size(); i++) {

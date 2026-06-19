@@ -23,7 +23,6 @@
 #include "port_scanner.h"        // Scan TCP ports communs + banner HTTP/SSH/FTP + API IoT
 #include "netbios_scanner.h"     // Node Status NetBIOS (UDP 137) - hostnames Windows/Samba
 #include "snmp_scanner.h"        // SNMP sysDescr (UDP 161) - fabricant/modele en texte clair
-#include "ws_discovery_scanner.h" // WS-Discovery (ONVIF) - cameras IP, imprimantes
 #include "media_api_scanner.h"   // API HTTP proprietaires : Cast, Sonos, Roku, Samsung TV
 #include "device_enricher.h"     // Enrichissement par pattern matching sur le hostname
 #include "device_history.h"      // Journal chronologique des evenements (nouveaux/changements)
@@ -674,29 +673,38 @@ static int _sourceTier(const String& source) {
 // "Unknown" qui les essaie tous).
 // ---------------------------------------------------------------------------
 String NetworkScanner::_profileFor(const NetworkDevice& d) {
-    const String& cat = d.category;
-    const String& svc = d.services;
-    const String& mfr = d.manufacturer;
+    const String& cat   = d.category;
+    const String& svc    = d.services;
+    const String& mfr    = d.manufacturer;
+    const String& ports  = d.openPorts;   // ex: "HTTP|SMB|IPP" - rempli par le port scan ciblé
 
-    if (cat == "NAS") return "NAS";
-    if (cat == "Printer") return "Printer";
-    if (cat == "Router" || cat == "Network" || cat == "Network Equipment") return "Network";
-    if (cat == "Mobile") return "Mobile";
+    // Indices imprimante : 9100 (RAW), 515 (LPD), 631 (IPP/CUPS)
+    if (cat == "Printer" ||
+        ports.indexOf("IPP") >= 0 || ports.indexOf("LPD") >= 0 || ports.indexOf("IPP/CUPS") >= 0)
+        return "Printer";
+
+    // Indices NAS : port 5000 (DSM/UPnP), SMB, fabricant Synology/QNAP
+    if (cat == "NAS" ||
+        ports.indexOf("HTTP/5000") >= 0 ||
+        mfr == "Synology" || mfr == "QNAP")
+        return "NAS";
 
     if (cat == "Streaming" || cat == "Audio" ||
         svc.indexOf("Cast") >= 0 || svc.indexOf("AirPlay") >= 0 || svc.indexOf("Sonos") >= 0)
         return "Streaming";
 
     if (cat == "Home Automation" || cat == "Smart Home" ||
-        mfr == "Philips Hue" || mfr == "Tuya / Smart Life" || mfr == "Sonoff / Itead" ||
+        mfr == "Philips Hue" || mfr == "Hue" || mfr == "Tuya / Smart Life" || mfr == "Sonoff / Itead" ||
         mfr == "Shelly / Allterco" || mfr == "Tado" || mfr == "Netatmo" || mfr == "Somfy")
         return "SmartHome";
 
+    // Indices ordinateur : hostname/OUI PC, ports Windows (RPC/NetBIOS/SMB/RDP)
     if (cat == "Computer" || cat == "SBC" ||
-        svc.indexOf("SSH") >= 0 || svc.indexOf("SMB") >= 0 || d.os.indexOf("Windows") >= 0)
+        svc.indexOf("SSH") >= 0 || svc.indexOf("SMB") >= 0 || d.os.indexOf("Windows") >= 0 ||
+        ports.indexOf("RPC") >= 0 || ports.indexOf("NetBIOS") >= 0 || ports.indexOf("RDP") >= 0)
         return "Computer";
 
-    if (cat == "IoT") return "IoT";
+    if (cat == "Mobile") return "Mobile";
 
     return "Unknown";
 }
@@ -783,10 +791,15 @@ static String _portName(uint16_t p) {
         case 21:   return "FTP";
         case 22:   return "SSH";
         case 23:   return "Telnet";
+        case 53:   return "DNS";
         case 80:   return "HTTP";
+        case 135:  return "RPC";
+        case 139:  return "NetBIOS";
         case 443:  return "HTTPS";
         case 445:  return "SMB";
+        case 515:  return "LPD";
         case 554:  return "RTSP";
+        case 631:  return "IPP/CUPS";
         case 1883: return "MQTT";
         case 3389: return "RDP";
         case 5000: return "HTTP/5000";
@@ -904,11 +917,22 @@ void NetworkScanner::_applyPortScanResult(NetworkDevice& d, const PortScanResult
         if (sb.indexOf("openssh") >= 0) d.os = "Linux / Unix";
     }
 
+    // Titre HTML -> signature constructeur, si le banner n'a rien donne
+    if (!pr.httpTitle.isEmpty()) {
+        if (d.manufacturer.isEmpty()) {
+            String mfr = _bannerToMfr(pr.httpTitle);
+            if (!mfr.isEmpty()) d.manufacturer = mfr;
+        }
+        if (d.model.isEmpty() && pr.httpTitle.length() < 40) d.model = pr.httpTitle;
+    }
+
     // API IoT identifiee precisement -> manufacturer/category/model/firmware
     if (!pr.iotType.isEmpty()) {
         if (d.manufacturer.isEmpty()) d.manufacturer = pr.iotType;
         if (d.category.isEmpty() || d.category == "IoT") {
             if (pr.iotType == "FritzBox") d.category = "Router";
+            else if (pr.iotType == "Synology") d.category = "NAS";
+            else if (pr.iotType == "Hue") d.category = "Home Automation";
             else d.category = "IoT";
         }
         if (d.model.isEmpty() && !pr.iotModel.isEmpty()) d.model = pr.iotModel;
@@ -1524,9 +1548,6 @@ bool NetworkScanner::rescanDevice(const String& ip, bool deep) {
     xSemaphoreGive(_mutex);
 
     _scanning = true;
-    // Meme empreinte stack que le scan complet : SSDP/DNS-SD parcourent tout
-    // le sous-reseau en interne avant filtrage sur l'IP visee (multicast,
-    // pas de requete unicast ciblee possible avec ces protocoles).
     _rescanDeep = deep;
     xTaskCreatePinnedToCore(_rescanTask, "net_rescan", 24576, this, 1, &_rescanTaskHandle, 0);
     Log::i(TAG, "Passe précise (%s, profil %s) lancée — %s", deep ? "approfondie" : "rapide", profile.c_str(), ip.c_str());
@@ -1573,36 +1594,21 @@ void NetworkScanner::_runRescan(const String& ip, bool deep) {
         xSemaphoreGive(_mutex);
     }
 
-    // Profil deduit des informations deja connues - determine quels modules
-    // de decouverte sont pertinents pour cet equipement (cf. _profileFor).
+    // Profil hypothetique a partir des informations deja connues - affiche
+    // tel quel pour le scan rapide. Le scan approfondi le redetermine apres
+    // le scan de ports (cf. plus bas) car les indices les plus fiables (ports
+    // ouverts) ne sont disponibles qu'a ce moment-la.
     String profile = _profileFor(before);
-    bool isMobile  = (profile == "Mobile");
-
-    // Scan rapide : un sous-ensemble cible de modules selon le profil.
-    // Scan approfondi : tous les modules pertinents pour le profil (plus
-    // gourmand mais plus exhaustif). Le profil "Mobile" reste minimal dans
-    // les deux cas (PTR/presence) - les telephones repondent rarement aux
-    // protocoles de decouverte et l'attente n'apporterait rien.
-    bool wantPorts   = !isMobile && (deep || profile == "Computer" || profile == "NAS" ||
-                                      profile == "Printer" || profile == "Network" || profile == "Unknown");
-    bool wantNetBios = !isMobile && (deep || profile == "Computer" || profile == "Unknown");
-    bool wantSsdp    = !isMobile && (deep || profile == "NAS" || profile == "Streaming" ||
-                                      profile == "SmartHome" || profile == "Network" || profile == "Unknown");
-    bool wantDnsSd   = !isMobile && (deep || profile == "Streaming" || profile == "SmartHome" || profile == "Unknown");
-    bool wantWsDisc  = !isMobile && (deep || profile == "Computer" || profile == "Printer" || profile == "Unknown");
-    bool wantMedia   = !isMobile && (deep || profile == "Streaming" || profile == "SmartHome");
-    bool wantSnmp    = !isMobile && (deep || profile == "Printer" || profile == "Network" || profile == "Unknown");
-
     {
         xSemaphoreTake(_mutex, portMAX_DELAY);
         _rescanStatus.profile = profile;
         xSemaphoreGive(_mutex);
     }
-    Log::i(TAG, "Passe précise — profil déduit : %s (modules : ports=%d netbios=%d ssdp=%d dnssd=%d wsdisc=%d media=%d snmp=%d)",
-           profile.c_str(), wantPorts, wantNetBios, wantSsdp, wantDnsSd, wantWsDisc, wantMedia, wantSnmp);
+
+    std::vector<String> log;
 
     // ── Sonde ARP directe sur l'IP ───────────────────────────────────────
-    _setRescanProgress("ARP", 5);
+    _setRescanProgress("ARP", deep ? 5 : 15);
     IPAddress target;
     target.fromString(ip);
     ip4_addr_t ip4target;
@@ -1625,7 +1631,7 @@ void NetworkScanner::_runRescan(const String& ip, bool deep) {
 
     // ── Repli ICMP si l'ARP n'a pas repondu ──────────────────────────────
     if (!isOnline) {
-        _setRescanProgress("ICMP", 10);
+        _setRescanProgress("ICMP", deep ? 10 : 30);
         auto pings = icmpScanner.pingWithTtl({ ip }, 300);
         if (!pings.empty() && pings[0].ttl > 0) {
             isOnline = true;
@@ -1650,7 +1656,7 @@ void NetworkScanner::_runRescan(const String& ip, bool deep) {
 
     // ── Enrichissement, uniquement si l'equipement repond ────────────────
     if (isOnline) {
-        _setRescanProgress("Hostname (PTR)", 20);
+        _setRescanProgress("Résolution hostname", deep ? 20 : 60);
         hostnameResolver.batchPtrDns({ ip });
         HostnameSource src = HostnameSource::None;
         String name = hostnameResolver.resolve(ip, src);
@@ -1667,152 +1673,119 @@ void NetworkScanner::_runRescan(const String& ip, bool deep) {
         }
         xSemaphoreGive(_mutex);
 
-        // Scan de ports plus long qu'en scan complet (500 ms vs 250 ms) :
-        // une seule cible, peut se permettre d'attendre des banners lents.
-        if (wantPorts) {
-        _setRescanProgress("Ports TCP", 35);
-        auto portResults = portScanner.scan({ ip }, 500);
-        auto prIt = portResults.find(ip);
-        if (prIt != portResults.end()) {
-            xSemaphoreTake(_mutex, portMAX_DELAY);
-            for (auto& d : _results) {
-                if (d.ip == ip) { _applyPortScanResult(d, prIt->second); break; }
-            }
-            xSemaphoreGive(_mutex);
-        }
-        }
-
-        bool needsHostname = false;
-        {
-            xSemaphoreTake(_mutex, portMAX_DELAY);
-            for (const auto& d : _results) {
-                if (d.ip == ip) { needsHostname = d.hostname.isEmpty(); break; }
-            }
-            xSemaphoreGive(_mutex);
-        }
-        if (wantNetBios && needsHostname) {
-            _setRescanProgress("NetBIOS", 45);
-            auto nbResults = netBiosScanner.scan({ ip }, 250);
-            auto nbIt = nbResults.find(ip);
-            if (nbIt != nbResults.end()) {
+        if (!deep) {
+            // ── Scan rapide : confirmation de presence + hostname, rien d'autre ──
+            _setRescanProgress("Vérification présence", 90);
+        } else {
+            // ── Scan approfondi ────────────────────────────────────────────
+            // Etape 1 : scanner uniquement les ports de l'equipement cible
+            // (jamais de decouverte multicast SSDP/DNS-SD/WS-Discovery, qui
+            // interrogerait tout le sous-reseau pour ne garder qu'une IP).
+            _setRescanProgress("Services réseau", 30);
+            auto portResults = portScanner.scan({ ip }, 500, &kRescanTargetPorts);
+            auto prIt = portResults.find(ip);
+            bool hasExploitableService = (prIt != portResults.end());
+            if (hasExploitableService) {
                 xSemaphoreTake(_mutex, portMAX_DELAY);
                 for (auto& d : _results) {
-                    if (d.ip == ip) { _applyNetBiosResult(d, nbIt->second); break; }
+                    if (d.ip == ip) { _applyPortScanResult(d, prIt->second); break; }
                 }
                 xSemaphoreGive(_mutex);
             }
-        }
 
-        // ── SSDP/UPnP + DNS-SD ────────────────────────────────────────────
-        // Ces protocoles reposent sur de la diffusion multicast (pas de requete
-        // ciblee sur une seule IP) : relancer la decouverte complete avec un
-        // delai genereux, puis ne fusionner que la reponse de l'IP visee.
-        // Justifie ici car l'utilisateur attend explicitement le resultat
-        // d'une seule fiche, contrairement au scan complet ou ce cout serait
-        // paye pour chaque equipement. N'est lance que si le profil deduit
-        // (cf. _profileFor) en a l'utilite, ou en scan approfondi.
-        if (wantSsdp) {
-        _setRescanProgress("SSDP/UPnP", 60);
-        auto ssdpResults = ssdpScanner.scan(5000);
-        for (const auto& sdev : ssdpResults) {
-            if (sdev.ip != ip) continue;
-            xSemaphoreTake(_mutex, portMAX_DELAY);
-            for (auto& d : _results) {
-                if (d.ip == ip) { _applySsdpResult(d, sdev); break; }
-            }
-            xSemaphoreGive(_mutex);
-            break;
-        }
-        }
-
-        if (wantDnsSd) {
-        _setRescanProgress("DNS-SD", 80);
-        auto dnssdResults = dnsSdScanner.scan(9000);
-        auto ddIt = dnssdResults.find(ip);
-        if (ddIt != dnssdResults.end()) {
-            xSemaphoreTake(_mutex, portMAX_DELAY);
-            for (auto& d : _results) {
-                if (d.ip == ip) { _applyDnsSdResult(d, ddIt->second); break; }
-            }
-            xSemaphoreGive(_mutex);
-        }
-        }
-
-        // ── WS-Discovery (ONVIF) ──────────────────────────────────────────
-        // Protocole utilise par la quasi-totalite des cameras IP et
-        // imprimantes ONVIF pour s'annoncer, independamment de SSDP. Comme
-        // SSDP/DNS-SD, c'est une decouverte multicast non ciblable par IP :
-        // relancer la decouverte complete et ne garder que l'IP visee.
-        if (wantWsDisc) {
-        _setRescanProgress("WS-Discovery", 72);
-        auto wsdResults = wsDiscoveryScanner.scan(2000);
-        auto wsdIt = wsdResults.find(ip);
-        if (wsdIt != wsdResults.end()) {
-            xSemaphoreTake(_mutex, portMAX_DELAY);
-            for (auto& d : _results) {
-                if (d.ip != ip) continue;
-                if (!wsdIt->second.category.isEmpty() &&
-                    (d.category.isEmpty() || _isAmbiguousOuiBrand(d.manufacturer))) {
-                    d.category = wsdIt->second.category;
+            if (!hasExploitableService) {
+                // Regle importante : aucun service exploitable -> on arrete
+                // immediatement la passe approfondie, sans lancer d'autres
+                // modules (NetBIOS, API constructeur, SNMP...).
+                log.push_back("Aucun service exploitable détecté. Passe approfondie terminée.");
+                Log::i(TAG, "%s — aucun service exploitable, passe approfondie écourtée", ip.c_str());
+            } else {
+                // Etape 2 : le profil est redetermine maintenant que les ports
+                // ouverts de la cible sont connus - bien plus fiable que
+                // l'hypothese initiale basee sur le seul historique.
+                NetworkDevice updated;
+                {
+                    xSemaphoreTake(_mutex, portMAX_DELAY);
+                    for (const auto& d : _results) {
+                        if (d.ip == ip) { updated = d; break; }
+                    }
+                    xSemaphoreGive(_mutex);
                 }
-                if (d.type.isEmpty() && !wsdIt->second.types.isEmpty()) {
-                    d.type = wsdIt->second.types;
-                }
-                if (d.source.isEmpty() || d.source == "MAC") d.source = "SSDP";
-                break;
-            }
-            xSemaphoreGive(_mutex);
-        }
-        }
+                profile = _profileFor(updated);
+                xSemaphoreTake(_mutex, portMAX_DELAY);
+                _rescanStatus.profile = profile;
+                xSemaphoreGive(_mutex);
+                Log::i(TAG, "%s — profil déduit après scan de ports : %s (ports: %s)",
+                       ip.c_str(), profile.c_str(), updated.openPorts.c_str());
 
-        // ── API HTTP proprietaires (Cast / Sonos / Roku / Samsung TV) ───────
-        // Outils non utilises jusqu'ici : ces ports fixes ne sont pas dans la
-        // liste du scan de ports standard, mais repondent en clair avec le
-        // modele et le nom convivial exact de l'appareil multimedia.
-        if (wantMedia) {
-        _setRescanProgress("API multimédia", 86);
-        MediaApiResult mediaRes = mediaApiScanner.probe(ip, 600);
-        if (!mediaRes.apiType.isEmpty()) {
-            xSemaphoreTake(_mutex, portMAX_DELAY);
-            for (auto& d : _results) {
-                if (d.ip != ip) continue;
-                if (!mediaRes.manufacturer.isEmpty() &&
-                    (d.manufacturer.isEmpty() || _isAmbiguousOuiBrand(d.manufacturer))) {
-                    d.manufacturer = mediaRes.manufacturer;
-                }
-                if (!mediaRes.model.isEmpty()) d.model = mediaRes.model;
-                if (!mediaRes.category.isEmpty() && d.category.isEmpty()) d.category = mediaRes.category;
-                if (!mediaRes.friendlyName.isEmpty() && d.hostname.isEmpty()) d.hostname = mediaRes.friendlyName;
-                d.source = mediaRes.apiType;
-                break;
-            }
-            xSemaphoreGive(_mutex);
-        }
-        }
+                // Modules specialises, declenches uniquement si le profil
+                // deduit en a l'utilite — jamais de decouverte multicast.
+                bool wantNetBios = (profile == "Computer" || profile == "Unknown") &&
+                                    (updated.openPorts.indexOf("NetBIOS") >= 0 ||
+                                     updated.openPorts.indexOf("RPC") >= 0 ||
+                                     updated.openPorts.indexOf("SMB") >= 0 ||
+                                     updated.hostname.isEmpty());
+                bool wantMedia   = (profile == "Streaming" || profile == "SmartHome");
+                bool wantSnmp    = (profile == "Printer" || profile == "Unknown");
 
-        // ── SNMP sysDescr ─────────────────────────────────────────────────
-        // Outil non utilise jusqu'ici dans le projet : de nombreux routeurs,
-        // switches, imprimantes et NAS exposent SNMP en lecture publique et
-        // y renseignent fabricant + modele en texte clair, plus fiable qu'un
-        // OUI MAC ambigu ou qu'un banner HTTP succinct.
-        if (wantSnmp) {
-        _setRescanProgress("SNMP", 95);
-        auto snmpResults = snmpScanner.querySysDescr({ ip }, 400);
-        auto snIt = snmpResults.find(ip);
-        if (snIt != snmpResults.end()) {
-            xSemaphoreTake(_mutex, portMAX_DELAY);
-            for (auto& d : _results) {
-                if (d.ip != ip) continue;
-                if (d.model.isEmpty()) d.model = snIt->second;
-                String mfr = _sysDescrToMfr(snIt->second);
-                if (!mfr.isEmpty() && (d.manufacturer.isEmpty() || _isAmbiguousOuiBrand(d.manufacturer))) {
-                    d.manufacturer = mfr;
+                if (wantNetBios) {
+                    _setRescanProgress("APIs constructeur", 55);
+                    auto nbResults = netBiosScanner.scan({ ip }, 250);
+                    auto nbIt = nbResults.find(ip);
+                    if (nbIt != nbResults.end()) {
+                        xSemaphoreTake(_mutex, portMAX_DELAY);
+                        for (auto& d : _results) {
+                            if (d.ip == ip) { _applyNetBiosResult(d, nbIt->second); break; }
+                        }
+                        xSemaphoreGive(_mutex);
+                    }
                 }
-                if (d.source.isEmpty() || d.source == "MAC") d.source = "SNMP";
-                break;
+
+                // API HTTP proprietaires (Cast / Sonos / Roku / Samsung TV) -
+                // requetes unicast directes sur des ports fixes, deja ciblees
+                // sur l'IP visee (aucune decouverte multicast impliquee).
+                if (wantMedia) {
+                    _setRescanProgress("Services multimédia", 70);
+                    MediaApiResult mediaRes = mediaApiScanner.probe(ip, 600);
+                    if (!mediaRes.apiType.isEmpty()) {
+                        xSemaphoreTake(_mutex, portMAX_DELAY);
+                        for (auto& d : _results) {
+                            if (d.ip != ip) continue;
+                            if (!mediaRes.manufacturer.isEmpty() &&
+                                (d.manufacturer.isEmpty() || _isAmbiguousOuiBrand(d.manufacturer))) {
+                                d.manufacturer = mediaRes.manufacturer;
+                            }
+                            if (!mediaRes.model.isEmpty()) d.model = mediaRes.model;
+                            if (!mediaRes.category.isEmpty() && d.category.isEmpty()) d.category = mediaRes.category;
+                            if (!mediaRes.friendlyName.isEmpty() && d.hostname.isEmpty()) d.hostname = mediaRes.friendlyName;
+                            d.source = mediaRes.apiType;
+                            break;
+                        }
+                        xSemaphoreGive(_mutex);
+                    }
+                }
+
+                // SNMP sysDescr - requete UDP unicast directe sur l'IP visee.
+                if (wantSnmp) {
+                    _setRescanProgress("SNMP", 90);
+                    auto snmpResults = snmpScanner.querySysDescr({ ip }, 400);
+                    auto snIt = snmpResults.find(ip);
+                    if (snIt != snmpResults.end()) {
+                        xSemaphoreTake(_mutex, portMAX_DELAY);
+                        for (auto& d : _results) {
+                            if (d.ip != ip) continue;
+                            if (d.model.isEmpty()) d.model = snIt->second;
+                            String mfr = _sysDescrToMfr(snIt->second);
+                            if (!mfr.isEmpty() && (d.manufacturer.isEmpty() || _isAmbiguousOuiBrand(d.manufacturer))) {
+                                d.manufacturer = mfr;
+                            }
+                            if (d.source.isEmpty() || d.source == "MAC") d.source = "SNMP";
+                            break;
+                        }
+                        xSemaphoreGive(_mutex);
+                    }
+                }
             }
-            xSemaphoreGive(_mutex);
-        }
         }
     }
 
@@ -1823,9 +1796,9 @@ void NetworkScanner::_runRescan(const String& ip, bool deep) {
 
     // ── Journal des enrichissements ──────────────────────────────────────
     // Compare l'etat avant/apres pour produire un resume comprehensible des
-    // gains de cette passe (ou son absence), affiche par l'UI.
-    std::vector<String> log;
-    {
+    // gains de cette passe. Si la passe a ete ecourtee (aucun service
+    // exploitable), le message correspondant est deja dans `log`.
+    if (log.empty()) {
         xSemaphoreTake(_mutex, portMAX_DELAY);
         for (const auto& d : _results) {
             if (d.ip != ip) continue;
