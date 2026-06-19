@@ -58,7 +58,7 @@ Configuration WiFi, gestion des réseaux enregistrés, réglage de la NeoPixel
 d'état, mise à jour du firmware (OTA) et état système (mémoire, nombre
 d'équipements, historique).
 
-![Système](docs/pictures/Gateway_Lab_V1_Parametres.png)
+![Système](docs/pictures/Gateway_Lab_V1_Systeme.png)
 
 ---
 
