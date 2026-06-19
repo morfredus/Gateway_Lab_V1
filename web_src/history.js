@@ -77,7 +77,7 @@ function renderHistory() {
   var filtered   = historyData.filter(function(e) {
     var category = EVENT_FILTER_CATEGORY[e.event] || e.event;
     if (!filters[category]) return false;
-    if (favOnly && !favoriteMacs[e.mac]) return false;
+    if (favOnly && !favoriteMacs[e.mac] && !favoriteMacs[e.ip]) return false;
     return true;
   });
   var container = document.getElementById('history-list');
@@ -100,9 +100,13 @@ document.getElementById('hist-filter-favorite').addEventListener('change', rende
 function loadFavorites() {
   fetch('/api/devices')
     .then(function(r) { return r.json(); })
-    .then(function(list) {
+    .then(function(data) {
       favoriteMacs = {};
-      (list || []).forEach(function(d) { if (d.favorite) favoriteMacs[d.mac] = true; });
+      (data.devices || []).forEach(function(d) {
+        if (!d.favorite) return;
+        if (d.mac) favoriteMacs[d.mac] = true;
+        if (d.ip) favoriteMacs[d.ip] = true;
+      });
       renderHistory();
     })
     .catch(function() {});

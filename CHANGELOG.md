@@ -5,6 +5,42 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.6] - Patch 6 - 2026-06-19
+
+### Corrige
+
+- **Page Historique : le filtre « Favoris uniquement » restait vide même
+  après le Patch 5.** La vraie cause : `loadFavorites()` traitait la
+  réponse de `GET /api/devices` comme un tableau brut
+  (`(list || []).forEach(...)`), alors que cet endpoint renvoie un objet
+  `{ scanning, stats, devices: [...] }` (comme `scan.js` le fait déjà
+  correctement via `data.devices`). `list.forEach` n'existe pas sur cet
+  objet, l'exception était silencieusement absorbée par le `.catch()`, et
+  `favoriteMacs` restait toujours vide — la correction du Patch 5
+  (indexation par MAC et IP) ne pouvait donc jamais s'appliquer à aucune
+  donnée. Correction : `loadFavorites()` lit désormais `data.devices`.
+
+---
+
+## [1.0.5] - Patch 5 - 2026-06-19
+
+### Corrige
+
+- **Page Historique : le filtre « Favoris uniquement » n'affichait jamais
+  aucun résultat.** `history.js` indexait les équipements favoris
+  exclusivement par adresse MAC (`favoriteMacs[d.mac]`), sans repli sur
+  l'IP — contrairement à la convention utilisée partout ailleurs dans le
+  projet (`scan.js` : `favKey = d.mac || d.ip` ; backend `network_scanner.cpp` :
+  `(!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp`). Les
+  équipements favoris dont la MAC n'était pas (encore) résolue, ainsi que
+  les entrées d'historique enregistrées avec une MAC vide, ne pouvaient
+  donc jamais correspondre, et le filtre restait systématiquement vide.
+  Correction : `loadFavorites()` indexe désormais chaque équipement favori
+  par sa MAC **et** son IP, et `renderHistory()` vérifie la correspondance
+  sur les deux champs (`favoriteMacs[e.mac] || favoriteMacs[e.ip]`).
+
+---
+
 ## [1.0.4] - Patch 4 - 2026-06-19
 
 ### Corrige
