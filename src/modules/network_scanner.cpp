@@ -1203,6 +1203,28 @@ std::vector<NetworkDevice> NetworkScanner::getResults() const {
     return copy;
 }
 
+// Nom "humain" du materiel - deduit de model/manufacturer/category, pour donner
+// un intitule comprehensible au-dessus du hostname brut (ex: "device-72" -> "Google Nest Hub").
+// Utilise uniquement pour l'export (CSV/JSON de /api/devices) - n'affecte jamais d.hostname.
+static String _humanNameFor(const NetworkDevice& d) {
+    if (!d.model.isEmpty()) return d.model;
+    if (!d.manufacturer.isEmpty()) return d.type.isEmpty() ? d.manufacturer : d.manufacturer + " " + d.type;
+    if (!d.category.isEmpty()) return d.category;
+    return "";
+}
+
+// Hostname enrichi sur 3 lignes pour l'export : nom humain, puis hostname/alias affiche,
+// puis la source de resolution - reproduit ce qu'affiche la colonne "Nom" de l'UI.
+static String _enrichedHostname(const NetworkDevice& d) {
+    String displayName = d.alias.isEmpty() ? d.hostname : d.alias;
+    String human = _humanNameFor(d);
+    String result;
+    if (!human.isEmpty() && human != displayName) result += human + "\n";
+    result += displayName + "\n";
+    result += d.alias.isEmpty() ? d.source : "Alias";
+    return result;
+}
+
 String NetworkScanner::resultsToJson() const {
     uint32_t now = millis();
     // Copie locale sous mutex (durée < 1 ms) pour libérer rapidement
@@ -1219,6 +1241,7 @@ String NetworkScanner::resultsToJson() const {
         obj["mac"]          = d.mac;
         obj["manufacturer"] = d.manufacturer;
         obj["hostname"]     = d.hostname;
+        obj["hostnameDisplay"] = _enrichedHostname(d);
         obj["category"]     = d.category;
         obj["type"]         = d.type;
         obj["model"]        = d.model;
@@ -1897,7 +1920,7 @@ String NetworkScanner::devicesToCsv() const {
         int confidence = _confidenceFor(d, confLabel);
         csv += csvField(d.ip)           + ",";
         csv += csvField(d.mac)          + ",";
-        csv += csvField(d.hostname)     + ",";
+        csv += csvField(_enrichedHostname(d)) + ",";
         csv += csvField(d.alias)        + ",";
         csv += csvField(d.manufacturer) + ",";
         csv += csvField(d.model)        + ",";

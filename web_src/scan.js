@@ -15,6 +15,15 @@ function fmtSeen(ms) {
   return Math.floor(s / 3600) + 'h';
 }
 
+// Nom "humain" du materiel - deduit de model/manufacturer/category, pour donner
+// un intitule comprehensible au-dessus du hostname brut (ex: "device-72" -> "Google Nest Hub")
+function humanDeviceName(d) {
+  if (d.model) return d.model;
+  if (d.manufacturer) return d.type ? d.manufacturer + ' ' + d.type : d.manufacturer;
+  if (d.category) return d.category;
+  return '';
+}
+
 function categoryClass(cat) {
   if (!cat) return '';
   return 'type-' + cat.toLowerCase()
@@ -166,12 +175,18 @@ function renderDevices(allDevices) {
     var editBtn = '<button class="alias-edit" title="Renommer cet équipement" ' +
       'data-key="' + esc(aliasKey) + '" data-alias="' + esc(d.alias || '') + '" ' +
       'onclick="editAlias(this)">✎</button>';
+    var humanName = humanDeviceName(d);
+    var humanHtml = (humanName && humanName !== displayName)
+      ? '<div class="name-human">' + esc(humanName) + '</div>'
+      : '';
     var nameHtml = displayName
-      ? '<div class="name-cell" title="' + esc(displayName) + '">' + esc(displayName) +
-          (d.alias ? '<span class="alias-tag" title="Alias personnalisé"> ★</span>' : sourceBadge(d.source)) +
+      ? '<div class="name-cell" title="' + esc(displayName) + '">' + humanHtml +
+          '<div class="name-raw">' + esc(displayName) +
+            (d.alias ? '<span class="alias-tag" title="Alias personnalisé"> ★</span>' : sourceBadge(d.source)) +
+          '</div>' +
           editBtn +
         '</div>'
-      : '<span class="none">—</span>' + editBtn;
+      : humanHtml + '<span class="none">—</span>' + editBtn;
     var svcHtml = (d.services && d.services.length)
       ? '<div class="svc-list">' + d.services.map(function(s) {
           return '<span class="svc-badge svc-' + svcClass(s) + '" title="Service DNS-SD : ' + esc(s) + '">' + esc(s) + '</span>';

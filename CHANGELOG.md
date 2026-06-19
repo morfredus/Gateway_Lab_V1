@@ -5,6 +5,36 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.8.10] - 2026-06-19
+
+### Documentation
+
+- Mise à jour de l'ensemble de la documentation utilisateur pour refléter
+  la fonctionnalité "Nom humain" introduite en v0.8.9 et la version
+  courante du projet : `README.md` (badge de version, tableau des
+  fonctionnalités), `ROADMAP.md` (entrée v0.8.9 dans le tableau « Réalisé »),
+  `docs/ARCHITECTURE.md`, `docs/PROTOCOLS.md` (champ `hostnameDisplay`
+  exporté par `/api/devices`).
+
+## [0.8.9] - 2026-06-19
+
+### Ajoute
+
+- **Nom "humain" du materiel dans la colonne Nom de la page Materiel** :
+  quand le hostname reste generique (ex: `device-72` faute de mDNS/PTR),
+  une premiere ligne deduite de `model` / `manufacturer` (+ `type`) /
+  `category` affiche desormais un intitule comprehensible (ex: "Google
+  Nest Hub"), suivi du hostname/alias et de la badge de source deja
+  affiches auparavant.
+  - `web_src/scan.js` : nouvelle fonction `humanDeviceName()`, colonne Nom
+    rendue sur 2 blocs (`.name-human` + `.name-raw`).
+  - Export CSV (`/api/devices/export.csv`) et JSON (`/api/devices`) :
+    la colonne/le champ `hostname` (CSV) et un nouveau champ
+    `hostnameDisplay` (JSON) reprennent le meme enrichissement sur 3
+    lignes (nom humain, hostname/alias, source) - le champ `hostname` brut
+    du JSON et la sauvegarde `/api/backup` restent inchanges pour ne pas
+    casser la restauration.
+
 ## [0.8.8] - 2026-06-18
 
 ### Corrige

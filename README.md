@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.8.8-blue)
+![Version](https://img.shields.io/badge/version-0.8.10-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -128,6 +128,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Découverte NetBIOS       | Node Status (UDP 137) - hostnames PC Windows / Samba              |
 | Scan de ports TCP        | 14 ports, bannières HTTP/SSH/FTP, détection API IoT (Shelly/Tasmota/FritzBox) |
 | Inventaire réseau        | IP, nom, fabricant, modèle, catégorie, OS, services, ports, MAC, source |
+| Nom humain du matériel   | Intitulé déduit (modèle/fabricant/catégorie) affiché au-dessus du hostname brut quand celui-ci reste générique, repris dans les exports CSV/JSON (`hostnameDisplay`) |
 | Auto-détection ESP32     | Le Gateway apparaît dans sa propre liste                          |
 | Identification OUI       | Base externalisée générée automatiquement                         |
 | Persistance LittleFS     | Statistiques online/offline, état conservé entre redémarrages     |

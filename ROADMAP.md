@@ -128,3 +128,5 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.8.6  | Ajout de la propriété standard `line-clamp` en complément de `-webkit-line-clamp` sur `.name-cell`, pour une meilleure compatibilité navigateur |
 | v0.8.7  | Page Paramètres restructurée et renommée Système (réseau, LED, mise à jour du firmware, état système), suppression de la page OTA dédiée (fonctionnalité intégrée), nouveau bloc de navigation partagé `web_src/menu.html` inliné sur toutes les pages pour simplifier la maintenance |
 | v0.8.8  | Correction de la barre de progression de mise à jour firmware qui disparaissait sans indication après le transfert ; étapes affichées (transfert, vérification, redémarrage) et redirection vers l'Accueil une fois le redémarrage terminé |
+| v0.8.9  | Nom "humain" du matériel (déduit du modèle/fabricant/catégorie) affiché au-dessus du hostname brut sur la page Équipements, repris dans les exports CSV/JSON (`hostnameDisplay`) |
+| v0.8.10 | Mise à jour de l'ensemble de la documentation utilisateur (README, ROADMAP, docs/) |
