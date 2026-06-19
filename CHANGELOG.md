@@ -5,6 +5,24 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.8.8] - 2026-06-18
+
+### Corrige
+
+- **Barre de progression de la mise à jour firmware disparaissant juste
+  après le transfert**, sans indication de ce qui se passait ensuite
+  (vérification, flash, redémarrage) : `wifi.js` masquait tout le
+  formulaire `#ota-form` (qui contient aussi la barre et le message) une
+  fois le transfert terminé.
+  - La barre reste désormais affichée à 100% et le message passe par les
+    étapes « Transfert du firmware : X% » → « Vérification du firmware… »
+    → « Firmware vérifié — redémarrage en cours… » → « Redémarrage en
+    cours… » → « Redémarrage terminé — retour à l'accueil… ».
+  - Seuls le sélecteur de fichier et le bouton « Mettre à jour » sont
+    désactivés pendant la mise à jour (au lieu de masquer tout le bloc).
+  - Une fois le redémarrage détecté (`/api/status` répond à nouveau), la
+    page redirige vers l'Accueil (`/`) au lieu de rester sur `/wifi`.
+
 ## [0.8.7] - 2026-06-18
 
 ### Modifie

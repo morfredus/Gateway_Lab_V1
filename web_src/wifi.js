@@ -148,30 +148,51 @@ document.getElementById('restart-btn').addEventListener('click', function() {
 // ── Mise à jour du firmware (ex page OTA) ──────────────────────────────
 document.getElementById('ota-form').addEventListener('submit', function(e) {
   e.preventDefault();
-  var file = document.getElementById('ota-file').files[0];
-  var msg  = document.getElementById('ota-msg');
+  var fileInput = document.getElementById('ota-file');
+  var file      = fileInput.files[0];
+  var msg       = document.getElementById('ota-msg');
+  var bar       = document.getElementById('ota-bar');
+  var submitBtn = e.target.querySelector('button[type="submit"]');
   if (!file) {
     msg.textContent = 'Aucun fichier sélectionné.';
     return;
   }
+
+  document.getElementById('ota-progress').style.display = 'block';
+  fileInput.disabled = true;
+  submitBtn.disabled = true;
+
   var fd = new FormData();
   fd.append('firmware', file);
   var xhr = new XMLHttpRequest();
   xhr.upload.onprogress = function(e) {
-    document.getElementById('ota-progress').style.display = 'block';
-    document.getElementById('ota-bar').style.width = (e.loaded / e.total * 100) + '%';
-    msg.textContent = 'Transfert : ' + Math.round(e.loaded / e.total * 100) + '%';
+    var pct = Math.round(e.loaded / e.total * 100);
+    bar.style.width = pct + '%';
+    if (pct < 100) {
+      msg.style.color = '';
+      msg.textContent = 'Transfert du firmware : ' + pct + '%';
+    } else {
+      msg.textContent = 'Vérification du firmware…';
+    }
   };
   xhr.onload = function() {
-    if (xhr.status === 200) {
+    bar.style.width = '100%';
+    if (xhr.status === 200 && xhr.responseText.indexOf('FAIL') === -1) {
       msg.style.color = '#10b981';
-      msg.textContent = 'Firmware transféré — redémarrage en cours…';
-      document.getElementById('ota-form').style.display = 'none';
+      msg.textContent = 'Firmware vérifié — redémarrage en cours…';
       waitForOtaReboot();
     } else {
       msg.style.color = '#ef4444';
       msg.textContent = 'Erreur : ' + xhr.responseText;
+      fileInput.disabled = false;
+      submitBtn.disabled = false;
     }
+  };
+  xhr.onerror = function() {
+    msg.style.color = '#ef4444';
+    msg.textContent = 'Erreur réseau pendant le transfert.';
+    fileInput.disabled = false;
+    submitBtn.disabled = false;
   };
   xhr.open('POST', '/update');
   xhr.send(fd);
@@ -183,12 +204,14 @@ function waitForOtaReboot() {
   var dots = ['', '.', '..', '...'];
   setTimeout(function poll() {
     dot = (dot + 1) % 4;
+    msg.style.color = '';
     msg.textContent = 'Redémarrage en cours' + dots[dot];
     fetch('/api/status', { cache: 'no-store' })
       .then(function(r) {
         if (r.ok) {
-          msg.textContent = 'Redémarrage terminé — redirection…';
-          setTimeout(function() { window.location.href = '/wifi'; }, 800);
+          msg.style.color = '#10b981';
+          msg.textContent = 'Redémarrage terminé — retour à l\'accueil…';
+          setTimeout(function() { window.location.href = '/'; }, 800);
         } else {
           setTimeout(poll, 1000);
         }
