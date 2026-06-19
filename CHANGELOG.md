@@ -5,6 +5,33 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.4] - Patch 4 - 2026-06-19
+
+### Corrige
+
+- **Page Historique : filtrage cassé, affichage incomplet par défaut.**
+  Depuis l'ajout de la surveillance continue (v1.0.0), le firmware émet
+  9 types d'évènements d'historique (`new`, `online`, `reconnected`,
+  `mobile_returned`, `offline`, `disappeared`, `mobile_left`, `changed`,
+  `identification_improved`), mais la page Historique (`history.js`)
+  n'en connaissait que 4 (`new`, `online`, `offline`, `changed`) : les
+  5 autres types — désormais les plus fréquents, car émis par chaque tick
+  de surveillance ARP au lieu d'un scan complet seulement — n'avaient
+  aucune case de filtre correspondante et étaient donc systématiquement
+  exclus de l'affichage, quel que soit l'état des cases cochées. En
+  pratique, seuls les évènements `changed` restaient visibles par défaut,
+  et le filtre « Favoris uniquement » semblait sans effet puisqu'il
+  s'appliquait à une liste déjà presque vide.
+  Correction : chaque type d'évènement réel est désormais rattaché à l'une
+  des 4 catégories de filtre existantes (`reconnected`/`mobile_returned`
+  → "Reconnexions", `disappeared`/`mobile_left` → "Déconnexions",
+  `identification_improved` → "Changements de champs"), via une table de
+  correspondance (`EVENT_FILTER_CATEGORY`) ; tous les types ont également
+  une icône et un libellé dédiés dans `EVENT_LABEL` pour un affichage
+  correct (au lieu du repli générique `•`).
+
+---
+
 ## [1.0.3] - Patch 3 - 2026-06-19
 
 ### Corrige

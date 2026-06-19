@@ -1,8 +1,32 @@
+// Tous les types d'evenements emis par DeviceHistory cote firmware (network_scanner.cpp).
+// Depuis v1.0.0, la surveillance continue (_monitorTick) emet reconnected/disappeared/
+// mobile_left/mobile_returned/identification_improved en plus de new/online/offline/changed
+// utilises par un scan complet — chaque type doit avoir une entree ici pour s'afficher.
 var EVENT_LABEL = {
-  'new':     { icon: '🆕', text: 'Nouvel équipement', cls: 'hist-new' },
-  'online':  { icon: '🟢', text: 'Reconnecté',         cls: 'hist-online' },
-  'offline': { icon: '🔴', text: 'Hors ligne',         cls: 'hist-offline' },
-  'changed': { icon: '✏️', text: 'Changement',         cls: 'hist-changed' }
+  'new':                     { icon: '🆕', text: 'Nouvel équipement',        cls: 'hist-new' },
+  'online':                  { icon: '🟢', text: 'Reconnecté',               cls: 'hist-online' },
+  'reconnected':             { icon: '🟢', text: 'Reconnecté',               cls: 'hist-online' },
+  'mobile_returned':         { icon: '📱', text: 'Mobile de retour',         cls: 'hist-online' },
+  'offline':                 { icon: '🔴', text: 'Hors ligne',               cls: 'hist-offline' },
+  'disappeared':             { icon: '🔴', text: 'Disparu',                  cls: 'hist-offline' },
+  'mobile_left':             { icon: '📴', text: 'Mobile parti',             cls: 'hist-offline' },
+  'changed':                 { icon: '✏️', text: 'Changement',               cls: 'hist-changed' },
+  'identification_improved': { icon: '🔍', text: 'Identification améliorée', cls: 'hist-changed' }
+};
+
+// Categorie de filtre (case a cocher) associee a chaque type d'evenement reel —
+// plusieurs types peuvent partager la meme case (ex: reconnected/mobile_returned
+// sous "Reconnexions").
+var EVENT_FILTER_CATEGORY = {
+  'new':                     'new',
+  'online':                  'online',
+  'reconnected':             'online',
+  'mobile_returned':         'online',
+  'offline':                 'offline',
+  'disappeared':             'offline',
+  'mobile_left':             'offline',
+  'changed':                 'changed',
+  'identification_improved': 'changed'
 };
 
 var FIELD_LABEL = {
@@ -23,7 +47,7 @@ function fmtDate(epoch) {
 function renderEntry(e) {
   var meta = EVENT_LABEL[e.event] || { icon: '•', text: e.event, cls: '' };
   var detail = '';
-  if (e.event === 'changed') {
+  if (e.event === 'changed' || e.event === 'identification_improved') {
     var fieldName = FIELD_LABEL[e.field] || e.field;
     detail = '<div class="hist-detail">' + esc(fieldName) + ' : <span class="hist-old">' +
               esc(e.oldValue) + '</span> → <span class="hist-new-val">' + esc(e.newValue) + '</span></div>';
@@ -51,7 +75,8 @@ function renderHistory() {
   var filters    = activeFilters();
   var favOnly    = document.getElementById('hist-filter-favorite').checked;
   var filtered   = historyData.filter(function(e) {
-    if (!filters[e.event]) return false;
+    var category = EVENT_FILTER_CATEGORY[e.event] || e.event;
+    if (!filters[category]) return false;
     if (favOnly && !favoriteMacs[e.mac]) return false;
     return true;
   });

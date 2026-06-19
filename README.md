@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-1.0.3-blue)
+![Version](https://img.shields.io/badge/version-1.0.4-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
