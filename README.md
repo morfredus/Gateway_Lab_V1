@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.8.7-blue)
+![Version](https://img.shields.io/badge/version-0.8.8-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -58,7 +58,7 @@ Configuration WiFi, gestion des réseaux enregistrés, réglage de la NeoPixel
 d'état, mise à jour du firmware (OTA) et état système (mémoire, nombre
 d'équipements, historique).
 
-![Système](docs/pictures/Gateway_Lab_V1_Systeme.png)
+![Système](docs/pictures/Gateway_Lab_V1_Parametres.png)
 
 ---
 
