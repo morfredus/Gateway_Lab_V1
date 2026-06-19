@@ -100,9 +100,9 @@ document.getElementById('hist-filter-favorite').addEventListener('change', rende
 function loadFavorites() {
   fetch('/api/devices')
     .then(function(r) { return r.json(); })
-    .then(function(list) {
+    .then(function(data) {
       favoriteMacs = {};
-      (list || []).forEach(function(d) {
+      (data.devices || []).forEach(function(d) {
         if (!d.favorite) return;
         if (d.mac) favoriteMacs[d.mac] = true;
         if (d.ip) favoriteMacs[d.ip] = true;

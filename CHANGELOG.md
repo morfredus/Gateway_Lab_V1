@@ -5,6 +5,23 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.6] - Patch 6 - 2026-06-19
+
+### Corrige
+
+- **Page Historique : le filtre « Favoris uniquement » restait vide même
+  après le Patch 5.** La vraie cause : `loadFavorites()` traitait la
+  réponse de `GET /api/devices` comme un tableau brut
+  (`(list || []).forEach(...)`), alors que cet endpoint renvoie un objet
+  `{ scanning, stats, devices: [...] }` (comme `scan.js` le fait déjà
+  correctement via `data.devices`). `list.forEach` n'existe pas sur cet
+  objet, l'exception était silencieusement absorbée par le `.catch()`, et
+  `favoriteMacs` restait toujours vide — la correction du Patch 5
+  (indexation par MAC et IP) ne pouvait donc jamais s'appliquer à aucune
+  donnée. Correction : `loadFavorites()` lit désormais `data.devices`.
+
+---
+
 ## [1.0.5] - Patch 5 - 2026-06-19
 
 ### Corrige
