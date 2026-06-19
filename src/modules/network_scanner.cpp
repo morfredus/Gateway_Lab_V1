@@ -666,6 +666,42 @@ static int _sourceTier(const String& source) {
 }
 
 // ---------------------------------------------------------------------------
+// Profil d'equipement probable - deduit des informations deja connues, pour
+// choisir les modules de decouverte les plus pertinents pour la passe
+// precise (rescanDevice). Simple hypothese : n'est jamais ecrit dans
+// NetworkDevice, et n'a aucune incidence si elle se revele fausse (les
+// modules manquants sont toujours disponibles via le scan approfondi
+// "Unknown" qui les essaie tous).
+// ---------------------------------------------------------------------------
+String NetworkScanner::_profileFor(const NetworkDevice& d) {
+    const String& cat = d.category;
+    const String& svc = d.services;
+    const String& mfr = d.manufacturer;
+
+    if (cat == "NAS") return "NAS";
+    if (cat == "Printer") return "Printer";
+    if (cat == "Router" || cat == "Network" || cat == "Network Equipment") return "Network";
+    if (cat == "Mobile") return "Mobile";
+
+    if (cat == "Streaming" || cat == "Audio" ||
+        svc.indexOf("Cast") >= 0 || svc.indexOf("AirPlay") >= 0 || svc.indexOf("Sonos") >= 0)
+        return "Streaming";
+
+    if (cat == "Home Automation" || cat == "Smart Home" ||
+        mfr == "Philips Hue" || mfr == "Tuya / Smart Life" || mfr == "Sonoff / Itead" ||
+        mfr == "Shelly / Allterco" || mfr == "Tado" || mfr == "Netatmo" || mfr == "Somfy")
+        return "SmartHome";
+
+    if (cat == "Computer" || cat == "SBC" ||
+        svc.indexOf("SSH") >= 0 || svc.indexOf("SMB") >= 0 || d.os.indexOf("Windows") >= 0)
+        return "Computer";
+
+    if (cat == "IoT") return "IoT";
+
+    return "Unknown";
+}
+
+// ---------------------------------------------------------------------------
 // Niveau de confiance de l'identification - explique a l'utilisateur d'ou
 // vient la deduction manufacturer/category/model/type affichee dans l'UI.
 //
@@ -1458,7 +1494,7 @@ void NetworkScanner::_setRescanProgress(const String& step, int percent) {
     Log::i(TAG, "Rescan %s — %s (%d%%)", _rescanStatus.ip.c_str(), step.c_str(), percent);
 }
 
-bool NetworkScanner::rescanDevice(const String& ip) {
+bool NetworkScanner::rescanDevice(const String& ip, bool deep) {
     if (_scanning) return false;
     if (systemHealth.isDegraded()) {
         Log::w(TAG, "Rescan refusé — mode dégradé (%s)", systemHealth.reason().c_str());
@@ -1466,10 +1502,11 @@ bool NetworkScanner::rescanDevice(const String& ip) {
     }
 
     bool known = false;
+    String profile = "Unknown";
     {
         xSemaphoreTake(_mutex, portMAX_DELAY);
         for (const auto& d : _results) {
-            if (d.ip == ip) { known = true; break; }
+            if (d.ip == ip) { known = true; profile = _profileFor(d); break; }
         }
         xSemaphoreGive(_mutex);
     }
@@ -1481,14 +1518,18 @@ bool NetworkScanner::rescanDevice(const String& ip) {
     _rescanStatus.ip      = ip;
     _rescanStatus.step    = "Démarrage";
     _rescanStatus.percent = 0;
+    _rescanStatus.mode     = deep ? "deep" : "quick";
+    _rescanStatus.profile  = profile;
+    _rescanStatus.log.clear();
     xSemaphoreGive(_mutex);
 
     _scanning = true;
     // Meme empreinte stack que le scan complet : SSDP/DNS-SD parcourent tout
     // le sous-reseau en interne avant filtrage sur l'IP visee (multicast,
     // pas de requete unicast ciblee possible avec ces protocoles).
+    _rescanDeep = deep;
     xTaskCreatePinnedToCore(_rescanTask, "net_rescan", 24576, this, 1, &_rescanTaskHandle, 0);
-    Log::i(TAG, "Passe précise lancée — %s", ip.c_str());
+    Log::i(TAG, "Passe précise (%s, profil %s) lancée — %s", deep ? "approfondie" : "rapide", profile.c_str(), ip.c_str());
     return true;
 }
 
@@ -1496,12 +1537,14 @@ void NetworkScanner::_rescanTask(void* selfPtr) {
     NetworkScanner* self = static_cast<NetworkScanner*>(selfPtr);
 
     String ip;
+    bool deep;
     {
         xSemaphoreTake(self->_mutex, portMAX_DELAY);
-        ip = self->_rescanStatus.ip;
+        ip   = self->_rescanStatus.ip;
         xSemaphoreGive(self->_mutex);
     }
-    self->_runRescan(ip);
+    deep = self->_rescanDeep;
+    self->_runRescan(ip, deep);
 
     xSemaphoreTake(self->_mutex, portMAX_DELAY);
     self->_rescanStatus.running = false;
@@ -1515,14 +1558,48 @@ void NetworkScanner::_rescanTask(void* selfPtr) {
     vTaskDelete(nullptr);
 }
 
-void NetworkScanner::_runRescan(const String& ip) {
+void NetworkScanner::_runRescan(const String& ip, bool deep) {
     uint32_t _t0 = millis();
     std::vector<NetworkDevice> previousState;
+    NetworkDevice before;
+    String confLabel;
+    int confBefore = 0;
     {
         xSemaphoreTake(_mutex, portMAX_DELAY);
         previousState = _results;
+        for (const auto& d : _results) {
+            if (d.ip == ip) { before = d; confBefore = _confidenceFor(d, confLabel); break; }
+        }
         xSemaphoreGive(_mutex);
     }
+
+    // Profil deduit des informations deja connues - determine quels modules
+    // de decouverte sont pertinents pour cet equipement (cf. _profileFor).
+    String profile = _profileFor(before);
+    bool isMobile  = (profile == "Mobile");
+
+    // Scan rapide : un sous-ensemble cible de modules selon le profil.
+    // Scan approfondi : tous les modules pertinents pour le profil (plus
+    // gourmand mais plus exhaustif). Le profil "Mobile" reste minimal dans
+    // les deux cas (PTR/presence) - les telephones repondent rarement aux
+    // protocoles de decouverte et l'attente n'apporterait rien.
+    bool wantPorts   = !isMobile && (deep || profile == "Computer" || profile == "NAS" ||
+                                      profile == "Printer" || profile == "Network" || profile == "Unknown");
+    bool wantNetBios = !isMobile && (deep || profile == "Computer" || profile == "Unknown");
+    bool wantSsdp    = !isMobile && (deep || profile == "NAS" || profile == "Streaming" ||
+                                      profile == "SmartHome" || profile == "Network" || profile == "Unknown");
+    bool wantDnsSd   = !isMobile && (deep || profile == "Streaming" || profile == "SmartHome" || profile == "Unknown");
+    bool wantWsDisc  = !isMobile && (deep || profile == "Computer" || profile == "Printer" || profile == "Unknown");
+    bool wantMedia   = !isMobile && (deep || profile == "Streaming" || profile == "SmartHome");
+    bool wantSnmp    = !isMobile && (deep || profile == "Printer" || profile == "Network" || profile == "Unknown");
+
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        _rescanStatus.profile = profile;
+        xSemaphoreGive(_mutex);
+    }
+    Log::i(TAG, "Passe précise — profil déduit : %s (modules : ports=%d netbios=%d ssdp=%d dnssd=%d wsdisc=%d media=%d snmp=%d)",
+           profile.c_str(), wantPorts, wantNetBios, wantSsdp, wantDnsSd, wantWsDisc, wantMedia, wantSnmp);
 
     // ── Sonde ARP directe sur l'IP ───────────────────────────────────────
     _setRescanProgress("ARP", 5);
@@ -1592,6 +1669,7 @@ void NetworkScanner::_runRescan(const String& ip) {
 
         // Scan de ports plus long qu'en scan complet (500 ms vs 250 ms) :
         // une seule cible, peut se permettre d'attendre des banners lents.
+        if (wantPorts) {
         _setRescanProgress("Ports TCP", 35);
         auto portResults = portScanner.scan({ ip }, 500);
         auto prIt = portResults.find(ip);
@@ -1602,6 +1680,7 @@ void NetworkScanner::_runRescan(const String& ip) {
             }
             xSemaphoreGive(_mutex);
         }
+        }
 
         bool needsHostname = false;
         {
@@ -1611,7 +1690,7 @@ void NetworkScanner::_runRescan(const String& ip) {
             }
             xSemaphoreGive(_mutex);
         }
-        if (needsHostname) {
+        if (wantNetBios && needsHostname) {
             _setRescanProgress("NetBIOS", 45);
             auto nbResults = netBiosScanner.scan({ ip }, 250);
             auto nbIt = nbResults.find(ip);
@@ -1630,7 +1709,9 @@ void NetworkScanner::_runRescan(const String& ip) {
         // delai genereux, puis ne fusionner que la reponse de l'IP visee.
         // Justifie ici car l'utilisateur attend explicitement le resultat
         // d'une seule fiche, contrairement au scan complet ou ce cout serait
-        // paye pour chaque equipement.
+        // paye pour chaque equipement. N'est lance que si le profil deduit
+        // (cf. _profileFor) en a l'utilite, ou en scan approfondi.
+        if (wantSsdp) {
         _setRescanProgress("SSDP/UPnP", 60);
         auto ssdpResults = ssdpScanner.scan(5000);
         for (const auto& sdev : ssdpResults) {
@@ -1642,7 +1723,9 @@ void NetworkScanner::_runRescan(const String& ip) {
             xSemaphoreGive(_mutex);
             break;
         }
+        }
 
+        if (wantDnsSd) {
         _setRescanProgress("DNS-SD", 80);
         auto dnssdResults = dnsSdScanner.scan(9000);
         auto ddIt = dnssdResults.find(ip);
@@ -1653,12 +1736,14 @@ void NetworkScanner::_runRescan(const String& ip) {
             }
             xSemaphoreGive(_mutex);
         }
+        }
 
         // ── WS-Discovery (ONVIF) ──────────────────────────────────────────
         // Protocole utilise par la quasi-totalite des cameras IP et
         // imprimantes ONVIF pour s'annoncer, independamment de SSDP. Comme
         // SSDP/DNS-SD, c'est une decouverte multicast non ciblable par IP :
         // relancer la decouverte complete et ne garder que l'IP visee.
+        if (wantWsDisc) {
         _setRescanProgress("WS-Discovery", 72);
         auto wsdResults = wsDiscoveryScanner.scan(2000);
         auto wsdIt = wsdResults.find(ip);
@@ -1678,11 +1763,13 @@ void NetworkScanner::_runRescan(const String& ip) {
             }
             xSemaphoreGive(_mutex);
         }
+        }
 
         // ── API HTTP proprietaires (Cast / Sonos / Roku / Samsung TV) ───────
         // Outils non utilises jusqu'ici : ces ports fixes ne sont pas dans la
         // liste du scan de ports standard, mais repondent en clair avec le
         // modele et le nom convivial exact de l'appareil multimedia.
+        if (wantMedia) {
         _setRescanProgress("API multimédia", 86);
         MediaApiResult mediaRes = mediaApiScanner.probe(ip, 600);
         if (!mediaRes.apiType.isEmpty()) {
@@ -1701,12 +1788,14 @@ void NetworkScanner::_runRescan(const String& ip) {
             }
             xSemaphoreGive(_mutex);
         }
+        }
 
         // ── SNMP sysDescr ─────────────────────────────────────────────────
         // Outil non utilise jusqu'ici dans le projet : de nombreux routeurs,
         // switches, imprimantes et NAS exposent SNMP en lecture publique et
         // y renseignent fabricant + modele en texte clair, plus fiable qu'un
         // OUI MAC ambigu ou qu'un banner HTTP succinct.
+        if (wantSnmp) {
         _setRescanProgress("SNMP", 95);
         auto snmpResults = snmpScanner.querySysDescr({ ip }, 400);
         auto snIt = snmpResults.find(ip);
@@ -1724,6 +1813,7 @@ void NetworkScanner::_runRescan(const String& ip) {
             }
             xSemaphoreGive(_mutex);
         }
+        }
     }
 
     _enrichDevices();
@@ -1731,12 +1821,46 @@ void NetworkScanner::_runRescan(const String& ip) {
     _updateHistory(previousState);
     _saveToStore();
 
+    // ── Journal des enrichissements ──────────────────────────────────────
+    // Compare l'etat avant/apres pour produire un resume comprehensible des
+    // gains de cette passe (ou son absence), affiche par l'UI.
+    std::vector<String> log;
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (const auto& d : _results) {
+            if (d.ip != ip) continue;
+            String confLabelAfter;
+            int confAfter = _confidenceFor(d, confLabelAfter);
+
+            if (!d.model.isEmpty() && d.model != before.model)
+                log.push_back("Modèle détecté : " + d.model);
+            if (!d.manufacturer.isEmpty() && d.manufacturer != before.manufacturer)
+                log.push_back("Fabricant détecté : " + d.manufacturer);
+            if (!d.category.isEmpty() && d.category != before.category)
+                log.push_back("Catégorie : " + d.category);
+            if (!d.hostname.isEmpty() && d.hostname != before.hostname)
+                log.push_back("Nom d'hôte détecté : " + d.hostname);
+            if (!d.services.isEmpty() && d.services != before.services)
+                log.push_back("Service détecté : " + d.services);
+            if (!d.openPorts.isEmpty() && d.openPorts != before.openPorts)
+                log.push_back("Ports détectés : " + d.openPorts);
+            if (confAfter != confBefore)
+                log.push_back("Confiance : " + String(confBefore) + "% → " + String(confAfter) + "%");
+            break;
+        }
+        xSemaphoreGive(_mutex);
+    }
+    if (log.empty()) log.push_back("Aucune information supplémentaire détectée");
+
     uint32_t durMs = millis() - _t0;
 
-    Log::i(TAG, "Rafraichissement cible terminé — %s (%s, %u ms)", ip.c_str(), isOnline ? "en ligne" : "hors ligne", (unsigned)durMs);
+    Log::i(TAG, "Rafraichissement cible terminé — %s (%s, %s, profil %s, %u ms)",
+           ip.c_str(), isOnline ? "en ligne" : "hors ligne", deep ? "approfondi" : "rapide",
+           profile.c_str(), (unsigned)durMs);
 
     xSemaphoreTake(_mutex, portMAX_DELAY);
-    _rescanStatus.ok = isOnline;
+    _rescanStatus.ok  = isOnline;
+    _rescanStatus.log = log;
     _lastRescanMs = durMs;
     _rescanMsTotal += durMs;
     _rescanCount++;
@@ -1758,6 +1882,10 @@ String NetworkScanner::rescanStatusToJson() const {
     doc["ip"]      = s.ip;
     doc["step"]    = s.step;
     doc["percent"] = s.percent;
+    doc["mode"]    = s.mode;
+    doc["profile"] = s.profile;
+    JsonArray logArr = doc["log"].to<JsonArray>();
+    for (const auto& l : s.log) logArr.add(l);
     String json;
     serializeJson(doc, json);
     return json;

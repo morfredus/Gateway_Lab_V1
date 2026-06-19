@@ -425,6 +425,8 @@ tr:hover td      { background: #ffffff06; }
 }
 .rescan-btn:hover    { color: #38bdf8; }
 .rescan-btn:disabled { color: #334155; cursor: default; }
+.rescan-btn-deep        { letter-spacing: -0.15em; }
+.rescan-btn-deep:hover  { color: #f97316; }
 .mac-cell  { font-family: monospace; font-size: 0.78rem; color: #c3d0e0; white-space: nowrap; }
 .name-cell {
   max-width: 220px;

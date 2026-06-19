@@ -213,8 +213,10 @@ function renderDevices(allDevices) {
     if (d.seenCount > 0)
       seenHtml += '<div class="seen-count" title="Nombre de scans où cet équipement a été vu en ligne">vu ' + d.seenCount + 'x</div>';
     var rescanBtn = d.ip
-      ? '<button class="rescan-btn" title="Réinterroger cet équipement (sans relancer un scan complet)" ' +
-        'data-ip="' + esc(d.ip) + '" onclick="rescanDevice(this)">⟲</button>'
+      ? '<button class="rescan-btn" title="Scan rapide (2-5s) — confirme l\'identité et améliore la confiance" ' +
+        'data-ip="' + esc(d.ip) + '" data-mode="quick" onclick="rescanDevice(this)">⟲</button>' +
+        '<button class="rescan-btn rescan-btn-deep" title="Scan approfondi (15-60s) — récupère un maximum d\'informations" ' +
+        'data-ip="' + esc(d.ip) + '" data-mode="deep" onclick="rescanDevice(this)">⟲⟲</button>'
       : '';
     var favKey = d.mac || d.ip;
     var favBtn = '<button class="fav-btn ' + (d.favorite ? 'fav-on' : '') + '" ' +
@@ -369,7 +371,11 @@ function deleteNote(btn) {
 
 var RESCAN_ROW_ID = 'rescan-progress-row';
 
-function showRescanRow(afterRow, ip, step, percent) {
+function rescanModeLabel(mode) {
+  return mode === 'deep' ? 'Analyse approfondie' : 'Passe rapide';
+}
+
+function showRescanRow(afterRow, ip, mode, step, percent) {
   var row = document.getElementById(RESCAN_ROW_ID);
   if (!row) {
     row = document.createElement('tr');
@@ -387,9 +393,17 @@ function showRescanRow(afterRow, ip, step, percent) {
   if (afterRow.nextSibling !== row) {
     afterRow.parentNode.insertBefore(row, afterRow.nextSibling);
   }
-  document.getElementById('rescan-row-text').textContent = 'Passe précise sur ' + ip + ' — ' + step;
+  document.getElementById('rescan-row-text').textContent = rescanModeLabel(mode) + ' sur ' + ip + ' — ' + step;
   document.getElementById('rescan-row-bar').style.width = (percent || 0) + '%';
   document.getElementById('rescan-row-pct').textContent = (percent || 0) + '%';
+}
+
+function showRescanLog(afterRow, ip, mode, log) {
+  var row = document.getElementById(RESCAN_ROW_ID);
+  if (!row) return;
+  document.getElementById('rescan-row-text').textContent = rescanModeLabel(mode) + ' sur ' + ip + ' — ' + (log || []).join(' · ');
+  document.getElementById('rescan-row-bar').style.width = '100%';
+  document.getElementById('rescan-row-pct').textContent = '100%';
 }
 
 function hideRescanRow() {
@@ -397,19 +411,20 @@ function hideRescanRow() {
   if (row) row.remove();
 }
 
-function pollRescanStatus(btn, prevHtml, ip, row) {
+function pollRescanStatus(btn, prevHtml, ip, row, mode) {
   fetch('/api/devices/rescan/status').then(function(r) { return r.json(); }).then(function(s) {
     if (s.running) {
       var pct = s.percent || 0;
       btn.textContent = pct + '%';
-      btn.title = 'Passe précise en cours — ' + (s.step || '…');
-      showRescanRow(row, ip, s.step || '…', pct);
-      setTimeout(function() { pollRescanStatus(btn, prevHtml, ip, row); }, 500);
+      btn.title = rescanModeLabel(mode) + ' en cours — ' + (s.step || '…');
+      showRescanRow(row, ip, mode, s.step || '…', pct);
+      setTimeout(function() { pollRescanStatus(btn, prevHtml, ip, row, mode); }, 500);
     } else {
       btn.disabled = false;
       btn.textContent = prevHtml;
       btn.removeAttribute('title');
-      hideRescanRow();
+      showRescanLog(row, ip, mode, s.log);
+      setTimeout(hideRescanRow, 2500);
       fetchDevices();
     }
   }).catch(function() {
@@ -420,14 +435,15 @@ function pollRescanStatus(btn, prevHtml, ip, row) {
 }
 
 function rescanDevice(btn) {
-  var ip = btn.getAttribute('data-ip');
+  var ip   = btn.getAttribute('data-ip');
+  var mode = btn.getAttribute('data-mode') || 'quick';
   var row = btn.closest('tr');
   btn.disabled = true;
   var prevHtml = btn.textContent;
   btn.textContent = '…';
-  btn.title = 'Passe précise en cours — Démarrage';
-  showRescanRow(row, ip, 'Démarrage', 0);
-  fetch('/api/devices/rescan', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'ip=' + encodeURIComponent(ip) })
+  btn.title = rescanModeLabel(mode) + ' en cours — Démarrage';
+  showRescanRow(row, ip, mode, 'Démarrage', 0);
+  fetch('/api/devices/rescan', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'ip=' + encodeURIComponent(ip) + '&mode=' + encodeURIComponent(mode) })
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.error) {
@@ -437,7 +453,7 @@ function rescanDevice(btn) {
         hideRescanRow();
         return;
       }
-      pollRescanStatus(btn, prevHtml, ip, row);
+      pollRescanStatus(btn, prevHtml, ip, row, mode);
     })
     .catch(function() {
       btn.disabled = false;

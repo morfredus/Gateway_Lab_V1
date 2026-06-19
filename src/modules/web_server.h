@@ -54,7 +54,7 @@ struct ScanProvider {
 
     std::function<bool(const String& macOrIp, const String& alias)> setAlias;  // Alias utilisateur
     std::function<int(bool keepAlias, bool keepManufacturer)> resetDevices;    // RAZ des equipements connus
-    std::function<bool(const String& ip)> rescanDevice;   // Rafraichit un seul equipement (sans scan complet)
+    std::function<bool(const String& ip, bool deep)> rescanDevice;   // Rafraichit un seul equipement (sans scan complet) - deep=true pour le scan approfondi
     std::function<String()> getRescanStatusJson;          // Avancement de la passe precise en cours (polling UI)
     std::function<String()> getHistoryJson;   // Journal chronologique (evenements) en JSON
     std::function<void()>   clearHistory;     // Vide le journal d'historique

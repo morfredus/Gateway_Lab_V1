@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.8.10-blue)
+![Version](https://img.shields.io/badge/version-0.9.0-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -139,7 +139,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Détection des changements | Comparaison automatique entre deux scans (IP, fabricant, catégorie, ports...) |
 | Sauvegarde / restauration | Export et import JSON complet de l'inventaire et de l'historique |
 | Réinitialisation des équipements | RAZ de l'inventaire, avec options de conservation (alias, fabricant connu) |
-| Réinterrogation ciblée   | Rafraîchit un seul équipement (IP) sans relancer un scan complet, tâche asynchrone avec barre de progression affichée sous la ligne de l'équipement |
+| Réinterrogation ciblée   | Rafraîchit un seul équipement (IP) sans relancer un scan complet, en deux passes au choix — rapide (2-5s) ou approfondie (15-60s) — selon un profil d'équipement déduit des informations déjà connues ; tâche asynchrone avec barre de progression et journal d'enrichissement affichés sous la ligne de l'équipement |
 | Sous-catégorie (`type`)  | Précision du type d'équipement au sein d'une catégorie (ex: Caméra, Imprimante) |
 | Score de confiance unique | Calcul prudent (minimum des signaux fabricant/catégorie), avec détail par champ au survol |
 | Sondage SNMP             | `sysDescr` (UDP 161) lors de la passe précise — fabricant/modèle en texte clair |
@@ -461,9 +461,13 @@ disposant d'un alias et/ou d'un fabricant identifié.
 ### POST /api/devices/rescan
 
 Réinterroge un seul équipement (paramètre `ip`) sans relancer un scan
-complet : sonde ARP/ICMP ciblée, puis résolution de nom, scan de ports,
-NetBIOS, SNMP, WS-Discovery/ONVIF et API multimédia (Cast/Sonos/Roku/Samsung)
-si l'équipement répond. Exécuté de façon asynchrone sur une tâche FreeRTOS
+complet : sonde ARP/ICMP ciblée, puis résolution de nom, et — selon la passe
+demandée et le profil déduit de l'équipement (Computer, NAS, Printer,
+Mobile, Streaming, SmartHome, Network, IoT, Unknown) — scan de ports,
+NetBIOS, SSDP, DNS-SD, WS-Discovery/ONVIF, API multimédia
+(Cast/Sonos/Roku/Samsung) et SNMP. Paramètre `mode` optionnel : `quick`
+(par défaut, 2-5s, modules ciblés selon le profil) ou `deep` (15-60s, tous
+les modules pertinents). Exécuté de façon asynchrone sur une tâche FreeRTOS
 dédiée — voir `GET /api/devices/rescan/status` pour suivre la progression.
 Retourne une erreur 409 si un scan complet ou une autre passe précise est
 déjà en cours, ou 400 si l'IP est inconnue.
@@ -479,12 +483,19 @@ les 500 ms par l'interface) :
   "ok": false,
   "ip": "192.168.1.42",
   "step": "WS-Discovery",
-  "percent": 72
+  "percent": 72,
+  "mode": "deep",
+  "profile": "Streaming",
+  "log": ["Modèle détecté : Google Nest Hub", "Confiance : 30% → 70%"]
 }
 ```
 
 `running` repasse à `false` une fois la passe terminée ; `ok` indique si
-l'équipement a répondu.
+l'équipement a répondu. `mode` et `profile` indiquent la passe et le
+profil déduit pour cette réinterrogation. `log` contient le journal
+d'enrichissement de la dernière passe terminée (ou
+`["Aucune information supplémentaire détectée"]` si rien de nouveau n'a
+été trouvé).
 
 ### POST /api/favorite
 

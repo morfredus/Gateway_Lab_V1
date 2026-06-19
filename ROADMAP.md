@@ -130,3 +130,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.8.8  | Correction de la barre de progression de mise à jour firmware qui disparaissait sans indication après le transfert ; étapes affichées (transfert, vérification, redémarrage) et redirection vers l'Accueil une fois le redémarrage terminé |
 | v0.8.9  | Nom "humain" du matériel (déduit du modèle/fabricant/catégorie) affiché au-dessus du hostname brut sur la page Équipements, repris dans les exports CSV/JSON (`hostnameDisplay`) |
 | v0.8.10 | Mise à jour de l'ensemble de la documentation utilisateur (README, ROADMAP, docs/) |
+| v0.9.0  | Scan précis en deux passes (rapide / approfondi), orienté profil d'équipement déduit (Computer, NAS, Printer, Mobile, Streaming, SmartHome, Network, IoT, Unknown) ; journal d'enrichissement affiché en fin de passe |

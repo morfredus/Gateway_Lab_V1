@@ -5,6 +5,42 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.0] - 2026-06-19
+
+### Ajoute
+
+- **Scan précis en deux passes, orienté profil d'équipement** : le
+  rafraîchissement ciblé d'un seul équipement (bouton ⟲ de la page
+  Matériel) se décline désormais en deux passes distinctes :
+  - **Scan rapide** (2-5s) : confirme l'identité et améliore le score de
+    confiance avec un minimum de modules ciblés.
+  - **Scan approfondi** (15-60s) : interroge l'ensemble des modules de
+    découverte disponibles pour maximiser les informations exploitables
+    (modèle précis, services exposés, ports...).
+  - `network_scanner.h`/`.cpp` : nouvelle fonction `_profileFor()` qui
+    déduit un profil probable (Computer, NAS, Printer, Mobile, Streaming,
+    SmartHome, Network, IoT, Unknown) à partir des informations déjà
+    connues (catégorie, services, fabricant, OS) — une simple hypothèse
+    utilisée pour choisir les sondes les plus pertinentes, pas une
+    classification figée. `rescanDevice(ip, deep)` prend désormais un
+    paramètre de profondeur ; `_runRescan()` active sélectivement les
+    modules (Ports TCP, NetBIOS, SSDP, DNS-SD, WS-Discovery, API
+    multimédia, SNMP) selon le profil déduit et la passe demandée.
+  - **Journal d'enrichissement** : chaque passe précise produit un
+    journal des changements détectés (ex: « Modèle détecté : Google Nest
+    Hub », « Service détecté : Cast », « Confiance : 30% → 70% »), ou
+    « Aucune information supplémentaire détectée » si rien n'a changé.
+    Exposé via `/api/devices/rescan/status` (champs `mode`, `profile`,
+    `log`).
+  - `web_server.h`/`.cpp`, `main.cpp` : `ScanProvider::rescanDevice`
+    transmet désormais le paramètre `deep` ; `POST
+    /api/devices/rescan` accepte un paramètre `mode` (`quick` par défaut,
+    ou `deep`).
+  - `web_src/scan.js` : le bouton « Rescanner » devient deux actions
+    « Scan rapide » et « Scan approfondi » ; affichage en cours de
+    « Passe rapide sur 192.168.x.x » / « Analyse approfondie sur
+    192.168.x.x » puis du journal d'enrichissement en fin de passe.
+
 ## [0.8.10] - 2026-06-19
 
 ### Documentation

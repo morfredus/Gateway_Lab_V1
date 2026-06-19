@@ -102,8 +102,8 @@ void setup() {
             .resetDevices    = [](bool keepAlias, bool keepManufacturer) {
                 return netScanner.resetDevices(keepAlias, keepManufacturer);
             },
-            .rescanDevice    = [](const String& ip) {
-                return netScanner.rescanDevice(ip);
+            .rescanDevice    = [](const String& ip, bool deep) {
+                return netScanner.rescanDevice(ip, deep);
             },
             .getRescanStatusJson = [] {
                 return netScanner.rescanStatusToJson();

@@ -42,6 +42,9 @@ struct RescanStatus {
     String ip;                // IP visee par la passe en cours/terminee
     String step;               // Etape courante, ex: "SSDP/UPnP"
     int    percent = 0;       // Avancement estime (0-100)
+    String mode;               // "quick" ou "deep" - passe en cours/terminee
+    String profile;            // Profil d'equipement deduit, ex: "NAS", "Printer"
+    std::vector<String> log;   // Journal des enrichissements de la derniere passe
 };
 
 // Note libre datee, ajoutee par l'utilisateur sur un equipement de son
@@ -146,11 +149,20 @@ public:
     String devicesToCsv() const;
 
     // Lance la passe precise (asynchrone, tache FreeRTOS dediee) sur un seul
-    // equipement identifie par IP : ARP/ICMP, hostname, ports, NetBIOS,
-    // SSDP/UPnP, DNS-SD, SNMP. Retourne immediatement (true si la tache a
-    // demarre) - suivre l'avancement via getRescanStatus().
+    // equipement identifie par IP. Un profil d'equipement (Computer, NAS,
+    // Printer, Streaming, SmartHome, Mobile, Network, IoT, Unknown) est
+    // deduit des informations deja connues (fabricant, hostname, modele,
+    // categorie, services, ports, OUI) pour ne lancer que les modules de
+    // decouverte pertinents :
+    //   - deep=false (scan rapide, 2-5s)  : ARP/ICMP, PTR DNS, hostname,
+    //     puis un sous-ensemble cible de modules selon le profil.
+    //   - deep=true  (scan approfondi, 15-60s) : tout le scan rapide, puis
+    //     l'ensemble des modules pertinents pour le profil (ports complets,
+    //     SSDP/UPnP, DNS-SD, WS-Discovery/ONVIF, API multimedia, SNMP).
+    // Retourne immediatement (true si la tache a demarre) - suivre
+    // l'avancement via getRescanStatus().
     // Retourne false si l'IP est inconnue ou si un scan/rescan est deja en cours.
-    bool rescanDevice(const String& ip);
+    bool rescanDevice(const String& ip, bool deep = false);
 
     // Avancement courant de la passe precise (thread-safe) - pour le polling UI
     RescanStatus getRescanStatus() const;
@@ -178,8 +190,16 @@ private:
     static void _rescanTask(void* self);
 
     // Corps de la passe precise sur _rescanStatus.ip - met a jour _rescanStatus
-    // a chaque etape pour que l'UI puisse afficher un avancement reel
-    void _runRescan(const String& ip);
+    // a chaque etape pour que l'UI puisse afficher un avancement reel.
+    // deep=false : modules limites au profil deduit (scan rapide).
+    // deep=true  : tous les modules pertinents pour le profil (scan approfondi).
+    void _runRescan(const String& ip, bool deep);
+
+    // Deduit un profil d'equipement probable a partir des informations deja
+    // connues (fabricant, hostname, modele, categorie, services, ports) -
+    // simple hypothese servant a choisir les modules de decouverte les plus
+    // pertinents pour la passe precise. Ne modifie jamais le NetworkDevice.
+    static String _profileFor(const NetworkDevice& d);
 
     // Met a jour l'etape/pourcentage courant de la passe precise (thread-safe)
     void _setRescanProgress(const String& step, int percent);
@@ -260,6 +280,7 @@ private:
     std::vector<NetworkDevice>  _results;
     volatile bool               _scanning   = false;
     RescanStatus                _rescanStatus;   // Protege par _mutex (lecture/ecriture)
+    bool                         _rescanDeep  = false;   // Mode de la passe en cours, lu une seule fois par _rescanTask
     volatile bool               _newDevicesPending = false;   // true si le dernier scan a revele un nouvel equipement
 
     // Cumuls pour le calcul des temps moyens (cartouche diagnostics) - proteges par _mutex

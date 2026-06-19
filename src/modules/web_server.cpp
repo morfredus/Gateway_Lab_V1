@@ -225,7 +225,7 @@ void WebServerModule::_handleApiDevicesReset() {
 
 // ---------------------------------------------------------------------------
 // Handler : rafraichissement cible d'un seul equipement (sans scan complet)
-// Parametre (form-urlencoded) : ip
+// Parametres (form-urlencoded) : ip, mode ("quick" par defaut, ou "deep")
 // ---------------------------------------------------------------------------
 void WebServerModule::_handleApiDeviceRescan() {
     if (!_hasScan || !_scan.rescanDevice) {
@@ -238,8 +238,9 @@ void WebServerModule::_handleApiDeviceRescan() {
         _server.send(400, "application/json", "{\"error\":\"ip requise\"}");
         return;
     }
+    bool deep = (_server.arg("mode") == "deep");
 
-    bool started = _scan.rescanDevice(ip);
+    bool started = _scan.rescanDevice(ip, deep);
     _server.send(started ? 200 : 409, "application/json",
                  started ? "{\"status\":\"started\"}" : "{\"error\":\"equipement inconnu ou scan en cours\"}");
 }
