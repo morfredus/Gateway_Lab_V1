@@ -71,6 +71,10 @@ void WebServerModule::begin(uint16_t port) {
     _server.on("/api/wifi",   HTTP_DELETE, [this]() { _handleApiWifiDelete(); });
     _server.on("/api/system/backup",  HTTP_GET,  [this]() { _handleApiSystemBackup(); });
     _server.on("/api/system/restore", HTTP_POST, [this]() { _handleApiSystemRestore(); });
+    _server.on("/api/mobility",       HTTP_POST, [this]() { _handleApiSetMobility(); });
+    _server.on("/api/network/health", HTTP_GET,  [this]() { _handleApiNetworkHealth(); });
+    _server.on("/api/monitor",        HTTP_GET,  [this]() { _handleApiMonitorGet(); });
+    _server.on("/api/monitor",        HTTP_POST, [this]() { _handleApiMonitorPost(); });
     _server.on("/api/system/health",  HTTP_GET,  [this]() {
         String j = "{\"degraded\":";
         j += systemHealth.isDegraded() ? "true" : "false";
@@ -336,6 +340,10 @@ void WebServerModule::_handleApiSystemBackup() {
     doc["version"]       = PROJECT_VERSION;
     doc["mdnsHostname"]  = wifiMgr.hostname();
     doc["ledBrightness"] = statusLed.getBrightness();
+    if (_hasScan && _scan.getMonitorEnabled)
+        doc["monitorEnabled"] = _scan.getMonitorEnabled();
+    if (_hasScan && _scan.getMonitorInterval)
+        doc["monitorIntervalMinutes"] = _scan.getMonitorInterval();
     JsonArray arr = doc["wifiNetworks"].to<JsonArray>();
     for (const auto& c : wifiMgr.savedNetworks()) {
         JsonObject o = arr.add<JsonObject>();
@@ -372,6 +380,11 @@ void WebServerModule::_handleApiSystemRestore() {
 
     int brightness = doc["ledBrightness"] | -1;
     if (brightness >= 0) statusLed.setBrightness(brightness);
+
+    if (_hasScan && _scan.setMonitorEnabled && !doc["monitorEnabled"].isNull())
+        _scan.setMonitorEnabled(doc["monitorEnabled"].as<bool>());
+    if (_hasScan && _scan.setMonitorInterval && !doc["monitorIntervalMinutes"].isNull())
+        _scan.setMonitorInterval(doc["monitorIntervalMinutes"].as<int>());
 
     int restored = 0;
     JsonArray arr = doc["wifiNetworks"].as<JsonArray>();
@@ -525,6 +538,85 @@ void WebServerModule::_handleApiWifiDelete() {
     bool ok = wifiMgr.removeNetwork(ssid);
     _server.send(ok ? 200 : 404, "application/json",
                  ok ? "{\"status\":\"ok\"}" : "{\"error\":\"reseau introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : force/efface la classification mobile/fixe d'un equipement
+// Parametres (form-urlencoded) : mac (ou ip) + mode ("", "fixed" ou "mobile")
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiSetMobility() {
+    if (!_hasScan || !_scan.setMobility) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String key = _server.arg("mac");
+    if (key.isEmpty()) key = _server.arg("ip");
+    String mode = _server.arg("mode");
+
+    if (key.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"mac ou ip requis\"}");
+        return;
+    }
+    if (mode != "" && mode != "fixed" && mode != "mobile") {
+        _server.send(400, "application/json", "{\"error\":\"mode invalide (vide, fixed ou mobile)\"}");
+        return;
+    }
+
+    bool ok = _scan.setMobility(key, mode);
+    _server.send(ok ? 200 : 404, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// Handler : tableau de bord reseau (presents/connus, evenements 24h, equipements
+// les moins stables) — surveillance continue (v1.0.0)
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiNetworkHealth() {
+    String json = (_hasScan && _scan.getNetworkHealthJson)
+        ? _scan.getNetworkHealthJson()
+        : "{\"error\":\"non disponible\"}";
+    _server.sendHeader("Cache-Control", "no-cache");
+    _server.send(200, "application/json", json);
+}
+
+// ---------------------------------------------------------------------------
+// Handler : etat courant de la surveillance continue (activee + frequence en minutes)
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiMonitorGet() {
+    int  minutes = (_hasScan && _scan.getMonitorInterval) ? _scan.getMonitorInterval() : 0;
+    bool enabled = (_hasScan && _scan.getMonitorEnabled)  ? _scan.getMonitorEnabled()  : false;
+    String json = "{\"enabled\":";
+    json += enabled ? "true" : "false";
+    json += ",\"intervalMinutes\":";
+    json += minutes;
+    json += "}";
+    _server.send(200, "application/json", json);
+}
+
+// ---------------------------------------------------------------------------
+// Handler : definit l'etat de la surveillance continue (parametres optionnels
+// enabled et minutes). Frequence bornee a 1-60 min cote
+// NetworkScanner::setMonitorInterval() - les deux reglages sont persistes NVS.
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiMonitorPost() {
+    if (!_hasScan || !_scan.setMonitorInterval || !_scan.setMonitorEnabled) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+    if (_server.hasArg("enabled"))
+        _scan.setMonitorEnabled(_server.arg("enabled") == "1" || _server.arg("enabled") == "true");
+    if (_server.hasArg("minutes"))
+        _scan.setMonitorInterval(_server.arg("minutes").toInt());
+
+    bool enabled = (_scan.getMonitorEnabled)  ? _scan.getMonitorEnabled()  : false;
+    int  applied = (_scan.getMonitorInterval) ? _scan.getMonitorInterval() : 0;
+    String json = "{\"status\":\"ok\",\"enabled\":";
+    json += enabled ? "true" : "false";
+    json += ",\"intervalMinutes\":";
+    json += applied;
+    json += "}";
+    _server.send(200, "application/json", json);
 }
 
 // ---------------------------------------------------------------------------

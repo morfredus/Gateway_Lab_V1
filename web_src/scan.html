@@ -34,11 +34,7 @@
           <div class="reset-menu-list" id="data-menu-list">
             <a href="/api/devices/export.csv" download="gateway-lab-devices.csv">Export CSV</a>
             <a href="/api/backup" download="gateway-lab-backup.json">Export JSON</a>
-            <div class="reset-menu-sep"></div>
-            <a href="/api/system/backup" download="gateway-lab-settings.json">Sauvegarde</a>
-            <button onclick="triggerRestore()">Restauration…</button>
           </div>
-          <input type="file" id="restore-file" accept="application/json" style="display:none">
         </div>
         <div class="reset-menu">
           <button class="reset-btn" id="reset-btn" onclick="toggleResetMenu()">Réinitialiser ▾</button>
@@ -58,8 +54,6 @@
       ciblé de l'équipement afin d'interroger des services spécifiques ou
       des API propriétaires.
     </p>
-
-    <p class="card-meta" id="restore-msg" style="display:none"></p>
 
     <div class="stats-bar" id="stats-bar" style="display:none">
       <span class="stat-item stat-known"  id="stat-known">— connus</span>

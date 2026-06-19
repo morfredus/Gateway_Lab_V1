@@ -147,6 +147,14 @@ void setup() {
                     statusLed.setState(LedState::Ready);
                 }
             },
+            .setMobility     = [](const String& macOrIp, const String& mode) {
+                return netScanner.setMobility(macOrIp, mode);
+            },
+            .getNetworkHealthJson = [] { return netScanner.networkHealthToJson(); },
+            .getMonitorInterval   = [] { return netScanner.getMonitorInterval(); },
+            .setMonitorInterval   = [](int minutes) { netScanner.setMonitorInterval(minutes); },
+            .getMonitorEnabled    = [] { return netScanner.getMonitorEnabled(); },
+            .setMonitorEnabled    = [](bool enabled) { netScanner.setMonitorEnabled(enabled); },
         });
         webSrv.begin(WEB_SERVER_PORT);
 #endif
@@ -170,6 +178,10 @@ void loop() {
     // Traitement des requêtes HTTP en attente
     webSrv.loop();
 #endif
+
+    // Surveillance continue (v1.0.0) — sweep ARP leger + drainage des rescans
+    // differes, cadence interne geree par serviceMonitor() lui-meme
+    netScanner.serviceMonitor();
 
     // NetworkScanner n'a pas de loop() : il tourne en tâche FreeRTOS sur Core 0
     // — on suit ses transitions ici pour piloter la LED d'etat

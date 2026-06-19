@@ -77,6 +77,15 @@ std::vector<NetworkDevice> DeviceStore::load() {
             n.text = no["text"] | "";
             d.notes.push_back(n);
         }
+        // Surveillance continue / stabilite (v1.0.0)
+        d.presenceCount       = obj["presenceCount"]       | 0;
+        d.absenceCount        = obj["absenceCount"]        | 0;
+        d.reconnectionCount   = obj["reconnectionCount"]   | 0;
+        d.lastDisconnectEpoch = obj["lastDisconnectEpoch"] | 0;
+        d.totalOnlineSeconds  = obj["totalOnlineSeconds"]  | 0;
+        d.totalOfflineSeconds = obj["totalOfflineSeconds"] | 0;
+        d.mobilityOverride    = obj["mobilityOverride"]    | "";
+        d.mobileAwayNotified  = obj["mobileAwayNotified"]  | false;
         d.online       = false;
         d.lastSeen     = 0;   // Inconnu — sera affiché comme "hors ligne"
         if (!d.ip.isEmpty() || !d.mac.isEmpty())
@@ -124,6 +133,15 @@ void DeviceStore::save(const std::vector<NetworkDevice>& devices) {
             no["ts"]   = n.ts;
             no["text"] = n.text;
         }
+        // Surveillance continue / stabilite (v1.0.0)
+        obj["presenceCount"]       = d.presenceCount;
+        obj["absenceCount"]        = d.absenceCount;
+        obj["reconnectionCount"]   = d.reconnectionCount;
+        obj["lastDisconnectEpoch"] = d.lastDisconnectEpoch;
+        obj["totalOnlineSeconds"]  = d.totalOnlineSeconds;
+        obj["totalOfflineSeconds"] = d.totalOfflineSeconds;
+        obj["mobilityOverride"]    = d.mobilityOverride;
+        obj["mobileAwayNotified"]  = d.mobileAwayNotified;
     }
 
     serializeJson(doc, f);

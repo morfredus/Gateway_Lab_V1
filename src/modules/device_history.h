@@ -2,11 +2,16 @@
  * DeviceHistory - Journal chronologique des evenements equipements
  *
  * Enregistre les evenements detectes a chaque scan :
- *   - "new"      : nouvel equipement jamais vu
- *   - "online"   : equipement reapparu apres une absence
- *   - "offline"  : equipement absent depuis le dernier scan
- *   - "changed"  : un champ a change de valeur (ip, manufacturer, category,
- *                  hostname, openPorts...) entre deux scans
+ *   - "new"                    : nouvel equipement jamais vu
+ *   - "online"                 : equipement reapparu apres une absence
+ *   - "offline"                : equipement absent depuis le dernier scan
+ *   - "changed"                : un champ a change de valeur (ip, manufacturer,
+ *                                category, hostname, openPorts...) entre deux scans
+ *   - "reconnected"             : equipement connu reapparu (surveillance continue)
+ *   - "disappeared"             : equipement connu passe hors ligne (surveillance continue)
+ *   - "identification_improved" : confiance d'identification en hausse significative
+ *   - "mobile_left"             : equipement mobile absent depuis plus de 2h
+ *   - "mobile_returned"         : equipement mobile de retour apres une absence prolongee
  *
  * Persistance : tableau JSON dans /history.json sur LittleFS, capped a
  * MAX_ENTRIES pour rester dans les limites flash/RAM raisonnables - les

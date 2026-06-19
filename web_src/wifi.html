@@ -64,6 +64,22 @@
     <p id="wifi-msg"></p>
   </div>
 
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Surveillance automatique du réseau</p>
+    </div>
+    <label><input id="monitor-enabled" type="checkbox"> Activer la surveillance automatique</label>
+    <label for="monitor-interval">Intervalle de scan</label>
+    <select id="monitor-interval">
+      <option value="5">5 minutes</option>
+      <option value="10">10 minutes</option>
+      <option value="15">15 minutes</option>
+      <option value="30">30 minutes</option>
+      <option value="60">1 heure</option>
+    </select>
+    <p class="card-meta" id="monitor-msg"></p>
+  </div>
+
   <p class="section-title">Appareil</p>
 
   <div class="card">
@@ -117,6 +133,19 @@
       <span class="info-label">Historique</span>
       <span class="info-value" id="sys-history">—</span>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Sauvegarde / Restauration</p>
+    </div>
+    <p class="card-meta">Paramètres de fonctionnement : réseaux WiFi, luminosité LED, surveillance automatique.</p>
+    <div class="header-actions">
+      <a class="btn" href="/api/system/backup" download="gateway-lab-settings.json">Sauvegarde</a>
+      <button class="btn" type="button" onclick="triggerRestore()">Restauration…</button>
+    </div>
+    <input type="file" id="restore-file" accept="application/json" style="display:none">
+    <p class="card-meta" id="restore-msg" style="display:none"></p>
   </div>
 
   <div class="card">

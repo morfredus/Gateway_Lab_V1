@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.9.2-blue)
+![Version](https://img.shields.io/badge/version-1.0.3-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -18,6 +18,7 @@ Inventaire persistant des équipements détectés
 Classification automatique (fabricant, catégorie, type)
 Historique des connexions, déconnexions et changements
 Favoris et notes utilisateur
+Surveillance continue du réseau et score de stabilité par équipement
 Export CSV et JSON
 Sauvegarde et restauration
 Interface web responsive
@@ -54,8 +55,10 @@ Vue simplifiée de la passerelle, des points d'accès détectés et des équipem
 
 ### Système
 
-Configuration WiFi, gestion des réseaux enregistrés, réglage de la NeoPixel
-d'état, mise à jour du firmware (OTA) et état système (mémoire, nombre
+Configuration WiFi, gestion des réseaux enregistrés, activation et fréquence
+de la surveillance automatique du réseau (5 min → 1 h, Patch 1), réglage de
+la NeoPixel d'état, sauvegarde/restauration des paramètres de fonctionnement
+(Patch 1), mise à jour du firmware (OTA) et état système (mémoire, nombre
 d'équipements, historique).
 
 ![Système](docs/pictures/Gateway_Lab_V1_Systeme.png)
@@ -154,12 +157,16 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | NeoPixel d'état          | Bleu pulsé (démarrage), bleu fixe (prêt), vert clignotant (scan), jaune clignotant (nouvel équipement), violet (portail WiFi), cyan (sauvegarde) — luminosité réglable depuis la page Système, persistée |
 | Bouton BOOT               | Appui court = lance un scan, maintien 3 s = sauvegarde immédiate |
 | Filtres équipements      | Filtre par type, fabricant, favoris uniquement, en ligne uniquement (page Équipements, côté client) |
-| Menu Données              | Sur la page Équipements : Export CSV / Export JSON (inventaire) puis, après séparateur, Sauvegarde / Restauration (paramètres de fonctionnement) |
-| Sauvegarde des paramètres | Réseaux WiFi enregistrés, luminosité NeoPixel (`/api/system/backup`, `/api/system/restore`) — distincte de la sauvegarde de l'inventaire |
+| Menu Données              | Sur la page Équipements : Export CSV / Export JSON (inventaire) uniquement — la Sauvegarde / Restauration des paramètres de fonctionnement a été déplacée sur la page Système (Patch 1) |
+| Sauvegarde des paramètres | Réseaux WiFi enregistrés, luminosité NeoPixel, état et fréquence de la surveillance automatique (`/api/system/backup`, `/api/system/restore`) — distincte de la sauvegarde de l'inventaire, accessible depuis la page Système (Patch 1) |
 | Page Topologie           | Vue simplifiée (passerelle/routeurs vs reste des équipements), première étape avant la cartographie graphique (roadmap v0.4.x) |
 | Mode dégradé mémoire     | Heap critique (< `HEAP_CRITICAL_BYTES`) → refuse scans/rescans/notes/historique/config sans redémarrer ; inventaire déjà acquis consultable ; redémarrage manuel depuis la page Système |
 | Bornes mémoire           | Listes/historique/notes plafonnés (`MAX_TRACKED_DEVICES`, `MAX_HISTORY_EVENTS`, `MAX_NOTES_PER_DEVICE`, `MAX_NOTE_LENGTH`) pour garantir un fonctionnement stable sur la durée |
-| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/devices/rescan/status`, `/api/scan`, `/api/alias`, `/api/favorite`, `/api/notes`, `/api/diagnostics`, `/api/history`, `/api/backup`, `/api/restore`, `/api/devices/export.csv`, `/api/system/backup`, `/api/system/restore`, `/api/system/health`, `/api/system/restart`, `/api/wifi`, `/api/led/brightness` |
+| Surveillance continue    | Sweep ARP léger périodique (`serviceMonitor()`), activable/désactivable et fréquence configurable de 5 min à 1 h depuis la page Système (persisté NVS, Patch 1) — détection de présence uniquement : aucun scan rapide/approfondi automatique, aucune découverte SSDP/DNS-SD/SNMP lancée hors scan complet ou rescan manuel (Patch 2) |
+| Score de stabilité       | Compteurs de présence/absence/reconnexion par équipement, score 0-100% pour les équipements fixes (équipements mobiles non pénalisés), nouveaux évènements d'historique (`reconnected`, `disappeared`, `identification_improved`, `mobile_left`, `mobile_returned`) |
+| Classification mobile/fixe | Détection automatique par catégorie/type, override manuel via `POST /api/mobility` |
+| Tableau de bord réseau   | `GET /api/network/health` : équipements présents/connus, nouveautés/reconnexions/instabilités des dernières 24h, classement des équipements les moins stables |
+| API REST                 | `/api/status`, `/api/devices`, `/api/devices/reset`, `/api/devices/rescan`, `/api/devices/rescan/status`, `/api/scan`, `/api/alias`, `/api/favorite`, `/api/notes`, `/api/diagnostics`, `/api/history`, `/api/backup`, `/api/restore`, `/api/devices/export.csv`, `/api/system/backup`, `/api/system/restore`, `/api/system/health`, `/api/system/restart`, `/api/wifi`, `/api/led/brightness`, `/api/mobility`, `/api/network/health`, `/api/monitor` |
 
 ---
 
@@ -582,15 +589,18 @@ BOM UTF-8 en tête pour un affichage correct des accents dans Excel.
 Télécharge une sauvegarde JSON des **paramètres de fonctionnement du
 projet** — distincte de `/api/backup` (qui sauvegarde l'inventaire des
 équipements) : réseaux WiFi enregistrés (SSID + mot de passe), luminosité
-NeoPixel, et nom mDNS à titre informatif (fixé à la compilation via
-`MDNS_HOSTNAME`, non restaurable).
+NeoPixel, état et fréquence de la surveillance automatique du réseau
+(`monitorEnabled`, `monitorIntervalMinutes` — Patch 1), et nom mDNS à titre
+informatif (fixé à la compilation via `MDNS_HOSTNAME`, non restaurable).
+Accessible depuis la carte « Sauvegarde / Restauration » de la page Système.
 
 ### POST /api/system/restore
 
 Restaure les paramètres de fonctionnement depuis un export JSON généré par
 `/api/system/backup`. Les réseaux WiFi du fichier sont ajoutés ou mis à jour
-(jamais supprimés automatiquement) ; la luminosité NeoPixel est appliquée
-immédiatement.
+(jamais supprimés automatiquement) ; la luminosité NeoPixel et l'état/fréquence
+de la surveillance automatique sont appliqués immédiatement si présents dans
+le fichier.
 
 ### GET /api/system/health
 
@@ -651,6 +661,36 @@ Ajoute ou met à jour un réseau enregistré (paramètres `ssid` et `password`).
 ### DELETE /api/wifi
 
 Supprime un réseau enregistré (paramètre `ssid`).
+
+### POST /api/mobility
+
+Force ou efface la classification mobile/fixe d'un équipement (paramètres
+`mac` ou `ip`, et `mode` : vide pour revenir à la détection automatique,
+`fixed` ou `mobile` pour forcer).
+
+### GET /api/network/health
+
+Tableau de bord réseau de la surveillance continue : équipements
+présents/connus, compteurs des dernières 24h (nouveaux équipements,
+reconnexions, instabilités) et classement des équipements les moins
+stables (score de stabilité, équipements mobiles exclus).
+
+### GET /api/monitor
+
+Retourne l'état courant de la surveillance continue :
+`{"enabled": true, "intervalMinutes": 5}`. Réglable depuis la page Système
+(case d'activation + sélecteur 5 min → 1 h, Patch 1).
+
+### POST /api/monitor
+
+Définit l'état de la surveillance continue : paramètres optionnels `enabled`
+(`1`/`0`/`true`/`false`) et `minutes` (borné à 1-60 côté API ; l'interface
+propose 5/10/15/30/60 min), persistés en NVS. Lorsque `enabled=false`, la
+surveillance ne fait plus aucun tick (Patch 1). Quand elle est active, elle
+se limite à un sweep ARP de détection de présence — aucun scan rapide ou
+approfondi n'est plus déclenché automatiquement (Patch 2) ; pour une
+identification complète, lancer un scan manuel (`/scan`) ou une passe
+précise sur un équipement (`/api/devices/rescan`).
 
 ---
 

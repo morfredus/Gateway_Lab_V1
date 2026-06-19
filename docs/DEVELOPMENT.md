@@ -233,22 +233,18 @@ uniquement) permet de réduire la liste affichée sans relancer de scan ; les
 listes déroulantes Type/Fabricant se remplissent automatiquement à partir
 des équipements connus.
 
-Le menu **Données** est divisé en deux groupes par un séparateur :
+Le menu **Données** ne propose que l'export de l'inventaire des équipements
+(Patch 1 — la Sauvegarde/Restauration des paramètres de fonctionnement a été
+déplacée vers la page Système, voir plus bas) :
 
-1. **Export CSV** / **Export JSON** — export de l'inventaire des
-   équipements. Le CSV (`/api/devices/export.csv`, une ligne par équipement)
-   a des dates lisibles, des colonnes en ligne/favori en `Yes`/`No`, et
-   inclut les notes et le niveau de confiance ; le BOM UTF-8 en tête de
-   fichier garantit un affichage correct des accents dans Excel. Le JSON
-   (`/api/backup`) contient l'inventaire complet (alias, notes, historique,
-   confiance) avec les dates en epoch, pour une restauration fidèle via
-   `/api/restore`.
-2. **Sauvegarde** / **Restauration** — paramètres de fonctionnement du
-   projet (`/api/system/backup`, `/api/system/restore`), distincts de
-   l'inventaire : réseaux WiFi enregistrés (SSID + mot de passe), luminosité
-   NeoPixel, et nom mDNS à titre informatif (fixé à la compilation, non
-   restaurable). La restauration ajoute/met à jour les réseaux WiFi du
-   fichier sans jamais supprimer les réseaux déjà enregistrés.
+- **Export CSV** / **Export JSON** — export de l'inventaire des
+  équipements. Le CSV (`/api/devices/export.csv`, une ligne par équipement)
+  a des dates lisibles, des colonnes en ligne/favori en `Yes`/`No`, et
+  inclut les notes et le niveau de confiance ; le BOM UTF-8 en tête de
+  fichier garantit un affichage correct des accents dans Excel. Le JSON
+  (`/api/backup`) contient l'inventaire complet (alias, notes, historique,
+  confiance) avec les dates en epoch, pour une restauration fidèle via
+  `/api/restore`.
 
 **Colonnes du tableau :**
 
@@ -310,6 +306,21 @@ dédiée) :
 - Liste les réseaux enregistrés en mémoire (NVS)
 - Ajoute un nouveau réseau (SSID + mot de passe)
 - Supprime un réseau enregistré
+- **Surveillance automatique du réseau** (Patch 1) : case d'activation et
+  intervalle de scan configurable de 5 minutes à 1 heure
+  (`GET`/`POST /api/monitor`, champ `enabled` + `intervalMinutes`,
+  persistés en NVS). La surveillance se limite à une détection de présence
+  (sweep ARP) : aucun scan rapide ou approfondi n'est déclenché
+  automatiquement (Patch 2) — pour une identification complète, lancer un
+  scan manuel depuis la page Équipements ou une passe précise sur un
+  équipement.
+- **Sauvegarde / Restauration** (Patch 1, déplacée depuis la page
+  Équipements) des paramètres de fonctionnement du projet
+  (`/api/system/backup`, `/api/system/restore`), distincts de l'inventaire :
+  réseaux WiFi enregistrés, luminosité NeoPixel, état et fréquence de la
+  surveillance automatique, et nom mDNS à titre informatif (fixé à la
+  compilation, non restaurable). La restauration ajoute/met à jour les
+  réseaux WiFi du fichier sans jamais supprimer les réseaux déjà enregistrés.
 - Mise à jour du firmware : sélectionner le fichier `.bin`
   (`.pio/build/esp32s3_n16r8/firmware.bin` après `pio run`) et cliquer
   **Mettre à jour** — envoyé via `POST /update` (inchangé)

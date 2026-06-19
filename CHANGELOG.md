@@ -5,6 +5,158 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.3] - Patch 3 - 2026-06-19
+
+### Corrige
+
+- **Scan complet qui semblait se relancer en boucle au démarrage.**
+  `NetworkScanner::serviceMonitor()` ignorait correctement le tick de
+  surveillance pendant qu'un scan complet/rescan était en cours
+  (`_scanning == true`), mais ne mettait pas à jour `_lastMonitorTickMs`
+  dans ce cas. Résultat : dès que le scan complet de démarrage (souvent
+  long, 60-90 s) se terminait, le tick suivant était immédiatement déclaré
+  "dû" (`_lastMonitorTickMs` encore à 0) et relançait un sweep ARP complet
+  — visible dans les journaux comme un second scan (mêmes lignes "ARP passe
+  1/2/3") démarrant à l'instant exact où le premier se terminait, donnant
+  l'impression d'un scan qui boucle sur lui-même. `_lastMonitorTickMs` est
+  désormais aussi horodaté lorsque le tick est sauté pour cause de scan en
+  cours, reportant l'échéance d'un intervalle complet (même traitement que
+  le mode dégradé).
+- **Boucle infinie de passes précises sur les mêmes équipements.**
+  `NetworkScanner::_updateHistory()` — appelée à la fois en fin de scan
+  complet *et* en fin de chaque passe précise (`rescanDevice()`) — remettait
+  en file un nouveau scan rapide (`_queueQuickScanLocked()`) dès que la
+  confiance d'identification d'un équipement restait sous 35 %. Or un scan
+  rapide ne recueille volontairement que très peu d'informations (ARP +
+  hostname) et ne peut jamais faire remonter la confiance de certains
+  profils au-dessus de ce seuil : chaque passe rapide se remettait donc
+  elle-même en file indéfiniment, produisant un cycle ininterrompu sur le
+  même petit groupe d'équipements (observé en journal : six IP enchaînées en
+  boucle toutes les ~0,7 s, avec écriture de `/devices.json` à chaque
+  itération). `_updateHistory()` accepte désormais un paramètre
+  `allowRequeue` (vrai uniquement depuis un scan complet) : une passe
+  précise ne se reprogramme plus jamais elle-même.
+
+---
+
+## [1.0.2] - Patch 2 - 2026-06-19
+
+### Corrige
+
+- **Surveillance continue : suppression des scans automatiques en boucle.**
+  Le tick de surveillance (`NetworkScanner::_monitorTick()`) mettait
+  automatiquement en file des passes rapides/approfondies (changement de
+  champ détecté, confiance d'identification faible, nouvel équipement) ;
+  cette file était ensuite vidée à *chaque* itération de `loop()`, donc en
+  continu et indépendamment de l'intervalle de surveillance choisi par
+  l'utilisateur. La surveillance continue se limite désormais strictement à
+  la détection de présence par sweep ARP (déjà le cas du tick lui-même) :
+  plus aucun scan rapide ou approfondi n'est déclenché automatiquement.
+  Un scan approfondi reste accessible à tout moment, mais uniquement à
+  l'initiative explicite de l'utilisateur (`/scan` ou rescan manuel d'un
+  équipement via `/api/devices/rescan`).
+- Les événements d'historique `"identification_improved"` et `"reconnected"`
+  restent journalisés à titre informatif, mais ne déclenchent plus de scan.
+
+---
+
+## [1.0.1] - Patch 1 - 2026-06-19
+
+### Ajoute
+
+- **Activation/désactivation de la surveillance automatique du réseau**,
+  réglable depuis la page Système : nouvel état persistant
+  `NetworkScanner::setMonitorEnabled()`/`getMonitorEnabled()` (NVS,
+  espace de noms `monitor`, clé `enabled`) ; lorsqu'elle est désactivée,
+  `serviceMonitor()` ne fait plus rien (aucun tick, aucun drainage de la
+  file différée).
+- **Intervalle de scan configurable de 5 minutes à 1 heure** (au lieu de
+  1-60 min libre) exposé dans l'interface — la borne API reste 1-60 min
+  côté `NetworkScanner::setMonitorInterval()`.
+- `GET /api/monitor` retourne désormais `{"enabled":bool,"intervalMinutes":int}`
+  (auparavant `{"intervalMinutes":int}` seul).
+- `POST /api/monitor` accepte désormais les paramètres optionnels `enabled`
+  (`1`/`0`/`true`/`false`) et `minutes`, et renvoie l'état appliqué des deux
+  réglages.
+- `GET /api/system/backup` inclut désormais `monitorEnabled` et
+  `monitorIntervalMinutes` dans la sauvegarde des paramètres de
+  fonctionnement ; `POST /api/system/restore` les restaure si présents.
+
+### Modifie
+
+- **Réorganisation de l'interface — page Système** : ajout d'une carte
+  « Surveillance automatique du réseau » (case d'activation + sélecteur
+  d'intervalle 5 min/10 min/15 min/30 min/1 h) et déplacement de la carte
+  « Sauvegarde / Restauration » des paramètres de fonctionnement
+  (`/api/system/backup`, `/api/system/restore`), auparavant sur la page
+  Équipements.
+- **Page Équipements** : le menu « Données ▾ » ne propose plus que
+  « Export CSV » (`/api/devices/export.csv`) et « Export JSON »
+  (`/api/backup`, sauvegarde de l'inventaire) — les actions Sauvegarde et
+  Restauration des paramètres de fonctionnement en ont été retirées (voir
+  ci-dessus).
+
+---
+
+## [1.0.0] - 2026-06-19
+
+> **Note (1.0.2)** : le comportement de mise en file automatique de passes
+> rapides/approfondies décrit ci-dessous a été retiré au Patch 2 — voir
+> [1.0.2](#102---patch-2---2026-06-19). La surveillance continue ne fait
+> plus que sonder la présence (ARP).
+
+### Ajoute
+
+- **Surveillance continue du réseau et score de stabilité** : la passerelle
+  passe d'un outil d'inventaire à scan manuel à un observateur permanent du
+  réseau.
+  - `NetworkScanner::serviceMonitor()` exécute, sans tâche FreeRTOS dédiée,
+    un sweep ARP léger à intervalle configurable (1 à 60 min, 5 min par
+    défaut, persisté en NVS) — jamais de SSDP/DNS-SD/WS-Discovery/SNMP ni
+    d'appel aux API fabricants, et la passe est sautée (puis retentée au
+    tour suivant) si un scan complet ou une passe précise est déjà en
+    cours.
+  - Un équipement inconnu détecté pendant la surveillance est immédiatement
+    ajouté à l'inventaire (« Identification en cours »), puis une passe
+    rapide est mise en file ; une passe approfondie suit si la confiance
+    reste sous 60 % ou si le type est toujours vide.
+  - Un équipement déjà connu qui réapparaît met simplement à jour
+    `lastSeenEpoch`/`seenCount` et journalise un évènement `"reconnected"`,
+    sans déclencher de scan.
+  - Un changement important (hostname, IP, fabricant, type, ou confiance
+    anormalement basse) met en file une passe rapide de rafraîchissement.
+  - Nouveaux types d'évènements d'historique : `"reconnected"`,
+    `"disappeared"`, `"identification_improved"`, `"mobile_left"`,
+    `"mobile_returned"`.
+  - Nouveaux compteurs de stabilité par équipement (persistés dans
+    `/devices.json`) : `presenceCount`, `absenceCount`,
+    `reconnectionCount`, `lastDisconnectEpoch`, `totalOnlineSeconds`,
+    `totalOfflineSeconds`, `mobilityOverride`, `mobileAwayNotified`.
+  - Score de stabilité (0-100 %) calculé pour les équipements fixes à
+    partir du ratio temps en ligne / hors ligne, pénalisé par la
+    fréquence de reconnexion ; les équipements mobiles renvoient `-1`
+    (« N/A — non pénalisé ») et ne sont jamais comptés dans les
+    statistiques de stabilité.
+  - Classification mobile/fixe automatique par catégorie/type
+    (smartphone, tablette, montre connectée, portable = mobile probable ;
+    NAS, imprimante, caméra, routeur, TV, enceinte, hub/maison
+    connectée, serveur, SBC, streaming = fixe probable), avec
+    possibilité de forcer manuellement via `setMobility()` /
+    `POST /api/mobility` (même logique que `setFavorite`/`setAlias`).
+  - Gestion dédiée des absences d'équipements mobiles : aucune pénalité
+    avant 30 min d'absence ; au-delà de 2h, évènement `"mobile_left"`
+    journalisé une seule fois, puis `"mobile_returned"` au retour.
+  - File d'attente différée (`_pendingQuickScan`/`_pendingDeepScan`),
+    dédupliquée et protégée par mutex, vidée une entrée à la fois pour
+    éviter toute tempête de scans.
+  - Nouvel indicateur de santé réseau exposé via `networkHealthToJson()`
+    et `GET /api/network/health` : équipements présents/connus, nouveaux
+    équipements/reconnexions/instabilités des dernières 24h, et
+    classement des équipements les moins stables.
+  - Nouvelles routes API : `POST /api/mobility`, `GET /api/network/health`,
+    `GET /api/monitor`, `POST /api/monitor` (lecture/écriture de la
+    fréquence de surveillance).
+
 ## [0.9.2] - 2026-06-19
 
 ### Corrige

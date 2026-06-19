@@ -31,6 +31,7 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>            // Diagnostics : espace utilise/libre
+#include <Preferences.h>         // Persistance NVS de la frequence de surveillance (namespace "monitor")
 #include "../../include/app_config.h"   // MDNS_HOSTNAME, PROJECT_NAME
 #include "lwip/etharp.h"   // etharp_get_entry(), etharp_request()
 #include "lwip/netif.h"    // netif_default
@@ -39,6 +40,9 @@
 #include "../utils/logger.h"
 
 static const char* TAG = "Scanner";
+static const char* MONITOR_NVS_NAMESPACE = "monitor";
+static const char* MONITOR_NVS_KEY       = "intervalMin";
+static const char* MONITOR_NVS_ENABLED_KEY = "enabled";
 
 // Instance globale exportée
 NetworkScanner netScanner;
@@ -1086,7 +1090,7 @@ void NetworkScanner::_classifyDevices() {
 // Met egalement a jour firstSeenEpoch/lastSeenEpoch/seenCount pour chaque
 // equipement vu en ligne lors de ce scan.
 // ---------------------------------------------------------------------------
-void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous) {
+void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous, bool allowRequeue) {
     uint32_t epoch = timeSync.nowEpoch();
 
     auto findPrev = [&](const NetworkDevice& d) -> const NetworkDevice* {
@@ -1110,6 +1114,7 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous) 
                 if (epoch > 0) d.firstSeenEpoch = epoch;
                 d.lastSeenEpoch = epoch;
                 d.seenCount     = 1;
+                d.presenceCount = 1;
                 deviceHistory.addEvent(d.mac, d.ip, label, "new");
             }
             continue;
@@ -1118,20 +1123,61 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous) 
         // Reporter l'historique deja connu (l'enricher/merge a pu creer une
         // nouvelle entree distincte sans recopier ces champs)
         if (d.firstSeenEpoch == 0) d.firstSeenEpoch = prev->firstSeenEpoch;
-        d.seenCount = prev->seenCount;
+        d.seenCount             = prev->seenCount;
+        d.presenceCount         = prev->presenceCount;
+        d.absenceCount          = prev->absenceCount;
+        d.reconnectionCount     = prev->reconnectionCount;
+        d.lastDisconnectEpoch   = prev->lastDisconnectEpoch;
+        d.totalOnlineSeconds    = prev->totalOnlineSeconds;
+        d.totalOfflineSeconds   = prev->totalOfflineSeconds;
+        d.mobilityOverride      = prev->mobilityOverride;
+        d.mobileAwayNotified    = prev->mobileAwayNotified;
+
+        int confBefore = 0;
+        String confLabelTmp;
+        if (!prev->online) confBefore = _confidenceFor(*prev, confLabelTmp);
+
+        bool mobile = _isMobileDevice(d);
 
         if (d.online) {
-            if (!prev->online)
-                deviceHistory.addEvent(d.mac, d.ip, label, "online");
+            if (!prev->online) {
+                // Reapparition - "reconnected" si l'equipement etait deja
+                // connu (au moins une presence anterieure), sinon "online"
+                // (comportement historique conserve pour ne pas casser les
+                // filtres existants de la vue chronologique).
+                if (prev->presenceCount > 0) {
+                    d.reconnectionCount = prev->reconnectionCount + 1;
+                    deviceHistory.addEvent(d.mac, d.ip, label, "reconnected");
+                    if (mobile && d.mobileAwayNotified) {
+                        d.mobileAwayNotified = false;
+                        deviceHistory.addEvent(d.mac, d.ip, label, "mobile_returned");
+                    }
+                } else {
+                    deviceHistory.addEvent(d.mac, d.ip, label, "online");
+                }
+            }
+            d.presenceCount = prev->presenceCount + 1;
             if (epoch > 0) d.lastSeenEpoch = epoch;
             else d.lastSeenEpoch = prev->lastSeenEpoch;
             d.seenCount = prev->seenCount + 1;
             if (d.firstSeenEpoch == 0 && epoch > 0) d.firstSeenEpoch = epoch;
 
+            // Cumul du temps hors ligne ecoule depuis la derniere deconnexion
+            // connue (uniquement si l'horloge est synchronisee des deux cotes,
+            // et si l'absence n'etait pas une absence mobile courte deja exclue
+            // du decompte par _monitorTick()).
+            if (!prev->online && epoch > 0 && prev->lastDisconnectEpoch > 0 &&
+                epoch > prev->lastDisconnectEpoch && !(mobile)) {
+                d.totalOfflineSeconds = prev->totalOfflineSeconds + (epoch - prev->lastDisconnectEpoch);
+            }
+
             // Detection des changements de champs significatifs
+            bool importantChange = false;
             auto checkChange = [&](const char* field, const String& oldV, const String& newV) {
-                if (!oldV.isEmpty() && !newV.isEmpty() && oldV != newV)
+                if (!oldV.isEmpty() && !newV.isEmpty() && oldV != newV) {
                     deviceHistory.addEvent(d.mac, d.ip, label, "changed", field, oldV, newV);
+                    importantChange = true;
+                }
             };
             checkChange("ip",           prev->ip,           d.ip);
             checkChange("manufacturer", prev->manufacturer, d.manufacturer);
@@ -1139,11 +1185,47 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous) 
             checkChange("type",         prev->type,          d.type);
             checkChange("hostname",     prev->hostname,      d.hostname);
             checkChange("openPorts",    prev->openPorts,     d.openPorts);
+
+            // Amelioration sensible de l'identification (>= 15 points) -
+            // journalisee independamment d'un "changed" de champ precis.
+            String confLabelAfter;
+            int confAfter = _confidenceFor(d, confLabelAfter);
+            if (prev->online) {
+                int confPrev = _confidenceFor(*prev, confLabelTmp);
+                if (confAfter - confPrev >= 15) {
+                    deviceHistory.addEvent(d.mac, d.ip, label, "identification_improved",
+                                           "confidence", String(confPrev), String(confAfter));
+                }
+                // Confiance redevenue anormalement basse, ou changement
+                // important detecte -> re-sondage via la file differee
+                // (rafraichissement rapide, jamais immediat depuis ce thread).
+                // allowRequeue est faux lorsque cet appel provient d'une passe
+                // precise (_runRescan) : un scan rapide ne recueille volontairement
+                // que peu d'informations et ne fera jamais remonter la confiance
+                // au-dessus de 35% pour certains profils — sans cette garde, la
+                // passe se remettrait elle-meme en file indefiniment.
+                if (allowRequeue && (importantChange || confAfter < 35)) {
+                    _queueQuickScanLocked(d.ip);
+                }
+            }
         } else if (prev->online) {
+            // Transition present -> absent
+            d.lastDisconnectEpoch = (epoch > 0) ? epoch : prev->lastDisconnectEpoch;
+            if (!mobile) {
+                d.absenceCount = prev->absenceCount + 1;
+            }
             deviceHistory.addEvent(d.mac, d.ip, label, "offline");
             d.lastSeenEpoch = prev->lastSeenEpoch;
         } else {
             d.lastSeenEpoch = prev->lastSeenEpoch;
+
+            // Absence prolongee d'un equipement mobile - cf. _monitorTick()
+            // pour la meme logique appliquee entre deux scans complets.
+            if (mobile && !d.mobileAwayNotified && d.lastDisconnectEpoch > 0 &&
+                epoch > 0 && (epoch - d.lastDisconnectEpoch) * 1000UL >= MOBILE_AWAY_LONG_MS) {
+                d.mobileAwayNotified = true;
+                deviceHistory.addEvent(d.mac, d.ip, label, "mobile_left");
+            }
         }
     }
     xSemaphoreGive(_mutex);
@@ -1222,7 +1304,21 @@ ScanStats NetworkScanner::getStats() const {
 void NetworkScanner::begin() {
     if (_mutex) return;   // Idempotent — guard contre la double initialisation
     _mutex = xSemaphoreCreateMutex();
-    Log::i(TAG, "Module initialisé");
+
+    // Restauration de la frequence de surveillance continue (NVS, namespace
+    // "monitor") — meme pattern que StatusLed::begin() pour la luminosite.
+    Preferences prefs;
+    prefs.begin(MONITOR_NVS_NAMESPACE, true);
+    uint8_t storedMinutes = prefs.getUChar(MONITOR_NVS_KEY, MONITOR_INTERVAL_DEFAULT_MINUTES);
+    bool    storedEnabled = prefs.getBool(MONITOR_NVS_ENABLED_KEY, true);
+    prefs.end();
+    if (storedMinutes < MONITOR_INTERVAL_MIN_MINUTES || storedMinutes > MONITOR_INTERVAL_MAX_MINUTES)
+        storedMinutes = MONITOR_INTERVAL_DEFAULT_MINUTES;
+    _monitorIntervalMinutes = storedMinutes;
+    _monitorEnabled         = storedEnabled;
+
+    Log::i(TAG, "Module initialisé — surveillance continue : %s, %u min",
+           _monitorEnabled ? "activee" : "desactivee", (unsigned)_monitorIntervalMinutes);
 }
 
 void NetworkScanner::startScan() {
@@ -1323,6 +1419,13 @@ String NetworkScanner::resultsToJson() const {
         String confLabel;
         obj["confidence"]      = _confidenceFor(d, confLabel);
         obj["confidenceLabel"] = confLabel;
+        // Surveillance continue / stabilite (v1.0.0)
+        obj["presenceCount"]     = d.presenceCount;
+        obj["absenceCount"]      = d.absenceCount;
+        obj["reconnectionCount"] = d.reconnectionCount;
+        obj["mobilityOverride"]  = d.mobilityOverride;
+        obj["isMobile"]          = _isMobileDevice(d);
+        obj["stabilityScore"]    = _stabilityScoreFor(d);
         // services : tableau JSON ["HTTP","SSH","SMB"] depuis la chaîne pipe-séparée
         JsonArray svcArr = obj["services"].to<JsonArray>();
         if (!d.services.isEmpty()) {
@@ -1791,7 +1894,7 @@ void NetworkScanner::_runRescan(const String& ip, bool deep) {
 
     _enrichDevices();
     _classifyDevices();
-    _updateHistory(previousState);
+    _updateHistory(previousState, /*allowRequeue=*/false);
     _saveToStore();
 
     // ── Journal des enrichissements ──────────────────────────────────────
@@ -2045,4 +2148,441 @@ String NetworkScanner::devicesToCsv() const {
         csv += String(d.seenCount)      + "\n";
     }
     return csv;
+}
+
+// ---------------------------------------------------------------------------
+// Surveillance continue du reseau et score de stabilite (v1.0.0)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Classification mobile/fixe — l'override utilisateur (mobilityOverride)
+// gagne toujours. A defaut, on infere depuis category/type : categories
+// typiquement portees sur soi ou facilement deplacees (smartphone, tablette,
+// montre connectee, portable) -> mobile ; categories typiquement fixes
+// (NAS, imprimante, camera, routeur, TV, enceinte, hub domotique, serveur,
+// SBC, streaming) -> fixe. Ambigu -> fixe (hypothese conservatrice : on
+// prefere signaler une instabilite reelle plutot que la masquer a tort).
+// ---------------------------------------------------------------------------
+bool NetworkScanner::_isMobileDevice(const NetworkDevice& d) {
+    if (d.mobilityOverride == "fixed")  return false;
+    if (d.mobilityOverride == "mobile") return true;
+
+    String cat = d.category; cat.toLowerCase();
+    String typ = d.type;     typ.toLowerCase();
+
+    auto has = [&](const char* needle) {
+        return cat.indexOf(needle) >= 0 || typ.indexOf(needle) >= 0;
+    };
+
+    if (has("mobile") || has("smartphone") || has("phone") ||
+        has("tablet") || has("tablette") || has("watch") ||
+        has("montre") || has("laptop") || has("portable"))
+        return true;
+
+    if (has("nas") || has("printer") || has("imprimante") ||
+        has("camera") || has("router") || has("routeur") ||
+        has("tv") || has("speaker") || has("enceinte") ||
+        has("smarthub") || has("smart hub") || has("smarthome") ||
+        has("smart home") || has("home automation") || has("server") ||
+        has("serveur") || has("sbc") || has("streaming") || has("gateway"))
+        return false;
+
+    // Categorie ambigue ou vide -> fixe par defaut (conservateur)
+    return false;
+}
+
+// ---------------------------------------------------------------------------
+// Score de stabilite 0-100% — uniquement pertinent pour les equipements fixes
+// (les mobiles ne sont jamais penalises, cf. spec : retour -1 = "N/A").
+//
+// Heuristique volontairement simple :
+//   - Historique trop court (< 1h observe au total) -> 100% par defaut,
+//     pas de penalite prematuree (on n'a pas encore assez d'information).
+//   - Sinon, ratio tempsEnLigne / tempsTotalObserve, exprime en %.
+//   - Penalite additionnelle proportionnelle a la frequence de reconnexion
+//     (plus de reconnexions par heure observee = equipement plus instable
+//     que ne le suggere le seul ratio de temps, ex: un routeur qui flappe
+//     toutes les 10 minutes mais reste online la plupart du temps).
+// ---------------------------------------------------------------------------
+int NetworkScanner::_stabilityScoreFor(const NetworkDevice& d) {
+    if (_isMobileDevice(d)) return -1;   // N/A — jamais penalise
+
+    uint32_t totalSeconds = d.totalOnlineSeconds + d.totalOfflineSeconds;
+    // Moins d'1h d'observation cumulee : pas assez d'historique pour juger
+    if (totalSeconds < 3600) return 100;
+
+    float ratio = (float)d.totalOnlineSeconds / (float)totalSeconds;   // 0..1
+    int base = (int)(ratio * 100.0f);
+
+    // Penalite reconnexions : -2 points par reconnexion/heure observee,
+    // plafonnee a -30 points pour ne jamais ecraser totalement le ratio.
+    float hours = totalSeconds / 3600.0f;
+    float reconnectsPerHour = hours > 0 ? (d.reconnectionCount / hours) : 0;
+    int penalty = (int)(reconnectsPerHour * 2.0f);
+    if (penalty > 30) penalty = 30;
+
+    int score = base - penalty;
+    if (score < 0)   score = 0;
+    if (score > 100) score = 100;
+    return score;
+}
+
+// ---------------------------------------------------------------------------
+// File d'attente differee (scan rapide / approfondi) — protegee par _mutex,
+// dedupliquee. Drainee par _drainPendingScans() une entree a la fois pour
+// eviter toute "tempete" de rescans simultanes.
+// ---------------------------------------------------------------------------
+void NetworkScanner::_queueQuickScanLocked(const String& ip) {
+    for (const auto& q : _pendingQuickScan) if (q == ip) return;
+    _pendingQuickScan.push_back(ip);
+}
+
+void NetworkScanner::_queueDeepScanLocked(const String& ip) {
+    for (const auto& q : _pendingDeepScan) if (q == ip) return;
+    _pendingDeepScan.push_back(ip);
+}
+
+void NetworkScanner::_drainPendingScans() {
+    if (_scanning) return;   // Mutuelle exclusion avec scan complet/rescan
+
+    String ip;
+    bool deep = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    if (!_pendingQuickScan.empty()) {
+        ip = _pendingQuickScan.front();
+        _pendingQuickScan.erase(_pendingQuickScan.begin());
+        deep = false;
+    } else if (!_pendingDeepScan.empty()) {
+        ip = _pendingDeepScan.front();
+        _pendingDeepScan.erase(_pendingDeepScan.begin());
+        deep = true;
+    }
+    xSemaphoreGive(_mutex);
+
+    if (ip.isEmpty()) return;   // Rien a drainer ce tick
+
+    // Une seule passe demarree par drain — evite les tempetes de rescans.
+    // rescanDevice() refuse lui-meme si _scanning est devenu vrai entre-temps.
+    rescanDevice(ip, deep);
+}
+
+// ---------------------------------------------------------------------------
+// Tick de surveillance continue — sweep ARP seul + mise a jour de presence/
+// absence/compteurs de stabilite. Jamais de SSDP/DNS-SD/WS-Discovery/SNMP/API
+// ici : uniquement ARP (deja implemente par _sweepSubnet(), reutilise as-is).
+// ---------------------------------------------------------------------------
+void NetworkScanner::_monitorTick() {
+    // Etat de reference avant le tick — pour detecter les transitions
+    std::vector<NetworkDevice> previousState;
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        previousState = _results;
+        xSemaphoreGive(_mutex);
+    }
+
+    // Sweep ARP-only (3 passes, identique au scan complet) — reutilise
+    // tel quel, aucune nouvelle decouverte de service.
+    _sweepSubnet();
+
+    uint32_t epoch  = timeSync.nowEpoch();
+    uint32_t nowMs  = millis();
+
+    auto findPrev = [&](const NetworkDevice& d) -> const NetworkDevice* {
+        for (const auto& p : previousState) {
+            if ((!d.mac.isEmpty() && p.mac == d.mac) ||
+                (d.mac.isEmpty() && p.ip == d.ip))
+                return &p;
+        }
+        return nullptr;
+    };
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        const NetworkDevice* prev = findPrev(d);
+        bool wasOnline    = prev ? prev->online : false;
+        bool isNewDevice  = (prev == nullptr);
+        String label = !d.alias.isEmpty() ? d.alias :
+                       (!d.hostname.isEmpty() ? d.hostname : d.ip);
+        bool mobile = _isMobileDevice(d);
+
+        // Report des compteurs deja connus (le sweep ARP peut avoir recree
+        // une entree sans recopier ces champs lui-meme)
+        if (prev) {
+            d.presenceCount       = prev->presenceCount;
+            d.absenceCount        = prev->absenceCount;
+            d.reconnectionCount   = prev->reconnectionCount;
+            d.lastDisconnectEpoch = prev->lastDisconnectEpoch;
+            d.totalOnlineSeconds  = prev->totalOnlineSeconds;
+            d.totalOfflineSeconds = prev->totalOfflineSeconds;
+            d.mobileAwayNotified  = prev->mobileAwayNotified;
+            if (d.mobilityOverride.isEmpty()) d.mobilityOverride = prev->mobilityOverride;
+        }
+
+        if (isNewDevice) {
+            // Nouvel equipement jamais vu — point 2 de la spec : etat
+            // "Identification en cours". Aucun scan automatique declenche ici :
+            // la surveillance continue se limite a la presence (ARP), l'identification
+            // approfondie reste a l'initiative de l'utilisateur (scan complet ou rescan manuel).
+            if (d.online) {
+                if (epoch > 0) d.firstSeenEpoch = epoch;
+                d.lastSeenEpoch = epoch;
+                d.seenCount     = 1;
+                d.presenceCount = 1;
+                if (d.category.isEmpty()) d.category = "Identification en cours";
+                deviceHistory.addEvent(d.mac, d.ip, label, "new");
+            }
+            continue;
+        }
+
+        if (d.online && !wasOnline) {
+            // Reapparition — point 3 : equipement connu qui revient
+            d.presenceCount++;
+            d.seenCount = prev->seenCount + 1;
+            if (epoch > 0) d.lastSeenEpoch = epoch;
+            if (d.firstSeenEpoch == 0 && epoch > 0) d.firstSeenEpoch = epoch;
+
+            bool wasAwayLong = mobile && d.mobileAwayNotified;
+            if (wasAwayLong) {
+                // Retour d'un mobile signale comme longuement absent
+                deviceHistory.addEvent(d.mac, d.ip, label, "mobile_returned");
+                d.mobileAwayNotified = false;
+            } else if (mobile && d.lastDisconnectEpoch > 0 && epoch > 0 &&
+                       (epoch - d.lastDisconnectEpoch) * 1000UL < MOBILE_AWAY_SHORT_MS) {
+                // Absence courte d'un mobile — pas de penalite, pas d'evenement bruyant
+                deviceHistory.addEvent(d.mac, d.ip, label, "reconnected");
+            } else {
+                // Reconnexion "normale" (fixe, ou mobile absent moyennement longtemps)
+                d.reconnectionCount++;
+                deviceHistory.addEvent(d.mac, d.ip, label, "reconnected");
+            }
+
+            // Cumul du temps hors ligne ecoule depuis la derniere deconnexion
+            // (sauf absence mobile courte, deja exclue de la penalite ci-dessus
+            // au niveau evenement — on cumule neanmoins le temps reel observe
+            // pour les equipements fixes, qui doivent rester comparables)
+            if (!mobile && epoch > 0 && d.lastDisconnectEpoch > 0 && epoch > d.lastDisconnectEpoch) {
+                d.totalOfflineSeconds += (epoch - d.lastDisconnectEpoch);
+            }
+
+            // Changement de champ important detecte sur cette reapparition —
+            // signale a titre informatif uniquement : la surveillance continue
+            // ne declenche plus de scan automatique (presence ARP seule).
+
+        } else if (d.online && wasOnline) {
+            // Toujours en ligne — cumul du temps en ligne depuis le dernier tick
+            d.seenCount = prev->seenCount + 1;
+            if (epoch > 0) d.lastSeenEpoch = epoch;
+            if (!mobile && epoch > 0 && prev->lastSeenEpoch > 0 && epoch > prev->lastSeenEpoch) {
+                d.totalOnlineSeconds += (epoch - prev->lastSeenEpoch);
+            }
+
+            // Identification ameliorée : confiance en hausse significative
+            // (suivi informatif uniquement — aucun scan approfondi automatique :
+            // celui-ci reste a l'initiative de l'utilisateur)
+            String labelBefore, labelAfter;
+            int confBefore = _confidenceFor(*prev, labelBefore);
+            int confAfter  = _confidenceFor(d, labelAfter);
+            if (confAfter - confBefore >= 15) {
+                deviceHistory.addEvent(d.mac, d.ip, label, "identification_improved", "confidence",
+                                        String(confBefore) + "%", String(confAfter) + "%");
+            }
+
+            d.lastDisconnectEpoch = 0;   // Toujours en ligne — pas de deconnexion en cours
+
+        } else if (!d.online && wasOnline) {
+            // Passage hors ligne — point 9 : traitement special mobile
+            d.lastDisconnectEpoch = epoch;
+
+            if (mobile) {
+                // Absence courte (<30 min) : aucune penalite, aucun evenement bruyant
+                uint32_t awayMs = (prev->lastSeen > 0) ? (nowMs - prev->lastSeen) : 0;
+                if (awayMs >= MOBILE_AWAY_LONG_MS && !d.mobileAwayNotified) {
+                    String who = !d.alias.isEmpty() ? d.alias : (!d.hostname.isEmpty() ? d.hostname : d.ip);
+                    deviceHistory.addEvent(d.mac, d.ip, label, "mobile_left", "", "", who + " a quitte le reseau");
+                    d.mobileAwayNotified = true;
+                }
+                // awayMs entre 30min et 2h : silence total (ni penalite, ni evenement)
+            } else {
+                d.absenceCount++;
+                deviceHistory.addEvent(d.mac, d.ip, label, "disappeared");
+            }
+        } else {
+            // Toujours hors ligne — cumul du temps hors ligne pour les fixes,
+            // sauf si l'absence mobile est encore "courte" (pas de penalite)
+            if (!mobile && epoch > 0 && prev->lastSeenEpoch > 0) {
+                // On cumule uniquement depuis le dernier tick (pas depuis la
+                // deconnexion initiale, deja comptee au moment de la transition)
+            }
+            d.lastSeenEpoch = prev->lastSeenEpoch;
+
+            if (mobile && !d.mobileAwayNotified) {
+                uint32_t awayMs = (prev->lastSeen > 0) ? (nowMs - prev->lastSeen) : 0;
+                if (awayMs >= MOBILE_AWAY_LONG_MS) {
+                    String who = !d.alias.isEmpty() ? d.alias : (!d.hostname.isEmpty() ? d.hostname : d.ip);
+                    deviceHistory.addEvent(d.mac, d.ip, label, "mobile_left", "", "", who + " a quitte le reseau");
+                    d.mobileAwayNotified = true;
+                }
+            }
+        }
+    }
+    xSemaphoreGive(_mutex);
+
+    _saveToStore();
+    _lastMonitorTickMs = nowMs;
+}
+
+void NetworkScanner::serviceMonitor() {
+    if (!_monitorEnabled) return;   // Surveillance continue desactivee par l'utilisateur
+
+    uint32_t intervalMs = _monitorIntervalMinutes * 60UL * 1000UL;
+    uint32_t nowMs = millis();
+
+    // Premier appel ou intervalle ecoule ?
+    bool due = (_lastMonitorTickMs == 0) || (nowMs - _lastMonitorTickMs >= intervalMs);
+    if (due) {
+        if (_scanning) {
+            // Scan complet ou rescan en cours — on saute ce tick. On reporte
+            // l'echeance d'un intervalle complet (comme pour le mode degrade
+            // ci-dessous) plutot que de relancer le tick aussitot le scan en
+            // cours termine : sans cela, le scan automatique au demarrage
+            // (souvent long, dizaines de secondes) declenche un sweep ARP
+            // de surveillance qui ressemble a un second scan complet juste
+            // apres la fin du premier.
+            Log::d(TAG, "Surveillance continue : tick ignore (scan en cours)");
+            _lastMonitorTickMs = nowMs;
+        } else if (systemHealth.isDegraded()) {
+            Log::w(TAG, "Surveillance continue refusee — mode degrade (%s)", systemHealth.reason().c_str());
+            _lastMonitorTickMs = nowMs;   // Evite de boucler en continu en mode degrade
+        } else {
+            _monitorTick();
+        }
+    }
+
+    // Drainage de la file d'attente differee — une seule entree par appel
+    _drainPendingScans();
+}
+
+void NetworkScanner::setMonitorInterval(int minutes) {
+    if (minutes < MONITOR_INTERVAL_MIN_MINUTES) minutes = MONITOR_INTERVAL_MIN_MINUTES;
+    if (minutes > MONITOR_INTERVAL_MAX_MINUTES) minutes = MONITOR_INTERVAL_MAX_MINUTES;
+    _monitorIntervalMinutes = (uint32_t)minutes;
+
+    Preferences prefs;
+    prefs.begin(MONITOR_NVS_NAMESPACE, false);
+    prefs.putUChar(MONITOR_NVS_KEY, (uint8_t)minutes);
+    prefs.end();
+    Log::i(TAG, "Frequence de surveillance continue : %d min", minutes);
+}
+
+int NetworkScanner::getMonitorInterval() const {
+    return (int)_monitorIntervalMinutes;
+}
+
+void NetworkScanner::setMonitorEnabled(bool enabled) {
+    _monitorEnabled = enabled;
+
+    Preferences prefs;
+    prefs.begin(MONITOR_NVS_NAMESPACE, false);
+    prefs.putBool(MONITOR_NVS_ENABLED_KEY, enabled);
+    prefs.end();
+    Log::i(TAG, "Surveillance continue : %s", enabled ? "activee" : "desactivee");
+}
+
+bool NetworkScanner::getMonitorEnabled() const {
+    return _monitorEnabled;
+}
+
+bool NetworkScanner::setMobility(const String& macOrIp, const String& mode) {
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Modification de mobilite refusee — mode degrade (%s)", systemHealth.reason().c_str());
+        return false;
+    }
+    if (mode != "" && mode != "fixed" && mode != "mobile") return false;
+
+    bool found = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+            d.mobilityOverride = mode;
+            found = true;
+            break;
+        }
+    }
+    xSemaphoreGive(_mutex);
+    if (found) _saveToStore();
+    return found;
+}
+
+// ---------------------------------------------------------------------------
+// Donnees de sante reseau pour le tableau de bord — calcule les compteurs
+// des 24 dernieres heures depuis l'historique, et identifie les equipements
+// les moins stables (5 equipements fixes au score le plus bas, hors mobiles
+// jamais penalises). Choix documente : on retient les 5 scores les plus bas
+// sans seuil minimum, meme si tous sont >=90 — utile pour suivre la tendance
+// meme sur un reseau globalement sain.
+// ---------------------------------------------------------------------------
+String NetworkScanner::networkHealthToJson() const {
+    std::vector<NetworkDevice> copy;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    copy = _results;
+    xSemaphoreGive(_mutex);
+
+    int presentCount = 0;
+    int knownCount    = 0;
+    for (const auto& d : copy) {
+        if (d.ip.isEmpty() && d.mac.isEmpty()) continue;
+        knownCount++;
+        if (d.online) presentCount++;
+    }
+
+    // Compteurs 24h depuis l'historique
+    uint32_t nowEpoch = timeSync.nowEpoch();
+    uint32_t dayAgo    = (nowEpoch > 86400) ? (nowEpoch - 86400) : 0;
+    int newDevices24h     = 0;
+    int reconnections24h  = 0;
+    int unstableDevices24h = 0;
+    if (nowEpoch > 0) {
+        auto entries = deviceHistory.load(0);
+        for (const auto& e : entries) {
+            if (e.epoch == 0 || e.epoch < dayAgo) continue;
+            if (e.event == "new")             newDevices24h++;
+            else if (e.event == "reconnected") reconnections24h++;
+            // "offline" (scan complet) et "disappeared" (surveillance continue)
+            // designent le meme type de transition presence->absence
+            else if (e.event == "disappeared" || e.event == "offline") unstableDevices24h++;
+        }
+    }
+
+    // Equipements les moins stables (fixes uniquement — mobiles jamais penalises)
+    struct ScoredDevice { String label; int score; };
+    std::vector<ScoredDevice> scored;
+    for (const auto& d : copy) {
+        if (d.ip.isEmpty() && d.mac.isEmpty()) continue;
+        int score = _stabilityScoreFor(d);
+        if (score < 0) continue;   // Mobile — exclu du classement
+        String label = !d.alias.isEmpty() ? d.alias : (!d.hostname.isEmpty() ? d.hostname : d.ip);
+        scored.push_back({ label, score });
+    }
+    std::sort(scored.begin(), scored.end(), [](const ScoredDevice& a, const ScoredDevice& b) {
+        return a.score < b.score;
+    });
+    constexpr size_t LEAST_STABLE_COUNT = 5;
+
+    JsonDocument doc;
+    doc["presentCount"] = presentCount;
+    doc["knownCount"]   = knownCount;
+    JsonObject last24h = doc["last24h"].to<JsonObject>();
+    last24h["newDevices"]      = newDevices24h;
+    last24h["reconnections"]   = reconnections24h;
+    last24h["unstableDevices"] = unstableDevices24h;
+    JsonArray leastStable = doc["leastStable"].to<JsonArray>();
+    for (size_t i = 0; i < scored.size() && i < LEAST_STABLE_COUNT; i++) {
+        JsonObject o = leastStable.add<JsonObject>();
+        o["label"] = scored[i].label;
+        o["score"] = scored[i].score;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    return json;
 }

@@ -18,6 +18,13 @@
 #define HEAP_CRITICAL_BYTES   20000   // Sous ce seuil : mode dégradé (pas de redémarrage auto)
 #define HEAP_RECOVERY_MARGIN  10000   // Hystérésis : sortie du mode dégradé au-delà de CRITICAL+marge
 
+// Surveillance continue (NetworkScanner::serviceMonitor) — v1.0.0
+#define MONITOR_INTERVAL_MIN_MINUTES   1     // Borne basse de la frequence configurable
+#define MONITOR_INTERVAL_MAX_MINUTES   60    // Borne haute de la frequence configurable
+#define MONITOR_INTERVAL_DEFAULT_MINUTES 5   // Frequence par defaut (1er demarrage)
+#define MOBILE_AWAY_SHORT_MS  (30UL * 60UL * 1000UL)   // 30 min : absence courte, pas de penalite de stabilite
+#define MOBILE_AWAY_LONG_MS   (2UL * 60UL * 60UL * 1000UL)  // 2h : absence longue, evenement "mobile_left"
+
 // Features
 #define ENABLE_OTA
 #define ENABLE_WEB_SERVER
