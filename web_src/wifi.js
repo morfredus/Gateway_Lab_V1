@@ -108,6 +108,66 @@ ledBrightnessInput.addEventListener('change', function() {
   fetch('/api/led/brightness', { method: 'POST', body: fd }).catch(function() {});
 });
 
+// ── Surveillance automatique du réseau ─────────────────────────────────
+function refreshMonitor() {
+  fetch('/api/monitor', { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(d) {
+    document.getElementById('monitor-enabled').checked = !!d.enabled;
+    if (d.intervalMinutes) document.getElementById('monitor-interval').value = d.intervalMinutes;
+  }).catch(function() {});
+}
+
+function saveMonitor() {
+  var msg     = document.getElementById('monitor-msg');
+  var enabled = document.getElementById('monitor-enabled').checked;
+  var minutes = document.getElementById('monitor-interval').value;
+
+  var fd = new FormData();
+  fd.append('enabled', enabled ? '1' : '0');
+  fd.append('minutes', minutes);
+
+  fetch('/api/monitor', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      msg.style.color = d.status === 'ok' ? '#10b981' : '#ef4444';
+      msg.textContent = d.status === 'ok' ? 'Réglages enregistrés.' : 'Erreur : ' + (d.error || 'inconnue');
+    })
+    .catch(function() {
+      msg.style.color = '#ef4444';
+      msg.textContent = 'Erreur réseau.';
+    });
+}
+
+document.getElementById('monitor-enabled').addEventListener('change', saveMonitor);
+document.getElementById('monitor-interval').addEventListener('change', saveMonitor);
+
+// ── Sauvegarde / Restauration des paramètres ───────────────────────────
+function triggerRestore() {
+  document.getElementById('restore-file').click();
+}
+
+document.getElementById('restore-file').addEventListener('change', function() {
+  var input = this;
+  var msg   = document.getElementById('restore-msg');
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    msg.style.display = 'block';
+    msg.textContent = 'Restauration des paramètres en cours...';
+    fetch('/api/system/restore', { method: 'POST', body: reader.result })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        msg.textContent = d.status === 'ok'
+          ? 'Paramètres restaurés (' + d.networksRestored + ' réseau(x) WiFi).'
+          : 'Erreur : ' + (d.error || 'inconnue');
+        refreshLedBrightness();
+        refreshMonitor();
+      })
+      .catch(function() { msg.textContent = 'Erreur de connexion.'; });
+  };
+  reader.readAsText(input.files[0], 'UTF-8');
+  input.value = '';
+});
+
 function fmtBytes(b) {
   if (b === undefined || b === null) return '—';
   if (b < 1024) return b + ' o';
@@ -223,5 +283,6 @@ function waitForOtaReboot() {
 refreshWifiStatus();
 refreshLedBrightness();
 refreshHealth();
+refreshMonitor();
 setInterval(refreshWifiStatus, 10000);
 setInterval(refreshHealth, 10000);

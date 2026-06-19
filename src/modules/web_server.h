@@ -18,7 +18,8 @@
  *   POST /api/restore   — Restauration depuis une sauvegarde JSON
  *   GET  /api/devices/export.csv — Telechargement de l'inventaire au format CSV
  *   GET  /api/system/backup  — Sauvegarde des parametres de fonctionnement (JSON) :
- *                              reseaux WiFi enregistres, luminosite NeoPixel, nom mDNS
+ *                              reseaux WiFi enregistres, luminosite NeoPixel, nom mDNS,
+ *                              etat et frequence de la surveillance automatique
  *   POST /api/system/restore — Restauration des parametres de fonctionnement depuis une
  *                              sauvegarde JSON generee par /api/system/backup
  *   POST /api/favorite  — Marque/demarque un equipement comme favori
@@ -33,6 +34,10 @@
  *   DELETE /api/wifi    — Supprime un reseau enregistre (parametre ssid)
  *   GET  /update       — Page de mise à jour OTA (formulaire upload)
  *   POST /update       — Réception et installation d'un firmware .bin
+ *   POST /api/mobility — Force/efface la classification mobile/fixe d'un equipement
+ *   GET  /api/network/health — Tableau de bord reseau (presents/connus, 24h, moins stables)
+ *   GET  /api/monitor  — Etat de la surveillance continue (activee + frequence en minutes)
+ *   POST /api/monitor  — Definit l'etat de la surveillance continue (parametres enabled, minutes 1-60)
  *
  * Découplage via ScanProvider :
  *   WebServerModule ne connaît pas NetworkScanner directement.
@@ -67,6 +72,14 @@ struct ScanProvider {
     std::function<bool(const String& macOrIp, uint32_t ts)> deleteNote;             // Supprime une note par timestamp
     std::function<String()> getDiagnosticsJson;   // Heap/PSRAM/LittleFS/temps de scan en JSON
     std::function<void()>   acknowledgeNewDevices; // Acquitte les nouveaux equipements (visite de /scan)
+
+    // Surveillance continue / score de stabilite (v1.0.0)
+    std::function<bool(const String& macOrIp, const String& mode)> setMobility;   // "", "fixed" ou "mobile"
+    std::function<String()> getNetworkHealthJson;     // Tableau de bord reseau en JSON
+    std::function<int()>    getMonitorInterval;       // Frequence courante (minutes)
+    std::function<void(int minutes)> setMonitorInterval; // Definit la frequence (1-60 min), persistee NVS
+    std::function<bool()>   getMonitorEnabled;         // Surveillance continue activee ?
+    std::function<void(bool enabled)> setMonitorEnabled; // Active/desactive la surveillance continue, persistee NVS
 };
 
 class WebServerModule {
@@ -103,6 +116,10 @@ private:
     void _handleApiWifiDelete();    // Supprime un reseau enregistre
     void _handleApiSystemBackup();  // Sauvegarde des parametres de fonctionnement (JSON)
     void _handleApiSystemRestore(); // Restaure les parametres de fonctionnement depuis JSON
+    void _handleApiSetMobility();   // Force/efface la classification mobile/fixe d'un equipement
+    void _handleApiNetworkHealth(); // Tableau de bord reseau (presents/connus, 24h, moins stables)
+    void _handleApiMonitorGet();    // Frequence courante de la surveillance continue
+    void _handleApiMonitorPost();   // Definit la frequence de la surveillance continue
     void _handleNotFound();         // Réponse 404 pour les routes inconnues
 
     ScanProvider _scan;

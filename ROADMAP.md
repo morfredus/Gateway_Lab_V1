@@ -80,13 +80,10 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 
 ### v1.0.0 — Gateway réseau complète
 
-* Inventaire réseau avancé
-* Découverte multi-protocoles
+* ~~Surveillance continue du réseau et score de stabilité~~ ✅ v1.0.0
 * Cartographie réseau
-* Historique persistant
 * Intégrations domotiques
-* Export et API
-* Interface web unifiée
+* Interface web unifiée (tableau de bord dédié à la surveillance continue)
 
 ---
 
@@ -133,3 +130,8 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v0.9.0  | Scan précis en deux passes (rapide / approfondi), orienté profil d'équipement déduit (Computer, NAS, Printer, Mobile, Streaming, SmartHome, Network, IoT, Unknown) ; journal d'enrichissement affiché en fin de passe |
 | v0.9.1  | Correction de la passe précise : suppression de SSDP/DNS-SD/WS-Discovery (protocoles multicast non ciblables) du scan approfondi, qui interroge désormais uniquement l'IP visée (scan de ports dédié `kRescanTargetPorts`, arrêt immédiat si aucun service exploitable, modules ciblés selon le profil déduit des ports) ; fingerprint HTTP enrichi (`<title>`, API Synology/Hue) |
 | v0.9.2  | Correction de l'export CSV (`/api/devices/export.csv`) : la colonne hostname utilisait une chaîne multi-lignes (UI), ce qui répartissait les informations d'un équipement sur plusieurs lignes physiques ; `csvField()` aplatit désormais systématiquement tout retour à la ligne en espace, garantissant un équipement = une ligne |
+| v1.0.0  | Surveillance continue du réseau et score de stabilité : sweep ARP léger périodique (`serviceMonitor()`, 1-60 min, persisté NVS), identification automatique différée des nouveaux équipements (file rapide/approfondie), compteurs de présence/absence/reconnexion, score de stabilité 0-100% pour les équipements fixes, classification mobile/fixe automatique avec override manuel (`POST /api/mobility`), nouveaux évènements d'historique (`reconnected`, `disappeared`, `identification_improved`, `mobile_left`, `mobile_returned`), tableau de bord réseau (`GET /api/network/health`) |
+| v1.0.0  | Surveillance continue du réseau (sweep ARP léger configurable 1-60 min, sans tâche FreeRTOS dédiée) et score de stabilité par équipement (0-100 %, mobiles exclus) ; classification mobile/fixe automatique + override manuel (`setMobility`) ; gestion des absences mobiles (`mobile_left`/`mobile_returned`) ; file de scans différés ; nouvel indicateur de santé réseau (`/api/network/health`) et endpoints `/api/mobility`, `/api/monitor` |
+| v1.0.1 (Patch 1) | Activation/désactivation de la surveillance automatique du réseau et intervalle configurable de 5 min à 1 h depuis la page Système (`GET`/`POST /api/monitor` étendus au champ `enabled`), réglage inclus dans la sauvegarde des paramètres de fonctionnement (`monitorEnabled`/`monitorIntervalMinutes`) ; déplacement de la carte Sauvegarde/Restauration des paramètres vers la page Système ; page Équipements recentrée sur Export CSV / Export JSON uniquement |
+| v1.0.2 (Patch 2) | Correction : la surveillance continue mettait automatiquement en file des passes rapides/approfondies (nouvel équipement, changement de champ, confiance faible), draînées à chaque itération de `loop()` indépendamment de l'intervalle configuré — la surveillance se limite désormais strictement à la détection de présence ARP, tout scan approfondi restant à l'initiative explicite de l'utilisateur |
+| v1.0.3 (Patch 3) | Correction du scan complet qui semblait se relancer en boucle au démarrage (tick de surveillance immédiatement "dû" dès la fin du scan initial, faute d'horodatage lors d'un tick sauté) ; correction de la boucle infinie de passes précises sur un même petit groupe d'équipements (un scan rapide se remettait lui-même en file indéfiniment dès que la confiance restait sous 35 %, seuil qu'il ne peut volontairement jamais dépasser) |

@@ -22,6 +22,7 @@
 #pragma once
 #include <Arduino.h>
 #include <vector>
+#include "../../include/app_config.h"   // MONITOR_INTERVAL_*, MOBILE_AWAY_*
 
 struct PortScanResult;   // Defini dans port_scanner.h
 struct NetBiosInfo;      // Defini dans netbios_scanner.h
@@ -88,6 +89,16 @@ struct NetworkDevice {
 
     bool     favorite = false;        // Equipement marque comme favori par l'utilisateur
     std::vector<DeviceNote> notes;    // Notes libres datees, saisies par l'utilisateur
+
+    // Surveillance continue / score de stabilite (v1.0.0) ------------------
+    uint32_t presenceCount       = 0;   // Nombre de transitions absent -> present (presence tick/scan)
+    uint32_t absenceCount        = 0;   // Nombre de transitions present -> absent (hors penalite mobile courte)
+    uint32_t reconnectionCount   = 0;   // Nombre de reconnexions (present -> absent -> present)
+    uint32_t lastDisconnectEpoch = 0;   // Epoch NTP de la derniere deconnexion detectee (0 = inconnu)
+    uint32_t totalOnlineSeconds  = 0;   // Cumul du temps observe en ligne (epoch deltas)
+    uint32_t totalOfflineSeconds = 0;   // Cumul du temps observe hors ligne (epoque deltas, hors absences mobiles courtes)
+    String   mobilityOverride;          // "" = auto-detection, "fixed" ou "mobile" (force par l'utilisateur)
+    bool     mobileAwayNotified  = false; // true si l'evenement "mobile_left" a deja ete journalise pour l'absence en cours
 
     uint32_t lastSeen;      // millis() du dernier scan — converti en elapsed côté client
     bool     online;        // true si détecté lors du dernier scan
@@ -185,6 +196,38 @@ public:
     // Acquitte les nouveaux equipements (visite de la page /scan) - remet hasNewDevices() a false
     void acknowledgeNewDevices();
 
+    // ------------------------------------------------------------------
+    // Surveillance continue (v1.0.0) — Niveau 1
+    // ------------------------------------------------------------------
+
+    // A appeler a chaque iteration de loop() — gere elle-meme la frequence
+    // (millis(), bornee par getMonitorInterval()). Tick leger : sweep ARP
+    // seul (_sweepSubnet()) + mise a jour de presence/absence + bookkeeping
+    // stabilite. Aucune decouverte SSDP/DNS-SD/WS-Discovery/SNMP/API n'est
+    // jamais lancee depuis cette methode. Ignore le tick si un scan complet
+    // ou une passe precise est en cours (_scanning) - retente au tick suivant.
+    // Draine egalement une entree de la file d'attente differee (scan rapide
+    // ou approfondi) si aucun scan n'est en cours.
+    void serviceMonitor();
+
+    // Frequence du tick de surveillance, en minutes (1-60) - persiste en NVS
+    void setMonitorInterval(int minutes);
+    int  getMonitorInterval() const;
+
+    // Active/desactive la surveillance continue - persiste en NVS. Quand
+    // desactivee, serviceMonitor() ne fait plus rien (aucun tick, aucun
+    // drainage de la file differee).
+    void setMonitorEnabled(bool enabled);
+    bool getMonitorEnabled() const;
+
+    // Force/annule la classification mobile/fixe d'un equipement
+    // ("", "fixed", "mobile") - retourne false si introuvable
+    bool setMobility(const String& macOrIp, const String& mode);
+
+    // Donnees de sante reseau pour le tableau de bord (compteurs 24h,
+    // equipements presents/connus, equipements les moins stables)
+    String networkHealthToJson() const;
+
 private:
     // Point d'entrée de la tâche FreeRTOS (signature imposée par xTaskCreate)
     static void _task(void* self);
@@ -270,8 +313,11 @@ private:
     void _classifyDevices();
 
     // Met a jour firstSeen/lastSeen/seenCount et journalise les nouveautes/changements
-    // detectes par rapport a l'etat precedent (avant le merge du scan courant)
-    void _updateHistory(const std::vector<NetworkDevice>& previous);
+    // detectes par rapport a l'etat precedent (avant le merge du scan courant).
+    // allowRequeue=false depuis une passe precise (_runRescan) : evite qu'un
+    // equipement dont la confiance reste durablement < 35% (cas frequent pour
+    // un scan rapide, volontairement minimal) se re-mette en file a l'infini.
+    void _updateHistory(const std::vector<NetworkDevice>& previous, bool allowRequeue = true);
 
     // Deduit l'OS depuis la valeur TTL ICMP et l'injecte dans os (si vide)
     static String _osFromTtl(uint8_t ttl);
@@ -279,6 +325,38 @@ private:
     // Calcule un score de confiance (0-100) et son libelle pour l'UI -
     // explique a l'utilisateur quelle source a permis l'identification
     static int _confidenceFor(const NetworkDevice& d, String& label);
+
+    // ------------------------------------------------------------------
+    // Surveillance continue / stabilite (v1.0.0)
+    // ------------------------------------------------------------------
+
+    // Sweep ARP leger + mise a jour presence/absence/compteurs de stabilite
+    // pour tous les equipements connus. Appele par serviceMonitor() - jamais
+    // de SSDP/DNS-SD/SNMP/API ici. Detecte aussi les equipements inconnus
+    // (nouvelles entrees ARP) et les place en file d'attente de scan rapide.
+    void _monitorTick();
+
+    // Deduit si l'equipement est probablement mobile (smartphone, tablette,
+    // montre connectee, portable) a partir de mobilityOverride (priorite) ou
+    // de category/type. Par defaut, considere l'equipement comme fixe
+    // (hypothese conservatrice : ne jamais escamoter une instabilite reelle).
+    static bool _isMobileDevice(const NetworkDevice& d);
+
+    // Score de stabilite 0-100% pour les equipements fixes (ratio temps en
+    // ligne / temps observe total, attenue par les reconnexions frequentes ;
+    // 100 par defaut si l'historique est encore trop court pour juger).
+    // Retourne -1 ("N/A — non penalise") pour les equipements mobiles.
+    static int _stabilityScoreFor(const NetworkDevice& d);
+
+    // Met en file d'attente differee un scan rapide/approfondi sur une IP
+    // (deduplique) - draine par serviceMonitor() quand _scanning est libre.
+    // Appele avec _mutex deja acquis.
+    void _queueQuickScanLocked(const String& ip);
+    void _queueDeepScanLocked(const String& ip);
+
+    // Draine une seule entree de la file d'attente differee (scan rapide en
+    // priorite, puis approfondi) - ne fait rien si un scan est deja en cours.
+    void _drainPendingScans();
 
     SemaphoreHandle_t           _mutex        = nullptr;
     TaskHandle_t                _taskHandle   = nullptr;
@@ -296,6 +374,13 @@ private:
     uint32_t _lastRescanMs    = 0;
     uint32_t _rescanMsTotal   = 0;
     uint32_t _rescanCount     = 0;
+
+    // Surveillance continue (v1.0.0) - proteges par _mutex sauf mention contraire
+    uint32_t _monitorIntervalMinutes = MONITOR_INTERVAL_DEFAULT_MINUTES;  // Lu/ecrit via NVS, hors mutex (idem status_led)
+    bool     _monitorEnabled         = true;  // Lu/ecrit via NVS, hors mutex (idem status_led)
+    uint32_t _lastMonitorTickMs      = 0;     // millis() du dernier tick execute (0 = jamais)
+    std::vector<String>          _pendingQuickScan;   // File d'attente differee (IP), dedupliquee
+    std::vector<String>          _pendingDeepScan;    // File d'attente differee (IP), dedupliquee
 };
 
 // Instance globale

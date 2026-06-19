@@ -477,32 +477,6 @@ function toggleDataMenu() {
   document.getElementById('data-menu-list').classList.toggle('open');
 }
 
-function triggerRestore() {
-  document.getElementById('data-menu-list').classList.remove('open');
-  document.getElementById('restore-file').click();
-}
-
-document.getElementById('restore-file').addEventListener('change', function() {
-  var input = this;
-  var msg   = document.getElementById('restore-msg');
-  if (!input.files || !input.files[0]) return;
-  var reader = new FileReader();
-  reader.onload = function() {
-    msg.style.display = 'block';
-    msg.textContent = 'Restauration des paramètres en cours...';
-    fetch('/api/system/restore', { method: 'POST', body: reader.result })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        msg.textContent = d.status === 'ok'
-          ? 'Paramètres restaurés (' + d.networksRestored + ' réseau(x) WiFi).'
-          : 'Erreur : ' + (d.error || 'inconnue');
-      })
-      .catch(function() { msg.textContent = 'Erreur de connexion.'; });
-  };
-  reader.readAsText(input.files[0], 'UTF-8');
-  input.value = '';
-});
-
 document.addEventListener('click', function(e) {
   var menu = document.getElementById('reset-menu-list');
   if (menu && menu.classList.contains('open') && !e.target.closest('.reset-menu')) {
