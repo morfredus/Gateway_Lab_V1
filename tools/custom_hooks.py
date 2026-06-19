@@ -24,10 +24,10 @@ dans platformio.ini.
 
 import os
 import subprocess
-from SCons.Script import Import
+from SCons.Script import Import, ARGUMENTS  # type: ignore
 
 # Récupération de l'environnement SCons
-Import("env")
+env = Import("env")
 
 def run_minify_script(source, target, env):
     print("\n[⚡ PlatformIO Hook] Lancement STRICT avant compilation...")

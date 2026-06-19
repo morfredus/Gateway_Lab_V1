@@ -64,7 +64,7 @@ def _beautify_html(html: str) -> str:
 
 
 def _beautify_js(js: str) -> str:
-    if not HAS_JSBEAUTIFIER:
+    if not HAS_JSBEAUTIFIER or jsbeautifier is None:
         return js
     opts = jsbeautifier.default_options()
     opts.indent_size = 2
