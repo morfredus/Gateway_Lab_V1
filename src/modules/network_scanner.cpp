@@ -1977,12 +1977,18 @@ bool NetworkScanner::restoreFromJson(const String& json) {
 // ---------------------------------------------------------------------------
 // Export CSV - utilise par /api/devices/export.csv (tableur, scripts externes)
 // ---------------------------------------------------------------------------
+// Aplatit les retours a la ligne (note libre, hostname multi-source...) sur
+// un espace avant echappement : un enregistrement = une seule ligne physique,
+// meme pour les tableurs/scripts qui ne respectent pas les guillemets RFC4180.
 static String csvField(const String& s) {
-    bool needsQuotes = s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0;
-    if (!needsQuotes) return s;
-    String escaped = s;
-    escaped.replace("\"", "\"\"");
-    return "\"" + escaped + "\"";
+    String flat = s;
+    flat.replace("\r\n", " ");
+    flat.replace('\n', ' ');
+    flat.replace('\r', ' ');
+    bool needsQuotes = flat.indexOf(',') >= 0 || flat.indexOf('"') >= 0;
+    if (!needsQuotes) return flat;
+    flat.replace("\"", "\"\"");
+    return "\"" + flat + "\"";
 }
 
 // Date lisible (heure locale, synchronisee par NTP) pour l'export CSV uniquement
@@ -2021,7 +2027,7 @@ String NetworkScanner::devicesToCsv() const {
         int confidence = _confidenceFor(d, confLabel);
         csv += csvField(d.ip)           + ",";
         csv += csvField(d.mac)          + ",";
-        csv += csvField(_enrichedHostname(d)) + ",";
+        csv += csvField(d.hostname)     + ",";
         csv += csvField(d.alias)        + ",";
         csv += csvField(d.manufacturer) + ",";
         csv += csvField(d.model)        + ",";

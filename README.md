@@ -1,6 +1,6 @@
 # Gateway Lab V1
 
-![Version](https://img.shields.io/badge/version-0.9.1-blue)
+![Version](https://img.shields.io/badge/version-0.9.2-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -128,7 +128,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Découverte NetBIOS       | Node Status (UDP 137) - hostnames PC Windows / Samba              |
 | Scan de ports TCP        | 14 ports, bannières HTTP/SSH/FTP, détection API IoT (Shelly/Tasmota/FritzBox) |
 | Inventaire réseau        | IP, nom, fabricant, modèle, catégorie, OS, services, ports, MAC, source |
-| Nom humain du matériel   | Intitulé déduit (modèle/fabricant/catégorie) affiché au-dessus du hostname brut quand celui-ci reste générique, repris dans les exports CSV/JSON (`hostnameDisplay`) |
+| Nom humain du matériel   | Intitulé déduit (modèle/fabricant/catégorie) affiché au-dessus du hostname brut quand celui-ci reste générique, repris dans l'export JSON (`hostnameDisplay`) — l'export CSV garde le hostname brut sur une seule ligne |
 | Auto-détection ESP32     | Le Gateway apparaît dans sa propre liste                          |
 | Identification OUI       | Base externalisée générée automatiquement                         |
 | Persistance LittleFS     | Statistiques online/offline, état conservé entre redémarrages     |
@@ -568,7 +568,11 @@ Télécharge l'inventaire au format CSV (une ligne par équipement : IP, MAC,
 hôte, alias, fabricant, modèle, catégorie, type, OS, services, ports
 ouverts, en ligne (`Yes`/`No`), favori (`Yes`/`No`), niveau de confiance,
 notes utilisateur, première/dernière apparition (date lisible
-`AAAA-MM-JJ HH:MM:SS`), compteur de vues). Utile pour une exploitation dans
+`AAAA-MM-JJ HH:MM:SS`), compteur de vues). Chaque équipement occupe
+exactement une ligne physique : tout retour à la ligne présent dans une
+valeur (note libre saisie par l'utilisateur, hostname...) est aplati en
+espace avant export, pour rester lisible même par un tableur ou un script
+qui ne respecte pas les guillemets RFC4180. Utile pour une exploitation dans
 un tableur ou un script externe — pour une sauvegarde/restauration complète
 (format JSON, dates en epoch), utiliser `/api/backup`. Le fichier contient un
 BOM UTF-8 en tête pour un affichage correct des accents dans Excel.

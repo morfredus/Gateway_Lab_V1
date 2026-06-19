@@ -5,6 +5,28 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.9.2] - 2026-06-19
+
+### Corrige
+
+- **Export CSV inutilisable à cause de retours à la ligne dans les
+  colonnes** : la colonne `hostname` de `/api/devices/export.csv`
+  réutilisait `_enrichedHostname()`, une chaîne sur plusieurs lignes
+  (nom déduit + hostname brut + source) prévue pour l'affichage UI, ce
+  qui faisait apparaître les informations d'un même équipement sur
+  plusieurs lignes physiques dans le fichier — même correctement
+  échappée entre guillemets, la plupart des tableurs/scripts qui lisent
+  une « ligne » comme un enregistrement coupent le CSV au mauvais
+  endroit. `network_scanner.cpp` :
+  - la colonne `hostname` utilise désormais directement `d.hostname`
+    (valeur brute, une seule ligne) — le nom déduit reste disponible via
+    le JSON (`hostnameDisplay`, page Équipements).
+  - `csvField()` aplatit systématiquement tout retour à la ligne (`\n`,
+    `\r`, `\r\n`) en espace avant échappement, quelle que soit la
+    colonne (y compris les notes libres saisies par l'utilisateur), pour
+    garantir qu'un équipement occupe toujours exactement une ligne dans
+    l'export, quel que soit le tableur ou le script utilisé pour le lire.
+
 ## [0.9.1] - 2026-06-19
 
 ### Corrige
