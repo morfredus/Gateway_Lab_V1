@@ -77,7 +77,7 @@ function renderHistory() {
   var filtered   = historyData.filter(function(e) {
     var category = EVENT_FILTER_CATEGORY[e.event] || e.event;
     if (!filters[category]) return false;
-    if (favOnly && !favoriteMacs[e.mac]) return false;
+    if (favOnly && !favoriteMacs[e.mac] && !favoriteMacs[e.ip]) return false;
     return true;
   });
   var container = document.getElementById('history-list');
@@ -102,7 +102,11 @@ function loadFavorites() {
     .then(function(r) { return r.json(); })
     .then(function(list) {
       favoriteMacs = {};
-      (list || []).forEach(function(d) { if (d.favorite) favoriteMacs[d.mac] = true; });
+      (list || []).forEach(function(d) {
+        if (!d.favorite) return;
+        if (d.mac) favoriteMacs[d.mac] = true;
+        if (d.ip) favoriteMacs[d.ip] = true;
+      });
       renderHistory();
     })
     .catch(function() {});

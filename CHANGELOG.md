@@ -5,6 +5,25 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.5] - Patch 5 - 2026-06-19
+
+### Corrige
+
+- **Page Historique : le filtre « Favoris uniquement » n'affichait jamais
+  aucun résultat.** `history.js` indexait les équipements favoris
+  exclusivement par adresse MAC (`favoriteMacs[d.mac]`), sans repli sur
+  l'IP — contrairement à la convention utilisée partout ailleurs dans le
+  projet (`scan.js` : `favKey = d.mac || d.ip` ; backend `network_scanner.cpp` :
+  `(!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp`). Les
+  équipements favoris dont la MAC n'était pas (encore) résolue, ainsi que
+  les entrées d'historique enregistrées avec une MAC vide, ne pouvaient
+  donc jamais correspondre, et le filtre restait systématiquement vide.
+  Correction : `loadFavorites()` indexe désormais chaque équipement favori
+  par sa MAC **et** son IP, et `renderHistory()` vérifie la correspondance
+  sur les deux champs (`favoriteMacs[e.mac] || favoriteMacs[e.ip]`).
+
+---
+
 ## [1.0.4] - Patch 4 - 2026-06-19
 
 ### Corrige
