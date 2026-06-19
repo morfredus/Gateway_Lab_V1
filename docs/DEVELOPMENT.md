@@ -275,16 +275,27 @@ libres datées (bouton 📝), utile pour le suivi d'inventaire personnel
 
 ### Page Historique (`/history`)
 
-Affiche une liste chronologique des événements détectés entre deux scans :
-nouvel équipement, reconnexion, déconnexion, ou changement d'un champ
-(IP, fabricant, catégorie...). Les horodatages utilisent l'heure réelle
-(synchronisée par NTP au démarrage).
+Affiche une liste chronologique des événements détectés entre deux scans
+complets ou deux ticks de surveillance continue : nouvel équipement,
+reconnexion, déconnexion, ou changement d'un champ (IP, fabricant,
+catégorie...). Les horodatages utilisent l'heure réelle (synchronisée par
+NTP au démarrage).
 
-Des cases à cocher permettent de filtrer l'affichage par type d'événement,
-ainsi que par **favoris uniquement** : ce filtre ne conserve que les
-événements concernant des équipements actuellement marqués comme favoris
-(statut récupéré en direct depuis `/api/devices`, indépendamment de l'état
-de l'équipement au moment de l'événement historique).
+Quatre cases à cocher permettent de filtrer l'affichage par catégorie
+d'événement, chacune regroupant plusieurs types d'événements bruts émis par
+le firmware (depuis le Patch 4 / v1.0.4) :
+
+| Case de filtre | Types d'événements regroupés |
+|---|---|
+| Nouveaux équipements | `new` |
+| Reconnexions | `online`, `reconnected`, `mobile_returned` |
+| Déconnexions | `offline`, `disappeared`, `mobile_left` |
+| Changements de champs | `changed`, `identification_improved` |
+
+Une case **favoris uniquement** filtre en plus les événements pour ne
+conserver que ceux concernant des équipements actuellement marqués comme
+favoris (statut récupéré en direct depuis `/api/devices`, indépendamment de
+l'état de l'équipement au moment de l'événement historique).
 Le bouton **Vider l'historique** télécharge automatiquement une sauvegarde
 JSON du journal avant de le vider côté serveur.
 
