@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gateway Lab V1 - Topologie</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-scan">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="site-hdr">
+    <div class="site-name">
+      Gateway Lab&nbsp;V1
+      <span class="site-ver" id="site-ver">v—</span>
+    </div>
+    <span class="site-tag">Passerelle réseau locale</span>
+  </header>
+
+  <!-- ── Navigation ────────────────────────────────────────── -->
+  <!-- include:menu.html -->
+
+  <!-- ── Contenu ───────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Cartographie du réseau</p>
+    </div>
+    <p class="info-label" style="margin-bottom:0.9rem">
+      Cette page accueillera la cartographie du réseau local : passerelle, points
+      d'accès / répéteurs WiFi détectés et équipements rattachés. Fonctionnalité
+      en préparation (voir la roadmap) — en attendant, une vue simplifiée liste
+      la passerelle et les équipements identifiés comme points d'accès WiFi.
+    </p>
+    <div id="topology-list"></div>
+    <p class="empty-msg" id="topology-empty" style="display:none">
+      Aucune information de topologie disponible pour le moment — lancez un scan
+      depuis la page Équipements.
+    </p>
+  </div>
+
+  <!-- ── Footer ────────────────────────────────────────────── -->
+  <footer>
+    <span id="footer-ts">—</span>
+  </footer>
+
+  <script src="topology.js"></script>
+</body>
+</html>

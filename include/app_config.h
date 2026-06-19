@@ -1,0 +1,28 @@
+#ifndef APP_CONFIG_H
+#define APP_CONFIG_H
+
+// Timeouts
+#define WIFI_CONNECT_TIMEOUT 15000
+#define NETWORK_SCAN_TIMEOUT 5000
+
+// Network
+#define WEB_SERVER_PORT  80
+#define MDNS_HOSTNAME    "gateway-lab-v1"
+
+// Mémoire — protections contre l'épuisement du heap
+#define MAX_TRACKED_DEVICES   300     // Borne haute du nombre d'équipements suivis/persistés
+#define MAX_HISTORY_EVENTS    1000    // Borne haute du journal d'événements (FIFO, /history.json)
+#define MAX_NOTES_PER_DEVICE  20      // Borne haute des notes libres par équipement (FIFO)
+#define MAX_NOTE_LENGTH       256     // Longueur max d'une note (tronquée au-delà)
+#define HEAP_WARNING_BYTES    40000   // Sous ce seuil : log d'avertissement
+#define HEAP_CRITICAL_BYTES   20000   // Sous ce seuil : mode dégradé (pas de redémarrage auto)
+#define HEAP_RECOVERY_MARGIN  10000   // Hystérésis : sortie du mode dégradé au-delà de CRITICAL+marge
+
+// Features
+#define ENABLE_OTA
+#define ENABLE_WEB_SERVER
+#define ENABLE_MDNS
+// #define ENABLE_MQTT
+// #define ENABLE_HUE
+
+#endif // APP_CONFIG_H

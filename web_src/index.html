@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gateway Lab V1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-scan">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="site-hdr">
+    <div class="site-name">
+      Gateway Lab&nbsp;V1
+      <span class="site-ver" id="site-ver">v—</span>
+    </div>
+    <span class="site-tag">Passerelle réseau locale</span>
+  </header>
+
+  <!-- ── Navigation ────────────────────────────────────────── -->
+  <!-- include:menu.html -->
+
+  <!-- ── Contenu ───────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Informations réseau</p>
+      <span class="badge badge-ok" id="status-badge">Connecté</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">SSID</span>
+      <span class="info-value" id="ssid">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">IP locale</span>
+      <span class="info-value" id="ip">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Signal (RSSI)</span>
+      <span class="info-value" id="rssi">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">mDNS</span>
+      <span class="info-value" id="hostname">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Uptime</span>
+      <span class="info-value" id="uptime">—</span>
+    </div>
+  </div>
+
+  <!-- ── Diagnostics système (mémoire, stockage, temps de scan) ──── -->
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Diagnostics système</p>
+    </div>
+    <div class="diag-bar" id="diag-bar" style="display:none">
+      <span class="diag-item" id="diag-heap">Heap libre : —</span>
+      <span class="diag-item" id="diag-psram">PSRAM libre : —</span>
+      <span class="diag-item" id="diag-fs">LittleFS : —</span>
+      <span class="diag-item" id="diag-scan">Scan moyen : —</span>
+      <span class="diag-item" id="diag-rescan">Passe précise moyenne : —</span>
+    </div>
+  </div>
+
+  <div class="shortcuts">
+    <a class="shortcut" href="/scan">
+      <span class="icon">📡</span>Équipements
+    </a>
+    <a class="shortcut" href="/history">
+      <span class="icon">🕒</span>Historique
+    </a>
+    <a class="shortcut" href="/wifi">
+      <span class="icon">🔄</span>Mise à jour
+    </a>
+  </div>
+
+  <!-- ── Footer ────────────────────────────────────────────── -->
+  <footer>
+    <span id="footer-ts">—</span>
+    <span id="footer-mdns" style="color:#64748b"></span>
+  </footer>
+
+  <script src="index.js"></script>
+</body>
+</html>

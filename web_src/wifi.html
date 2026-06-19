@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gateway Lab V1 — Système</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-scan">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="site-hdr">
+    <div class="site-name">
+      Gateway Lab&nbsp;V1
+      <span class="site-ver" id="site-ver">v—</span>
+    </div>
+    <span class="site-tag">Système</span>
+  </header>
+
+  <!-- ── Navigation ────────────────────────────────────────── -->
+  <!-- include:menu.html -->
+
+  <!-- ── Contenu ───────────────────────────────────────────── -->
+  <p class="section-title">Réseau</p>
+
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">État de la connexion</p>
+      <span class="badge badge-ok" id="status-badge">Connecté</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">SSID</span>
+      <span class="info-value" id="wifi-ssid">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Adresse IP</span>
+      <span class="info-value" id="wifi-ip">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Signal (RSSI)</span>
+      <span class="info-value" id="wifi-rssi">—</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Réseaux enregistrés</p>
+    </div>
+    <div id="wifi-list"></div>
+    <p class="empty-msg" id="wifi-empty" style="display:none">Aucun réseau enregistré pour le moment.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Ajouter un réseau</p>
+    </div>
+    <form id="wifi-form">
+      <label for="wifi-new-ssid">SSID</label>
+      <input id="wifi-new-ssid" type="text" placeholder="Nom du réseau" autocomplete="off" required>
+      <label for="wifi-new-password">Mot de passe</label>
+      <input id="wifi-new-password" type="password" placeholder="Mot de passe WiFi" autocomplete="off">
+      <button class="btn" type="submit">Enregistrer ce réseau</button>
+    </form>
+    <p id="wifi-msg"></p>
+  </div>
+
+  <p class="section-title">Appareil</p>
+
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">LED d'état</p>
+    </div>
+    <label for="led-brightness">Luminosité (<span id="led-brightness-value">—</span>%)</label>
+    <input id="led-brightness" type="range" min="0" max="100" step="5" value="15">
+  </div>
+
+  <!-- ── Mise à jour du firmware (ex page OTA) ────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Mise à jour du firmware</p>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Firmware actuel</span>
+      <span class="info-value" id="fw-version">—</span>
+    </div>
+    <form id="ota-form">
+      <label>Sélectionnez le fichier firmware (.bin)</label>
+      <input type="file" id="ota-file" accept=".bin">
+      <div class="progress" id="ota-progress">
+        <div class="bar" id="ota-bar"></div>
+      </div>
+      <p id="ota-msg"></p>
+      <button type="submit" class="btn">Mettre à jour</button>
+    </form>
+  </div>
+
+  <!-- ── État système / mode dégradé ──────────────────────── -->
+  <div class="card" id="health-card">
+    <div class="card-header">
+      <p class="card-title">État système</p>
+      <span class="badge badge-ok" id="health-badge">Normal</span>
+    </div>
+    <p class="card-meta" id="health-msg">Mémoire disponible suffisante.</p>
+    <div class="info-row">
+      <span class="info-label">Heap libre</span>
+      <span class="info-value" id="sys-heap">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">PSRAM libre</span>
+      <span class="info-value" id="sys-psram">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Équipements</span>
+      <span class="info-value" id="sys-devices">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Historique</span>
+      <span class="info-value" id="sys-history">—</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Action système</p>
+    </div>
+    <button class="btn btn-danger" id="restart-btn" type="button">Redémarrer l'appareil</button>
+  </div>
+
+  <!-- ── Footer ────────────────────────────────────────────── -->
+  <footer>
+    <span id="footer-ts">—</span>
+    <a href="/">← Accueil</a>
+  </footer>
+
+  <script src="wifi.js"></script>
+</body>
+</html>
