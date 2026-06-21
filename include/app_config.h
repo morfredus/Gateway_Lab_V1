@@ -38,5 +38,8 @@
 // une fois le debogage termine.
 #define BOOT_LOG_ENABLED
 #define MAX_BOOT_LOG_ENTRIES   10     // Nombre de boots conserves dans /bootlog.json (FIFO)
+#define LOG_BUFFER_SIZE        20     // Lignes du buffer circulaire RTC (logs avant reboot)
+#define LOG_LINE_MAX_LEN       160    // Longueur max d'une ligne (JSON compact : t/lvl/tag/heap/blk/msg)
+#define BOOT_LOG_STATS_INTERVAL_MS  30000   // Cadence de l'instantane RuntimeStats/WiFi periodique
 
 #endif // APP_CONFIG_H

@@ -51,6 +51,7 @@
 #pragma once
 #include <Arduino.h>
 #include <functional>
+#include <WebServer.h>   // HTTPMethod (utilise par _on(), voir plus bas)
 
 // Interface de communication entre le serveur web et le scanner réseau.
 // Chaque champ est une fonction lambda fournie par main.cpp.
@@ -97,6 +98,12 @@ public:
     void loop();
 
 private:
+    // Enregistre une route en comptabilisant son appel dans BootLog::RuntimeStats
+    // (pagesServed pour les pages HTML, apiCalls pour /api/*) — voir boot_log.h.
+    // [DEBOGAGE TEMPORAIRE] : simple wrapper autour de _server.on(), a retirer
+    // (revenir a des appels directs _server.on()) une fois le debogage termine.
+    void _on(const char* path, HTTPMethod method, std::function<void()> handler);
+
     void _handleRoot();             // Sert la page HTML principale
     void _handleApiStatus();        // Retourne l'état WiFi/système en JSON
     void _handleApiDevices();       // Retourne la liste des équipements en JSON

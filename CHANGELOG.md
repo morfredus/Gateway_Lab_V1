@@ -5,6 +5,45 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.8] - Patch 8 - 2026-06-21
+
+### Ajoute
+
+- **Extension du journal de redémarrage (`BootLog`, FONCTIONNALITÉ TEMPORAIRE)**
+  avec des informations supplémentaires pour le débogage de crashs/watchdogs,
+  sans toucher à l'architecture existante (`src/modules/boot_log.h/.cpp`) :
+  - Compteurs persistants `boot_count`/`crash_count` en NVS (`Preferences`,
+    survivent aussi à une coupure d'alimentation), incrémentés à chaque
+    démarrage et à chaque reset classé "anormal" (panic, watchdog, brownout).
+  - Température interne du SoC (`temperatureRead()`) capturée à chaque boot.
+  - Dernier état connu avant le reset (heap libre, plus gros bloc libre,
+    uptime, état/RSSI/IP WiFi, dernière "tâche" signalée via
+    `bootLog.setLastTask(...)`), grâce à un instantané RTC rafraîchi en
+    continu par la nouvelle méthode `BootLog::service()` (à appeler depuis
+    `loop()`).
+  - Instantané périodique `RuntimeStats` (uptime, heap libre, plus gros bloc
+    libre, nombre d'équipements connus, pages servies, appels API) rafraîchi
+    toutes les `BOOT_LOG_STATS_INTERVAL_MS` (30 s par défaut) et persisté
+    avec chaque entrée de boot.
+  - Chaque ligne du buffer circulaire de logs est désormais un objet JSON
+    compact incluant le heap libre et le plus gros bloc libre au moment du
+    log, en plus du timestamp/niveau/tag/message.
+  - Nouveaux réglages dans `include/app_config.h` : `LOG_BUFFER_SIZE`,
+    `LOG_LINE_MAX_LEN`, `BOOT_LOG_STATS_INTERVAL_MS`.
+  - `main.cpp` fournit le nombre d'équipements connus via
+    `bootLog.setDevicesCountProvider(...)` et trace quelques tâches clés
+    via `bootLog.setLastTask(...)` (scan réseau, sauvegarde manuelle).
+  - `web_server.cpp` comptabilise désormais `pagesServed`/`apiCalls` via un
+    petit wrapper interne `_on()` autour de l'enregistrement des routes.
+  - Page `/debug` (`debug.html`/`debug.js`) mise à jour pour afficher toutes
+    ces nouvelles données par démarrage enregistré.
+  - Limite documentée : pas de capture de stack trace au PANIC (hors de
+    portée d'un module Arduino autonome sans `esp_core_dump` — voir le
+    commentaire dédié dans `boot_log.h`) ; la trace ESP-IDF reste visible
+    uniquement sur le moniteur série, comme avant.
+
+---
+
 ## [1.0.7] - Patch 7 - 2026-06-21
 
 ### Ajoute

@@ -351,6 +351,29 @@ les derniers logs émis juste avant ce reset (conservés en RAM
 LittleFS — 10 derniers démarrages conservés (FIFO). La page liste ces
 démarrages du plus récent au plus ancien, avec un bouton **Vider**.
 
+Étendu en Patch 8 (v1.0.8) avec, pour chaque démarrage enregistré :
+
+- `bootCount`/`crashCount` — compteurs cumulés persistés en NVS (survivent
+  aussi à une coupure d'alimentation, contrairement au reste du module).
+- `temperature` — température interne du SoC au démarrage.
+- État connu juste avant le reset (le plus proche possible de "l'état au
+  moment du crash") : `uptimeAtResetMs`, `freeHeapAtReset`,
+  `largestBlockAtReset`, `lastTask` (voir `BootLog::setLastTask()`),
+  `wifiStatus`/`wifiRssi`/`wifiIp`.
+- `lastStats` — dernier instantané périodique `RuntimeStats` (uptime, heap
+  libre, plus gros bloc libre, équipements connus, pages servies, appels
+  API), rafraîchi toutes les `BOOT_LOG_STATS_INTERVAL_MS` (30 s par défaut,
+  voir `include/app_config.h`) par `BootLog::service()` (appelée depuis
+  `loop()`).
+- Chaque ligne du buffer circulaire de logs est un objet JSON compact
+  incluant désormais le heap libre et le plus gros bloc libre au moment du
+  log, en plus du timestamp/niveau/tag/message.
+
+Limite connue : pas de capture de stack trace au moment d'un PANIC (le code
+applicatif ne tourne plus à cet instant) — voir le commentaire dédié dans
+`src/modules/boot_log.h`. La trace ESP-IDF reste visible sur le moniteur
+série, comme avant cette extension.
+
 **Cette page est temporaire** et destinée à être retirée une fois le
 débogage terminé. Pour la retirer entièrement :
 
@@ -359,11 +382,14 @@ débogage terminé. Pour la retirer entièrement :
    `MAX_BOOT_LOG_ENTRIES`.
 3. Dans `src/utils/logger.h`, retirer le bloc `#ifdef BOOT_LOG_ENABLED`
    (include + appel à `bootLog.capture()`).
-4. Dans `src/main.cpp`, retirer l'include et l'appel à `bootLog.begin()`
-   (bloc `#ifdef BOOT_LOG_ENABLED`).
-5. Dans `src/modules/web_server.cpp`, retirer le bloc `#ifdef
+4. Dans `src/main.cpp`, retirer l'include et les appels à `bootLog.begin()`,
+   `bootLog.service()`, `bootLog.setDevicesCountProvider(...)` et
+   `bootLog.setLastTask(...)` (tous dans des blocs `#ifdef
+   BOOT_LOG_ENABLED`).
+5. Dans `src/modules/web_server.cpp`/`.h`, retirer le bloc `#ifdef
    BOOT_LOG_ENABLED` (routes `/debug`, `/api/bootlog`) et les includes
-   correspondants ; retirer la mention dans `src/modules/web_server.h`.
+   correspondants. Le wrapper `_on()` (comptage `pagesServed`/`apiCalls`)
+   peut rester ou être remplacé par des appels directs à `_server.on()`.
 6. Supprimer `web_src/debug.html`, `web_src/debug.js` et l'entrée
    correspondante dans `tools/minify_web.py` (liste `PAGES`).
 7. Retirer le lien `<a href="/debug">Debug</a>` dans `web_src/menu.html`.

@@ -36,6 +36,7 @@ void setup() {
     // Doit s'executer avant le premier Log::* pour persister correctement
     // la raison du reset precedent et son journal capture
     bootLog.begin();
+    bootLog.setDevicesCountProvider([] { return (uint32_t)netScanner.getStats().known; });
 #endif
 
     Log::i("Main", "=== %s v%s ===", PROJECT_NAME, PROJECT_VERSION);
@@ -58,9 +59,17 @@ void setup() {
 
     // Bouton BOOT — appui court (scan) / maintien 3s (sauvegarde)
     bootButton.begin({
-        .onShortPress = [] { netScanner.startScan(); },
+        .onShortPress = [] {
+#ifdef BOOT_LOG_ENABLED
+            bootLog.setLastTask("Scan reseau (bouton BOOT)");
+#endif
+            netScanner.startScan();
+        },
         .onHold       = [] {
             statusLed.setState(LedState::Saving, 1500);
+#ifdef BOOT_LOG_ENABLED
+            bootLog.setLastTask("Sauvegarde JSON (bouton BOOT)");
+#endif
             netScanner.saveNow();
         },
     });
@@ -86,6 +95,9 @@ void setup() {
 #endif
 
         // Scan automatique a la connexion WiFi
+#ifdef BOOT_LOG_ENABLED
+        bootLog.setLastTask("Scan reseau (connexion WiFi)");
+#endif
         netScanner.startScan();
 
 #ifdef ENABLE_WEB_SERVER
@@ -172,6 +184,11 @@ void setup() {
 }
 
 void loop() {
+#ifdef BOOT_LOG_ENABLED
+    // Heartbeat + instantane periodique (RuntimeStats/WiFi) — voir boot_log.h
+    bootLog.service();
+#endif
+
     // Garde-fou mémoire — bascule en mode dégradé si le heap devient critique
     // (voir modules/system_health.h) ; aucun redémarrage automatique.
     systemHealth.loop();
