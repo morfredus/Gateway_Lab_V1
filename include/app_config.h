@@ -32,4 +32,11 @@
 // #define ENABLE_MQTT
 // #define ENABLE_HUE
 
+// [DEBOGAGE TEMPORAIRE] Journal de redemarrage (src/modules/boot_log.h) —
+// capture les derniers logs + la raison du reset avant chaque reboot, sans
+// moniteur serie. A retirer (cette ligne + boot_log.h/.cpp + page /debug)
+// une fois le debogage termine.
+#define BOOT_LOG_ENABLED
+#define MAX_BOOT_LOG_ENTRIES   10     // Nombre de boots conserves dans /bootlog.json (FIFO)
+
 #endif // APP_CONFIG_H

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gateway Lab V1 - Debug</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-scan">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="site-hdr">
+    <div class="site-name">
+      Gateway Lab&nbsp;V1
+      <span class="site-ver" id="site-ver">v—</span>
+    </div>
+    <span class="site-tag">Passerelle réseau locale</span>
+  </header>
+
+  <!-- ── Navigation ────────────────────────────────────────── -->
+  <!-- include:menu.html -->
+
+  <!-- ── Contenu ───────────────────────────────────────────── -->
+  <!-- PAGE TEMPORAIRE DE DEBOGAGE — voir docs/DEVELOPMENT.md pour la retirer -->
+  <div class="card">
+    <div class="card-header">
+      <p class="card-title">Journal de redémarrage (debug)</p>
+      <button class="reset-btn" id="clear-bootlog-btn" onclick="clearBootLog()">Vider</button>
+    </div>
+    <p class="info-label" style="margin-bottom:0.9rem">
+      Page temporaire de débogage : à chaque démarrage, la raison du reset
+      précédent (crash, watchdog, brownout, reset logiciel...) ainsi que les
+      derniers logs émis avant ce reset sont enregistrés ici — sans avoir
+      besoin d'un moniteur série branché au moment des faits. Conserve les
+      derniers démarrages (borné en mémoire flash).
+    </p>
+    <div id="bootlog-list"></div>
+    <p class="empty-msg" id="bootlog-empty" style="display:none">
+      Aucun redémarrage enregistré pour le moment.
+    </p>
+  </div>
+
+  <!-- ── Footer ────────────────────────────────────────────── -->
+  <footer>
+    <span id="footer-ts">—</span>
+  </footer>
+
+  <script src="debug.js"></script>
+</body>
+</html>

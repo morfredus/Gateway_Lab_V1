@@ -22,6 +22,10 @@
 #include "../../include/web_interface_wifi.h" // WIFI_PAGE (page Systeme en PROGMEM)
 #include "../../include/web_interface_topology.h" // TOPOLOGY_PAGE (topologie reseau en PROGMEM)
 #include "../utils/logger.h"
+#ifdef BOOT_LOG_ENABLED
+#include "boot_log.h"                          // [DEBOGAGE TEMPORAIRE] Journal de redemarrage — voir boot_log.h
+#include "../../include/web_interface_debug.h" // DEBUG_PAGE (journal de redemarrage en PROGMEM)
+#endif
 
 static const char* TAG = "WebSrv";
 
@@ -101,6 +105,20 @@ void WebServerModule::begin(uint16_t port) {
         statusLed.setBrightness((uint8_t)v);
         _server.send(200, "application/json", "{\"status\":\"ok\"}");
     });
+#ifdef BOOT_LOG_ENABLED
+    // [DEBOGAGE TEMPORAIRE] Page et API du journal de redemarrage — voir boot_log.h.
+    // A retirer (ce bloc + la page web_src/debug.html/.js + le lien menu.html)
+    // une fois le debogage termine.
+    _server.on("/debug",        HTTP_GET, [this]() { _server.send_P(200, "text/html", DEBUG_PAGE); });
+    _server.on("/api/bootlog",  HTTP_GET, [this]() {
+        _server.sendHeader("Cache-Control", "no-cache");
+        _server.send(200, "application/json", bootLog.getLogJson());
+    });
+    _server.on("/api/bootlog",  HTTP_DELETE, [this]() {
+        bootLog.clear();
+        _server.send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+#endif
     _server.onNotFound(       [this]()  { _handleNotFound(); });
 
     // Délégation des routes OTA à OtaManager (/update GET + POST)

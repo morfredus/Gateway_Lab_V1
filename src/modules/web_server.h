@@ -38,6 +38,9 @@
  *   GET  /api/network/health — Tableau de bord reseau (presents/connus, 24h, moins stables)
  *   GET  /api/monitor  — Etat de la surveillance continue (activee + frequence en minutes)
  *   POST /api/monitor  — Definit l'etat de la surveillance continue (parametres enabled, minutes 1-60)
+ *   GET  /debug         — [DEBOGAGE TEMPORAIRE] Journal de redemarrage (raison + derniers logs)
+ *   GET  /api/bootlog   — [DEBOGAGE TEMPORAIRE] Historique des boots en JSON (voir boot_log.h)
+ *   DELETE /api/bootlog — [DEBOGAGE TEMPORAIRE] Vide l'historique des boots
  *
  * Découplage via ScanProvider :
  *   WebServerModule ne connaît pas NetworkScanner directement.

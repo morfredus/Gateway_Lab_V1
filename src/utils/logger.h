@@ -15,9 +15,14 @@
 
 #pragma once
 #include <Arduino.h>
+#include "../../include/app_config.h"   // BOOT_LOG_ENABLED
 
 #ifndef LOG_LEVEL
 #define LOG_LEVEL 3
+#endif
+
+#ifdef BOOT_LOG_ENABLED
+#include "../modules/boot_log.h"   // [DEBOGAGE TEMPORAIRE] capture les logs avant reboot — voir boot_log.h
 #endif
 
 namespace Log {
@@ -28,6 +33,9 @@ namespace detail {
         char buf[256];
         vsnprintf(buf, sizeof(buf), fmt, args);
         Serial.printf("[%s][%s] %s\n", level, tag, buf);
+#ifdef BOOT_LOG_ENABLED
+        bootLog.capture(level, tag, buf);
+#endif
     }
 }
 

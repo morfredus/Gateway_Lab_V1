@@ -5,6 +5,27 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.7] - Patch 7 - 2026-06-21
+
+### Ajoute
+
+- **Journal de redémarrage pour le débogage, sans moniteur série
+  (FONCTIONNALITÉ TEMPORAIRE).** Nouveau module `src/modules/boot_log.h/.cpp` :
+  un buffer circulaire des derniers logs (`Log::i/w/e/d`) est conservé en
+  RAM `RTC_NOINIT_ATTR` (survit à un reboot logiciel, un crash, un
+  watchdog ou un brownout — pas à une coupure d'alimentation). Au
+  démarrage suivant, la raison du reset (`esp_reset_reason()` : panic,
+  watchdog, brownout, reset logiciel/externe...) et le contenu du buffer
+  précédent sont persistés dans `/bootlog.json` sur LittleFS (10 derniers
+  démarrages, FIFO), consultables sur une nouvelle page `/debug`
+  (lien "Debug" dans le menu) et via `GET`/`DELETE /api/bootlog`.
+  Pensé pour être retiré facilement une fois le débogage terminé :
+  toutes les additions sont regroupées et signalées par le commentaire
+  « DEBOGAGE TEMPORAIRE » (voir `docs/DEVELOPMENT.md` pour la procédure
+  de retrait complète).
+
+---
+
 ## [1.0.6] - Patch 6 - 2026-06-19
 
 ### Corrige

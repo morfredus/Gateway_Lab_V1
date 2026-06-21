@@ -22,12 +22,22 @@
 #include "modules/status_led.h"        // Pilotage de la NeoPixel d'etat
 #include "modules/boot_button.h"       // Gestes du bouton BOOT (court/maintien 3s)
 #include "modules/system_health.h"     // Garde-fou heap — mode degrade (pas de redemarrage auto)
+#ifdef BOOT_LOG_ENABLED
+#include "modules/boot_log.h"          // [DEBOGAGE TEMPORAIRE] Journal de redemarrage — voir boot_log.h
+#endif
 
 // Suit les transitions du scan en cours pour piloter la LED (Scanning -> Ready)
 static bool _ledScanInProgress = false;
 
 void setup() {
     Serial.begin(115200);
+
+#ifdef BOOT_LOG_ENABLED
+    // Doit s'executer avant le premier Log::* pour persister correctement
+    // la raison du reset precedent et son journal capture
+    bootLog.begin();
+#endif
+
     Log::i("Main", "=== %s v%s ===", PROJECT_NAME, PROJECT_VERSION);
 
     systemHealth.begin();

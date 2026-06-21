@@ -70,6 +70,14 @@ PAGES = [
         "TOPOLOGY_PAGE",
         None,
     ),
+    (
+        # [DEBOGAGE TEMPORAIRE] Page /debug — voir docs/DEVELOPMENT.md pour la retirer
+        WEB_SRC_DIR / "debug.html",
+        WEB_SRC_DIR / "debug.js",
+        INCLUDE_DIR / "web_interface_debug.h",
+        "DEBUG_PAGE",
+        None,
+    ),
 ]
 
 # ---------------------------------------------------------------------------

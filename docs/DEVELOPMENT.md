@@ -338,6 +338,43 @@ dédiée) :
 
 Voir `docs/WIFI_SETUP.md` pour le détail complet de la configuration WiFi.
 
+### Page Debug (`/debug`) — temporaire
+
+Page de débogage ajoutée en Patch 7 (v1.0.7) pour diagnostiquer les
+redémarrages inattendus (crash, watchdog, brownout) sans avoir besoin d'un
+moniteur série branché au moment des faits.
+
+À chaque démarrage, la raison du reset précédent (`esp_reset_reason()`) et
+les derniers logs émis juste avant ce reset (conservés en RAM
+`RTC_NOINIT_ATTR`, qui survit à un reboot logiciel/crash/watchdog mais pas
+à une coupure d'alimentation) sont persistés dans `/bootlog.json` sur
+LittleFS — 10 derniers démarrages conservés (FIFO). La page liste ces
+démarrages du plus récent au plus ancien, avec un bouton **Vider**.
+
+**Cette page est temporaire** et destinée à être retirée une fois le
+débogage terminé. Pour la retirer entièrement :
+
+1. Supprimer `src/modules/boot_log.h` et `src/modules/boot_log.cpp`.
+2. Dans `include/app_config.h`, retirer `#define BOOT_LOG_ENABLED` et
+   `MAX_BOOT_LOG_ENTRIES`.
+3. Dans `src/utils/logger.h`, retirer le bloc `#ifdef BOOT_LOG_ENABLED`
+   (include + appel à `bootLog.capture()`).
+4. Dans `src/main.cpp`, retirer l'include et l'appel à `bootLog.begin()`
+   (bloc `#ifdef BOOT_LOG_ENABLED`).
+5. Dans `src/modules/web_server.cpp`, retirer le bloc `#ifdef
+   BOOT_LOG_ENABLED` (routes `/debug`, `/api/bootlog`) et les includes
+   correspondants ; retirer la mention dans `src/modules/web_server.h`.
+6. Supprimer `web_src/debug.html`, `web_src/debug.js` et l'entrée
+   correspondante dans `tools/minify_web.py` (liste `PAGES`).
+7. Retirer le lien `<a href="/debug">Debug</a>` dans `web_src/menu.html`.
+8. Régénérer les headers (`python tools/minify_web.py`), qui supprimera
+   automatiquement `include/web_interface_debug.h` du build (le fichier
+   généré peut être supprimé manuellement).
+
+Tous les ajouts liés à cette fonctionnalité sont signalés par le
+commentaire « DEBOGAGE TEMPORAIRE » dans le code, pour les repérer
+facilement.
+
 ---
 
 ## Résolution des problèmes fréquents
