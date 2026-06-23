@@ -22,6 +22,7 @@
 #include "modules/status_led.h"        // Pilotage de la NeoPixel d'etat
 #include "modules/boot_button.h"       // Gestes du bouton BOOT (court/maintien 3s)
 #include "modules/system_health.h"     // Garde-fou heap — mode degrade (pas de redemarrage auto)
+#include "modules/dhcp_sniffer.h"      // Fingerprinting passif DHCP (UDP 67) - hostname/OS
 #ifdef BOOT_LOG_ENABLED
 #include "modules/boot_log.h"          // [DEBOGAGE TEMPORAIRE] Journal de redemarrage — voir boot_log.h
 #endif
@@ -87,6 +88,10 @@ void setup() {
 
         // Synchronisation NTP - necessaire pour l'historique (firstSeen/lastSeen)
         timeSync.begin();
+
+        // Ecoute passive DHCP (UDP/67) - fingerprinting hostname/OS, sans
+        // aucune requete active ; tourne en continu independamment du scan
+        dhcpSniffer.begin();
 
 #ifdef ENABLE_OTA
         // Mise à jour OTA disponible sur le réseau local (ArduinoOTA)
@@ -209,6 +214,9 @@ void loop() {
     // Surveillance continue (v1.0.0) — sweep ARP leger + drainage des rescans
     // differes, cadence interne geree par serviceMonitor() lui-meme
     netScanner.serviceMonitor();
+
+    // Drainage non bloquant des paquets DHCP captes passivement (UDP/67)
+    dhcpSniffer.loop();
 
     // NetworkScanner n'a pas de loop() : il tourne en tâche FreeRTOS sur Core 0
     // — on suit ses transitions ici pour piloter la LED d'etat

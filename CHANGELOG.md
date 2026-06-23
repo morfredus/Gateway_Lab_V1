@@ -5,6 +5,25 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.0] - 2026-06-23
+
+### Ajoute
+
+- **Fingerprinting passif DHCP** (`src/modules/dhcp_sniffer.h/.cpp`) :
+  module continu et indépendant du scanner réseau, démarré une fois le
+  WiFi connecté. Ouvre un socket UDP non bloquant sur `0.0.0.0:67` et
+  écoute les paquets DHCPDISCOVER/REQUEST émis par les autres équipements
+  du réseau — sans jamais émettre de requête ni répondre. Extrait le
+  hostname déclaré (option 12) et devine l'OS à partir du vendor class
+  identifier (option 60 : `MSFT*` → Windows, `android-dhcp*` → Android,
+  `dhcpcd*`/`udhcp*` → Linux). Table interne MAC → fingerprint bornée à
+  64 entrées. `NetworkScanner::_enrichDevices()` consulte cette table en
+  mémoire (lecture seule, aucune requête) pour compléter `hostname`/`os`
+  des équipements quand ils sont encore vides, sans jamais écraser une
+  source plus fiable (SSDP, API, mDNS/PTR…). Source affichée : `DHCP`.
+  Zéro coût ajouté au scan complet, au scan ciblé ou à la surveillance
+  continue.
+
 ## [1.0.9] - 2026-06-23
 
 ### Ajoute

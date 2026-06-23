@@ -148,6 +148,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Sondage SNMP             | `sysDescr` (UDP 161) en requête unicast ciblée, lors de la passe précise approfondie (profil Imprimante/Inconnu avec service exploitable) — fabricant/modèle en texte clair |
 | API appareils multimédia | Cast, Sonos, Roku, Samsung Smart TV — sondées en requête unicast ciblée, lors de la passe précise approfondie (profil Streaming/Domotique avec service exploitable) |
 | Sondage broker MQTT      | CONNECT anonyme + topics `$SYS/broker/version`/`clients/connected`, requête TCP unicast ciblée, lors de la passe précise approfondie (profil Domotique/Inconnu avec port 1883 ouvert) |
+| Fingerprinting DHCP passif | Écoute continue des paquets DHCPDISCOVER/REQUEST (UDP 67) des autres équipements — hostname (option 12) et OS déclaré via vendor class (option 60), sans jamais émettre de requête ni ajouter de coût au scan |
 | Découverte Matter (DNS-SD) | Détection des appareils Matter commissionnables (`_matterc._udp`) |
 | Filtrage de l'historique | Filtres par type d'événement (nouveau, reconnexion, déconnexion, changement) et par favoris uniquement |
 | Effacement de l'historique | Vide le journal après téléchargement automatique d'une sauvegarde JSON |
@@ -715,6 +716,7 @@ Les informations affichées peuvent provenir de plusieurs mécanismes :
 | Roku         | `Roku`    | API Roku `/query/device-info`, requête unicast ciblée (passe précise approfondie) |
 | SamsungTV    | `Samsung` | API Samsung Smart TV `/api/v2/`, requête unicast ciblée (passe précise approfondie) |
 | MQTT         | `MQTT`    | Broker MQTT (port 1883), CONNECT + topics `$SYS/broker/*`, requête unicast ciblée (passe précise approfondie) |
+| DHCP         | `DHCP`    | Hostname résolu via fingerprinting DHCP passif (option 12, UDP 67), écoute continue sans requête |
 | Self         | `ESP32`   | Informations de l'ESP32 lui-même                                |
 
 ---

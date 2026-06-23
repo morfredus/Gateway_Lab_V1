@@ -25,6 +25,7 @@
 #include "snmp_scanner.h"        // SNMP sysDescr (UDP 161) - fabricant/modele en texte clair
 #include "media_api_scanner.h"   // API HTTP proprietaires : Cast, Sonos, Roku, Samsung TV
 #include "mqtt_scanner.h"        // Broker MQTT (TCP 1883) - version/clients via $SYS
+#include "dhcp_sniffer.h"        // Fingerprinting passif DHCP (UDP 67) - hostname/OS
 #include "device_enricher.h"     // Enrichissement par pattern matching sur le hostname
 #include "device_history.h"      // Journal chronologique des evenements (nouveaux/changements)
 #include "time_sync.h"           // Epoch NTP pour firstSeen/lastSeen
@@ -1021,14 +1022,31 @@ void NetworkScanner::_scanNetBios() {
 }
 
 // ---------------------------------------------------------------------------
-// Enrichissement final : pattern matching sur le hostname resolu
+// Enrichissement final : DHCP passif puis pattern matching sur le hostname
 //
-// Derniere etape du scan - complete manufacturer/category/os encore vides
-// a partir de mots-cles trouves dans le hostname (cf. device_enricher.h).
+// Derniere etape du scan - complete hostname/os/manufacturer/category encore
+// vides. Le fingerprint DHCP (capture passive, cf. dhcp_sniffer.h) est
+// consulte en premier : c'est une source auto-declaree par l'equipement
+// lui-meme, plus fiable qu'une simple deduction par mots-cles, mais elle
+// ne remplace jamais une source deja plus precise (SSDP, API, OUI connu...).
+// Aucun cout reseau ici : simple lecture memoire de la table maintenue par
+// DhcpSniffer en arriere-plan.
 // ---------------------------------------------------------------------------
 void NetworkScanner::_enrichDevices() {
     xSemaphoreTake(_mutex, portMAX_DELAY);
     for (auto& d : _results) {
+        if (!d.mac.isEmpty()) {
+            DhcpFingerprint fp;
+            if (dhcpSniffer.lookup(d.mac, fp)) {
+                if (d.hostname.isEmpty() && !fp.hostname.isEmpty()) {
+                    d.hostname = fp.hostname;
+                    d.source   = "DHCP";
+                }
+                if (d.os.isEmpty() && !fp.osGuess.isEmpty()) {
+                    d.os = fp.osGuess;
+                }
+            }
+        }
         applyDeviceEnrichment(d);
     }
     xSemaphoreGive(_mutex);

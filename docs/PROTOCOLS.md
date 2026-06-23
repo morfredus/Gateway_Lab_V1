@@ -46,6 +46,78 @@ lire la table avant qu'elle ne soit réécrasée.
 
 ---
 
+## DHCP — fingerprinting passif
+
+### C'est quoi ?
+
+DHCP (Dynamic Host Configuration Protocol) est le protocole par lequel un
+équipement obtient automatiquement une adresse IP en rejoignant le réseau.
+Pour cela, il envoie un paquet **DHCPDISCOVER** (puis **DHCPREQUEST**) en
+**broadcast** sur `255.255.255.255:67` — visible par tous les équipements
+du même réseau local, pas seulement par le serveur DHCP (la box).
+
+Ce paquet contient, en clair, des informations que l'équipement déclare
+lui-même :
+
+- **Option 12 (Host Name)** : le nom choisi par son système d'exploitation
+  (souvent plus parlant que le hostname DNS/PTR, parfois absent côté box)
+- **Option 60 (Vendor Class Identifier)** : une chaîne identifiant
+  fréquemment l'OS ou le firmware du client DHCP (`MSFT 5.0` = Windows,
+  `android-dhcp-13` = Android, `dhcpcd-9.4.1` = Linux, `udhcp 1.31.1` =
+  Linux embarqué/IoT…)
+
+### Comment ça marche ?
+
+```
+Un smartphone Android rejoint le WiFi :
+Smartphone → Tout le réseau (255.255.255.255:67) :
+  DHCPDISCOVER
+    Option 12 (Host Name)            : "Galaxy-S23"
+    Option 60 (Vendor Class)          : "android-dhcp-13"
+    chaddr (adresse MAC du client)    : A2:3B:...
+```
+
+Gateway Lab écoute passivement ce trafic — il ne répond jamais aux
+DHCPDISCOVER captés (il ne joue jamais le rôle de serveur DHCP) et n'émet
+aucune requête. Un simple socket UDP, lié en écoute sur le port serveur
+DHCP (67) en `INADDR_ANY`, suffit à lwIP pour délivrer ces broadcasts au
+firmware au même titre qu'à n'importe quel autre équipement du réseau.
+
+### Comment Gateway Lab l'utilise ?
+
+`DhcpSniffer` (`src/modules/dhcp_sniffer.*`) tourne en continu, indépendamment
+de tout scan, dès la connexion WiFi établie :
+
+```
+1. Socket UDP lié sur 0.0.0.0:67, non bloquant
+2. A chaque paquet recu :
+   a. Verifie op=BOOTREQUEST + cookie magique DHCP
+   b. Extrait chaddr (MAC client), puis les options 12/53/60
+   c. Ne retient que les DHCPDISCOVER/DHCPREQUEST (option 53 = 1 ou 3)
+   d. Stocke hostname + vendorClass + osGuess dans une table MAC -> empreinte
+      (bornee a 64 entrees, eviction de la plus ancienne au-dela)
+3. NetworkScanner consulte cette table (simple lecture memoire, _enrichDevices())
+   pour chaque equipement deja decouvert par ARP, et complete son hostname/os
+   s'ils sont encore vides — sans jamais ecraser une source plus fiable
+```
+
+`osGuess` se limite volontairement à une petite table de signatures
+Vendor Class connues et stables (Windows/Android/Linux) : la liste de
+paramètres demandés (option 55), souvent utilisée en fingerprinting OS
+avancé, est trop ambiguë/instable sans base de signatures externe pour
+être exploitée de façon fiable ici.
+
+**Particularité par rapport aux autres modules** : `DhcpSniffer` n'est
+**jamais** déclenché par un scan (complet ou ciblé) — il n'émet aucune
+requête, donc n'ajoute aucun coût réseau au scan complet ni à la passe
+précise. C'est une source d'enrichissement purement passive et continue,
+comparable dans son principe au mDNS passif historique (retiré en v0.8.2
+pour une raison différente : conflit de socket avec le responder mDNS
+d'ESP-IDF, qui ne se pose pas ici puisqu'aucun service ESP-IDF n'occupe le
+port 67).
+
+---
+
 ## mDNS — Multicast DNS
 
 ### C'est quoi ?
@@ -555,6 +627,7 @@ juste deux entrées de plus dans la table des services interrogés.
 |---|---|---|---|
 | ARP | — | Ethernet L2 | Découverte des équipements (sweep) |
 | ICMP | — | IP | Repli si l'ARP ne répond pas (TTL → OS) |
+| DHCP | 67 | UDP broadcast 255.255.255.255 | Fingerprinting passif (hostname/OS) — écoute continue, jamais de requête |
 | mDNS | 5353 | UDP multicast 224.0.0.251 | Résolution de noms `.local` |
 | DNS-SD | 5353 | UDP multicast 224.0.0.251 | Services (`_matter._tcp`, `_matterc._udp`, `_googlecast._tcp`…) |
 | DNS PTR | 53 | UDP → serveur DNS box | Résolution de noms DHCP |
