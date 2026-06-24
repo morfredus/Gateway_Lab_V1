@@ -142,6 +142,12 @@ Phase 8 : Self entry
   → Ajoute l'ESP32 lui-même (l'ARP ne peut pas découvrir sa propre adresse)
 ```
 
+**Enrichissement DHCP passif** : l'étape finale `_enrichDevices()` consulte
+aussi, par MAC, la table tenue en continu par `DhcpSniffer` (cf.
+`src/modules/dhcp_sniffer.*` ci-dessous) — simple lecture mémoire, aucune
+requête supplémentaire. Complète hostname/os si encore vides, sans jamais
+écraser une source plus fiable (SSDP, API, mDNS/PTR…).
+
 **Thread-safety** : `_results` (le vecteur de résultats) est protégé par un mutex
 FreeRTOS. `getResults()` retourne une copie — jamais une référence.
 
@@ -167,6 +173,34 @@ voir `wifi_manager.cpp`) dès que le Wi-Fi est connecté — en pratique en
 permanence. Aucune API ESP-IDF publique ne permet d'observer passivement
 les annonces reçues par ce service partagé. `begin()`/`update()`/`end()`
 sont conservés comme no-op pour compatibilité. Voir `docs/WARNINGS.md`.
+
+---
+
+### `src/modules/dhcp_sniffer.*` — Fingerprinting passif DHCP
+
+**Rôle** : capter, sans jamais émettre de requête, les paquets DHCP
+broadcast des autres équipements pour en extraire hostname et OS déclarés.
+
+Module continu et indépendant de `NetworkScanner` :
+- `begin()` (appelé une fois le WiFi connecté, comme `timeSync`/`otaMgr`) :
+  ouvre un socket UDP non bloquant lié sur `0.0.0.0:67`. Si le bind échoue
+  (port déjà occupé), le module se désactive silencieusement — log
+  d'avertissement uniquement, aucun impact sur le reste du firmware.
+- `loop()` (appelé depuis la boucle principale) : draine jusqu'à 4 paquets
+  par appel, parse l'en-tête BOOTP fixe (`chaddr` = MAC client) puis les
+  options 12 (Host Name), 53 (Message Type — ne retient que
+  DISCOVER/REQUEST) et 60 (Vendor Class Identifier).
+- Stocke le résultat dans une table interne MAC → `DhcpFingerprint`
+  (mutex FreeRTOS dédié), bornée à 64 entrées (éviction de la plus
+  ancienne au-delà).
+- `lookup(mac)` : consultée uniquement par `NetworkScanner::_enrichDevices()`
+  — lecture mémoire, aucune dépendance temporelle avec le cycle de scan.
+
+`osGuess` provient d'une table de signatures Vendor Class limitée et
+documentée (`MSFT*` → Windows, `android-dhcp*` → Android, `dhcpcd*`/
+`udhcp*` → Linux) — volontairement sans heuristique sur l'option 55
+(liste de paramètres demandés), jugée trop instable sans base de
+signatures externe. Voir `docs/PROTOCOLS.md`.
 
 ---
 
@@ -231,6 +265,10 @@ protocoles plus coûteux, non utilisés lors du scan complet, et qui peuvent
 - `SnmpScanner` : GetRequest SNMP v1 (ASN.1 BER manuel) sur `sysDescr` (UDP 161)
 - `MediaApiScanner` : sondes HTTP séquentielles Cast (`:8008`), Sonos (`:1400`),
   Roku (`:8060`), Samsung Smart TV (`:8001`)
+- `MqttScanner` : connexion TCP unicast à un broker MQTT (`:1883`), CONNECT
+  anonyme + souscription `$SYS/broker/version` et `$SYS/broker/clients/connected`
+  — déclenché uniquement si le profil déduit (`SmartHome`/`Unknown`) a le
+  port MQTT ouvert
 
 Ces deux scanners sont appelés uniquement depuis `_runRescan(ip, deep)` dans
 `network_scanner.cpp`, exécuté dans une tâche FreeRTOS dédiée

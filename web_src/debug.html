@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gateway Lab V1 - Historique</title>
+  <title>Gateway Lab V1 - Debug</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="page-scan">
@@ -14,31 +14,30 @@
       Gateway Lab&nbsp;V1
       <span class="site-ver" id="site-ver">v—</span>
     </div>
-    <span class="site-tag">Historique</span>
+    <span class="site-tag">Logs de Debug</span>
   </header>
 
   <!-- ── Navigation ────────────────────────────────────────── -->
   <!-- include:menu.html -->
 
   <!-- ── Contenu ───────────────────────────────────────────── -->
+  <!-- PAGE TEMPORAIRE DE DEBOGAGE — voir docs/DEVELOPMENT.md pour la retirer -->
   <div class="card">
     <div class="card-header">
-      <p class="card-title">Vue chronologique</p>
-      <button class="reset-btn" id="clear-history-btn" onclick="clearHistory()">Vider l'historique</button>
+      <p class="card-title">Journal de redémarrage (debug)</p>
+      <button class="reset-btn" id="clear-bootlog-btn" onclick="clearBootLog()">Vider</button>
     </div>
     <p class="info-label" style="margin-bottom:0.9rem">
-      Journal des nouveaux équipements, reconnexions, déconnexions et changements
-      de champs détectés entre deux scans (100 derniers événements).
+      Page temporaire de débogage : à chaque démarrage, la raison du reset
+      précédent (crash, watchdog, brownout, reset logiciel...) ainsi que les
+      derniers logs émis avant ce reset sont enregistrés ici — sans avoir
+      besoin d'un moniteur série branché au moment des faits. Conserve les
+      derniers démarrages (borné en mémoire flash).
     </p>
-    <div class="hist-filters" id="hist-filters">
-      <label><input type="checkbox" class="hist-filter" value="new"     checked> Nouveaux équipements</label>
-      <label><input type="checkbox" class="hist-filter" value="online"  checked> Reconnexions</label>
-      <label><input type="checkbox" class="hist-filter" value="offline" checked> Déconnexions</label>
-      <label><input type="checkbox" class="hist-filter" value="changed" checked> Changements de champs</label>
-      <label><input type="checkbox" id="hist-filter-favorite"> Favoris uniquement</label>
-    </div>
-    <div id="history-list"></div>
-    <p class="empty-msg" id="history-empty" style="display:none">Aucun événement enregistré pour le moment.</p>
+    <div id="bootlog-list"></div>
+    <p class="empty-msg" id="bootlog-empty" style="display:none">
+      Aucun redémarrage enregistré pour le moment.
+    </p>
   </div>
 
   <!-- ── Footer ────────────────────────────────────────────── -->
@@ -46,6 +45,6 @@
     <span id="footer-ts">—</span>
   </footer>
 
-  <script src="history.js"></script>
+  <script src="debug.js"></script>
 </body>
 </html>

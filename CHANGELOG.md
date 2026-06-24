@@ -5,6 +5,136 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.1] - 2026-06-24
+
+### Corrige
+
+- **Page Historique : aucune déconnexion jamais visible pour les appareils
+  mobiles, malgré des reconnexions répétées.** Dans `NetworkScanner::_monitorTick()`
+  (`src/modules/network_scanner.cpp`), une absence courte (<30 min) d'un
+  équipement classé mobile ne journalisait strictement aucun événement côté
+  déconnexion (silence volontaire pour éviter le bruit), alors que la
+  réapparition journalisait systématiquement `"reconnected"`. Résultat :
+  l'historique affichait des chaînes de "Reconnecté" sans jamais la
+  déconnexion correspondante. Une absence courte de mobile journalise
+  désormais un événement discret `"offline_brief"`, symétrique au
+  `"reconnected"` qui suit.
+
+### Ajoute
+
+- **Regroupement des reconnexions en chaîne sur la page Historique**
+  (`web_src/history.js`) : lorsque plusieurs événements de reconnexion
+  consécutifs d'un même équipement se suivent à moins de 20 minutes
+  d'intervalle **sans aucune déconnexion explicite** entre eux (`offline`,
+  `disappeared`, `mobile_left`, ou désormais `offline_brief`), ils sont
+  fusionnés dans l'affichage en une seule entrée « ⚠️ Connexion instable
+  détectée », avec le nombre de reconnexions et la fenêtre de temps
+  concernée — au lieu d'empiler des "Reconnecté" sans cause visible. Si une
+  déconnexion (même discrète) existe entre deux reconnexions, aucune fusion
+  n'a lieu : chaque événement reste affiché individuellement, la cause étant
+  déjà visible.
+  - Nouveau type d'événement `offline_brief` (icône ⚪, catégorie de filtre
+    "Déconnexions") et nouveau style `.hist-offline-brief`/`.hist-unstable`
+    (`web_src/styles.css`).
+
+---
+
+## [1.1.0] - 2026-06-23
+
+### Ajoute
+
+- **Fingerprinting passif DHCP** (`src/modules/dhcp_sniffer.h/.cpp`) :
+  module continu et indépendant du scanner réseau, démarré une fois le
+  WiFi connecté. Ouvre un socket UDP non bloquant sur `0.0.0.0:67` et
+  écoute les paquets DHCPDISCOVER/REQUEST émis par les autres équipements
+  du réseau — sans jamais émettre de requête ni répondre. Extrait le
+  hostname déclaré (option 12) et devine l'OS à partir du vendor class
+  identifier (option 60 : `MSFT*` → Windows, `android-dhcp*` → Android,
+  `dhcpcd*`/`udhcp*` → Linux). Table interne MAC → fingerprint bornée à
+  64 entrées. `NetworkScanner::_enrichDevices()` consulte cette table en
+  mémoire (lecture seule, aucune requête) pour compléter `hostname`/`os`
+  des équipements quand ils sont encore vides, sans jamais écraser une
+  source plus fiable (SSDP, API, mDNS/PTR…). Source affichée : `DHCP`.
+  Zéro coût ajouté au scan complet, au scan ciblé ou à la surveillance
+  continue.
+
+## [1.0.9] - 2026-06-23
+
+### Ajoute
+
+- **Sondage de broker MQTT lors de la passe précise approfondie**
+  (`src/modules/mqtt_scanner.h/.cpp`) : déclenché uniquement quand le profil
+  déduit (`SmartHome`/`Unknown`) a le port 1883 ouvert. Connexion TCP
+  unicast directe vers l'IP visée — CONNECT MQTT v3.1.1 anonyme, puis,
+  si accepté sans authentification, souscription aux topics standards
+  `$SYS/broker/version` et `$SYS/broker/clients/connected` (jamais aux
+  topics applicatifs des appareils). Le modèle/catégorie de l'équipement
+  sont enrichis avec la version du broker et son nombre de clients
+  connectés, source `MQTT`. Aucun impact sur le scan complet ni sur la
+  surveillance continue.
+
+---
+
+## [1.0.8] - Patch 8 - 2026-06-21
+
+### Ajoute
+
+- **Extension du journal de redémarrage (`BootLog`, FONCTIONNALITÉ TEMPORAIRE)**
+  avec des informations supplémentaires pour le débogage de crashs/watchdogs,
+  sans toucher à l'architecture existante (`src/modules/boot_log.h/.cpp`) :
+  - Compteurs persistants `boot_count`/`crash_count` en NVS (`Preferences`,
+    survivent aussi à une coupure d'alimentation), incrémentés à chaque
+    démarrage et à chaque reset classé "anormal" (panic, watchdog, brownout).
+  - Température interne du SoC (`temperatureRead()`) capturée à chaque boot.
+  - Dernier état connu avant le reset (heap libre, plus gros bloc libre,
+    uptime, état/RSSI/IP WiFi, dernière "tâche" signalée via
+    `bootLog.setLastTask(...)`), grâce à un instantané RTC rafraîchi en
+    continu par la nouvelle méthode `BootLog::service()` (à appeler depuis
+    `loop()`).
+  - Instantané périodique `RuntimeStats` (uptime, heap libre, plus gros bloc
+    libre, nombre d'équipements connus, pages servies, appels API) rafraîchi
+    toutes les `BOOT_LOG_STATS_INTERVAL_MS` (30 s par défaut) et persisté
+    avec chaque entrée de boot.
+  - Chaque ligne du buffer circulaire de logs est désormais un objet JSON
+    compact incluant le heap libre et le plus gros bloc libre au moment du
+    log, en plus du timestamp/niveau/tag/message.
+  - Nouveaux réglages dans `include/app_config.h` : `LOG_BUFFER_SIZE`,
+    `LOG_LINE_MAX_LEN`, `BOOT_LOG_STATS_INTERVAL_MS`.
+  - `main.cpp` fournit le nombre d'équipements connus via
+    `bootLog.setDevicesCountProvider(...)` et trace quelques tâches clés
+    via `bootLog.setLastTask(...)` (scan réseau, sauvegarde manuelle).
+  - `web_server.cpp` comptabilise désormais `pagesServed`/`apiCalls` via un
+    petit wrapper interne `_on()` autour de l'enregistrement des routes.
+  - Page `/debug` (`debug.html`/`debug.js`) mise à jour pour afficher toutes
+    ces nouvelles données par démarrage enregistré.
+  - Limite documentée : pas de capture de stack trace au PANIC (hors de
+    portée d'un module Arduino autonome sans `esp_core_dump` — voir le
+    commentaire dédié dans `boot_log.h`) ; la trace ESP-IDF reste visible
+    uniquement sur le moniteur série, comme avant.
+
+---
+
+## [1.0.7] - Patch 7 - 2026-06-21
+
+### Ajoute
+
+- **Journal de redémarrage pour le débogage, sans moniteur série
+  (FONCTIONNALITÉ TEMPORAIRE).** Nouveau module `src/modules/boot_log.h/.cpp` :
+  un buffer circulaire des derniers logs (`Log::i/w/e/d`) est conservé en
+  RAM `RTC_NOINIT_ATTR` (survit à un reboot logiciel, un crash, un
+  watchdog ou un brownout — pas à une coupure d'alimentation). Au
+  démarrage suivant, la raison du reset (`esp_reset_reason()` : panic,
+  watchdog, brownout, reset logiciel/externe...) et le contenu du buffer
+  précédent sont persistés dans `/bootlog.json` sur LittleFS (10 derniers
+  démarrages, FIFO), consultables sur une nouvelle page `/debug`
+  (lien "Debug" dans le menu) et via `GET`/`DELETE /api/bootlog`.
+  Pensé pour être retiré facilement une fois le débogage terminé :
+  toutes les additions sont regroupées et signalées par le commentaire
+  « DEBOGAGE TEMPORAIRE » (voir `docs/DEVELOPMENT.md` pour la procédure
+  de retrait complète).
+
+---
+
 ## [1.0.6] - Patch 6 - 2026-06-19
 
 ### Corrige

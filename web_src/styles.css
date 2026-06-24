@@ -491,6 +491,8 @@ tr:hover td      { background: #ffffff06; }
 .source-sonos   { background: #1c1c1c; color: #e5e5e5; }
 .source-roku    { background: #2a1530; color: #e9a6ff; }
 .source-samsung { background: #10202a; color: #7dd3fc; }
+.source-mqtt    { background: #1a2a14; color: #a3e635; }
+.source-dhcp    { background: #2a1c10; color: #fbbf24; }
 
 /* Catégorie (IoT, Mobile, Router…) */
 .type-badge {
@@ -834,9 +836,11 @@ input[type=file] {
 .hist-new-val { color: #4ade80; }
 .hist-time { font-size: 0.72rem; color: #aeb9c9; margin-top: 0.2rem; }
 .hist-new     .hist-title { color: #7dd3fc; }
-.hist-online  .hist-title { color: #4ade80; }
-.hist-offline .hist-title { color: #f87171; }
-.hist-changed .hist-title { color: #facc15; }
+.hist-online        .hist-title { color: #4ade80; }
+.hist-offline       .hist-title { color: #f87171; }
+.hist-offline-brief .hist-title { color: #aeb9c9; }
+.hist-unstable      .hist-title { color: #fb923c; }
+.hist-changed       .hist-title { color: #facc15; }
 
 /* ════════════════════════════════════════════════════
    16. PAGE ÉQUIPEMENTS — Alias utilisateur

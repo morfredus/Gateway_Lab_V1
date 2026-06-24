@@ -9,9 +9,11 @@ var EVENT_LABEL = {
   'mobile_returned':         { icon: '📱', text: 'Mobile de retour',         cls: 'hist-online' },
   'offline':                 { icon: '🔴', text: 'Hors ligne',               cls: 'hist-offline' },
   'disappeared':             { icon: '🔴', text: 'Disparu',                  cls: 'hist-offline' },
+  'offline_brief':           { icon: '⚪', text: 'Brève absence',            cls: 'hist-offline-brief' },
   'mobile_left':             { icon: '📴', text: 'Mobile parti',             cls: 'hist-offline' },
   'changed':                 { icon: '✏️', text: 'Changement',               cls: 'hist-changed' },
-  'identification_improved': { icon: '🔍', text: 'Identification améliorée', cls: 'hist-changed' }
+  'identification_improved': { icon: '🔍', text: 'Identification améliorée', cls: 'hist-changed' },
+  'unstable_connection':     { icon: '⚠️', text: 'Connexion instable détectée', cls: 'hist-unstable' }
 };
 
 // Categorie de filtre (case a cocher) associee a chaque type d'evenement reel —
@@ -24,9 +26,11 @@ var EVENT_FILTER_CATEGORY = {
   'mobile_returned':         'online',
   'offline':                 'offline',
   'disappeared':             'offline',
+  'offline_brief':           'offline',
   'mobile_left':             'offline',
   'changed':                 'changed',
-  'identification_improved': 'changed'
+  'identification_improved': 'changed',
+  'unstable_connection':     'online'
 };
 
 var FIELD_LABEL = {
@@ -47,7 +51,12 @@ function fmtDate(epoch) {
 function renderEntry(e) {
   var meta = EVENT_LABEL[e.event] || { icon: '•', text: e.event, cls: '' };
   var detail = '';
-  if (e.event === 'changed' || e.event === 'identification_improved') {
+  if (e._unstable) {
+    meta = EVENT_LABEL.unstable_connection;
+    var span = Math.round((e._unstable.toEpoch - e._unstable.fromEpoch) / 60) || 1;
+    detail = '<div class="hist-detail">' + e._unstable.count + ' reconnexions en ' + span +
+              ' min, sans déconnexion explicite observée — connexion probablement instable.</div>';
+  } else if (e.event === 'changed' || e.event === 'identification_improved') {
     var fieldName = FIELD_LABEL[e.field] || e.field;
     detail = '<div class="hist-detail">' + esc(fieldName) + ' : <span class="hist-old">' +
               esc(e.oldValue) + '</span> → <span class="hist-new-val">' + esc(e.newValue) + '</span></div>';
@@ -63,7 +72,60 @@ function renderEntry(e) {
 }
 
 var historyData  = [];
+var displayData  = [];
 var favoriteMacs = {};
+
+// Fenetre en dessous de laquelle des reconnexions consecutives du meme
+// appareil, sans deconnexion explicite (offline/disappeared/mobile_left)
+// entre elles, sont regroupees en un seul evenement "connexion instable"
+// plutot que d'afficher une chaine de "Reconnecte" sans cause visible.
+var UNSTABLE_WINDOW_SEC = 20 * 60;
+var RECONNECT_EVENTS = { 'online': true, 'reconnected': true, 'mobile_returned': true };
+var VISIBLE_DISCONNECT_EVENTS = { 'offline': true, 'disappeared': true, 'mobile_left': true };
+
+// historyData est trie du plus recent au plus ancien (comme renvoye par l'API).
+// L'ordre relatif des evenements d'un meme appareil est donc preserve.
+function buildDisplayData(raw) {
+  var byKey = {};
+  raw.forEach(function(e, idx) {
+    var key = e.mac || e.ip;
+    if (!key) return;
+    (byKey[key] = byKey[key] || []).push(idx);
+  });
+
+  var hidden = {};
+  var groupInfo = {};
+
+  Object.keys(byKey).forEach(function(key) {
+    var idxs = byKey[key];
+    var i = 0;
+    while (i < idxs.length) {
+      if (!RECONNECT_EVENTS[raw[idxs[i]].event]) { i++; continue; }
+      var j = i + 1;
+      while (j < idxs.length) {
+        var prevEv = raw[idxs[j - 1]];
+        var curEv  = raw[idxs[j]];
+        if (VISIBLE_DISCONNECT_EVENTS[curEv.event]) break;      // deconnexion visible -> pas d'instabilite
+        if (!RECONNECT_EVENTS[curEv.event]) break;              // autre evenement (offline_brief, changed...) -> on arrete la chaine
+        if (prevEv.epoch - curEv.epoch > UNSTABLE_WINDOW_SEC) break; // trop espace pour etre "instable"
+        j++;
+      }
+      var runLen = j - i;
+      if (runLen >= 2) {
+        groupInfo[idxs[i]] = { count: runLen, fromEpoch: raw[idxs[j - 1]].epoch, toEpoch: raw[idxs[i]].epoch };
+        for (var k = i + 1; k < j; k++) hidden[idxs[k]] = true;
+      }
+      i = j;
+    }
+  });
+
+  var display = [];
+  raw.forEach(function(e, idx) {
+    if (hidden[idx]) return;
+    display.push(groupInfo[idx] ? Object.assign({}, e, { _unstable: groupInfo[idx] }) : e);
+  });
+  return display;
+}
 
 function activeFilters() {
   var checked = {};
@@ -74,7 +136,7 @@ function activeFilters() {
 function renderHistory() {
   var filters    = activeFilters();
   var favOnly    = document.getElementById('hist-filter-favorite').checked;
-  var filtered   = historyData.filter(function(e) {
+  var filtered   = displayData.filter(function(e) {
     var category = EVENT_FILTER_CATEGORY[e.event] || e.event;
     if (!filters[category]) return false;
     if (favOnly && !favoriteMacs[e.mac] && !favoriteMacs[e.ip]) return false;
@@ -85,7 +147,7 @@ function renderHistory() {
   if (!filtered.length) {
     container.innerHTML = '';
     empty.style.display = 'block';
-    empty.textContent = historyData.length ? 'Aucun événement ne correspond aux filtres sélectionnés.' : 'Aucun événement enregistré pour le moment.';
+    empty.textContent = displayData.length ? 'Aucun événement ne correspond aux filtres sélectionnés.' : 'Aucun événement enregistré pour le moment.';
     return;
   }
   empty.style.display = 'none';
@@ -117,6 +179,7 @@ function loadHistory() {
     .then(function(r) { return r.json(); })
     .then(function(list) {
       historyData = list || [];
+      displayData = buildDisplayData(historyData);
       renderHistory();
       document.getElementById('footer-ts').textContent = 'Actualisé : ' + new Date().toLocaleTimeString('fr-FR');
     })

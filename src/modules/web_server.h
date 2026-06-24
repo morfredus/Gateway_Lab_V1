@@ -38,6 +38,9 @@
  *   GET  /api/network/health — Tableau de bord reseau (presents/connus, 24h, moins stables)
  *   GET  /api/monitor  — Etat de la surveillance continue (activee + frequence en minutes)
  *   POST /api/monitor  — Definit l'etat de la surveillance continue (parametres enabled, minutes 1-60)
+ *   GET  /debug         — [DEBOGAGE TEMPORAIRE] Journal de redemarrage (raison + derniers logs)
+ *   GET  /api/bootlog   — [DEBOGAGE TEMPORAIRE] Historique des boots en JSON (voir boot_log.h)
+ *   DELETE /api/bootlog — [DEBOGAGE TEMPORAIRE] Vide l'historique des boots
  *
  * Découplage via ScanProvider :
  *   WebServerModule ne connaît pas NetworkScanner directement.
@@ -48,6 +51,7 @@
 #pragma once
 #include <Arduino.h>
 #include <functional>
+#include <WebServer.h>   // HTTPMethod (utilise par _on(), voir plus bas)
 
 // Interface de communication entre le serveur web et le scanner réseau.
 // Chaque champ est une fonction lambda fournie par main.cpp.
@@ -94,6 +98,12 @@ public:
     void loop();
 
 private:
+    // Enregistre une route en comptabilisant son appel dans BootLog::RuntimeStats
+    // (pagesServed pour les pages HTML, apiCalls pour /api/*) — voir boot_log.h.
+    // [DEBOGAGE TEMPORAIRE] : simple wrapper autour de _server.on(), a retirer
+    // (revenir a des appels directs _server.on()) une fois le debogage termine.
+    void _on(const char* path, HTTPMethod method, std::function<void()> handler);
+
     void _handleRoot();             // Sert la page HTML principale
     void _handleApiStatus();        // Retourne l'état WiFi/système en JSON
     void _handleApiDevices();       // Retourne la liste des équipements en JSON

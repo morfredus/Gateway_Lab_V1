@@ -22,12 +22,24 @@
 #include "modules/status_led.h"        // Pilotage de la NeoPixel d'etat
 #include "modules/boot_button.h"       // Gestes du bouton BOOT (court/maintien 3s)
 #include "modules/system_health.h"     // Garde-fou heap — mode degrade (pas de redemarrage auto)
+#include "modules/dhcp_sniffer.h"      // Fingerprinting passif DHCP (UDP 67) - hostname/OS
+#ifdef BOOT_LOG_ENABLED
+#include "modules/boot_log.h"          // [DEBOGAGE TEMPORAIRE] Journal de redemarrage — voir boot_log.h
+#endif
 
 // Suit les transitions du scan en cours pour piloter la LED (Scanning -> Ready)
 static bool _ledScanInProgress = false;
 
 void setup() {
     Serial.begin(115200);
+
+#ifdef BOOT_LOG_ENABLED
+    // Doit s'executer avant le premier Log::* pour persister correctement
+    // la raison du reset precedent et son journal capture
+    bootLog.begin();
+    bootLog.setDevicesCountProvider([] { return (uint32_t)netScanner.getStats().known; });
+#endif
+
     Log::i("Main", "=== %s v%s ===", PROJECT_NAME, PROJECT_VERSION);
 
     systemHealth.begin();
@@ -48,9 +60,17 @@ void setup() {
 
     // Bouton BOOT — appui court (scan) / maintien 3s (sauvegarde)
     bootButton.begin({
-        .onShortPress = [] { netScanner.startScan(); },
+        .onShortPress = [] {
+#ifdef BOOT_LOG_ENABLED
+            bootLog.setLastTask("Scan reseau (bouton BOOT)");
+#endif
+            netScanner.startScan();
+        },
         .onHold       = [] {
             statusLed.setState(LedState::Saving, 1500);
+#ifdef BOOT_LOG_ENABLED
+            bootLog.setLastTask("Sauvegarde JSON (bouton BOOT)");
+#endif
             netScanner.saveNow();
         },
     });
@@ -69,6 +89,10 @@ void setup() {
         // Synchronisation NTP - necessaire pour l'historique (firstSeen/lastSeen)
         timeSync.begin();
 
+        // Ecoute passive DHCP (UDP/67) - fingerprinting hostname/OS, sans
+        // aucune requete active ; tourne en continu independamment du scan
+        dhcpSniffer.begin();
+
 #ifdef ENABLE_OTA
         // Mise à jour OTA disponible sur le réseau local (ArduinoOTA)
         // et via la page /update du serveur web
@@ -76,6 +100,9 @@ void setup() {
 #endif
 
         // Scan automatique a la connexion WiFi
+#ifdef BOOT_LOG_ENABLED
+        bootLog.setLastTask("Scan reseau (connexion WiFi)");
+#endif
         netScanner.startScan();
 
 #ifdef ENABLE_WEB_SERVER
@@ -162,6 +189,11 @@ void setup() {
 }
 
 void loop() {
+#ifdef BOOT_LOG_ENABLED
+    // Heartbeat + instantane periodique (RuntimeStats/WiFi) — voir boot_log.h
+    bootLog.service();
+#endif
+
     // Garde-fou mémoire — bascule en mode dégradé si le heap devient critique
     // (voir modules/system_health.h) ; aucun redémarrage automatique.
     systemHealth.loop();
@@ -182,6 +214,9 @@ void loop() {
     // Surveillance continue (v1.0.0) — sweep ARP leger + drainage des rescans
     // differes, cadence interne geree par serviceMonitor() lui-meme
     netScanner.serviceMonitor();
+
+    // Drainage non bloquant des paquets DHCP captes passivement (UDP/67)
+    dhcpSniffer.loop();
 
     // NetworkScanner n'a pas de loop() : il tourne en tâche FreeRTOS sur Core 0
     // — on suit ses transitions ici pour piloter la LED d'etat

@@ -22,7 +22,6 @@ web_src/extracted/
 .lib/
 .cache/
 .morfredus/
-README.txt
 
 # Arduino IDE (fichiers temporaires ou specifiques a l'utilisateur)
 *.lss              # Fichiers de liste de compilation (Arduino IDE et autres)
@@ -37,6 +36,7 @@ temp/
 .arduino/
 arduino/
 hardware/
+data/
 
 # Fichiers compilés (binaires) pour le téléchargement
 *.hex

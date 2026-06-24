@@ -87,7 +87,9 @@ function sourceBadge(source) {
     'Cast':         { cls: 'source-cast',      label: 'Cast',      title: 'API Google Cast (/setup/eureka_info)' },
     'Sonos':        { cls: 'source-sonos',     label: 'Sonos',     title: 'API Sonos (/xml/device_description.xml)' },
     'Roku':         { cls: 'source-roku',      label: 'Roku',      title: 'API Roku (/query/device-info)' },
-    'SamsungTV':    { cls: 'source-samsung',   label: 'Samsung',   title: 'API Samsung Smart TV (/api/v2/)' }
+    'SamsungTV':    { cls: 'source-samsung',   label: 'Samsung',   title: 'API Samsung Smart TV (/api/v2/)' },
+    'MQTT':         { cls: 'source-mqtt',      label: 'MQTT',      title: 'Broker MQTT (port 1883) — CONNECT + topics $SYS/broker/*' },
+    'DHCP':         { cls: 'source-dhcp',      label: 'DHCP',      title: 'Nom resolu via fingerprinting DHCP passif (option 12, UDP 67)' }
   };
   var c = cfg[source];
   if (!c) return '';

@@ -22,6 +22,10 @@
 #include "../../include/web_interface_wifi.h" // WIFI_PAGE (page Systeme en PROGMEM)
 #include "../../include/web_interface_topology.h" // TOPOLOGY_PAGE (topologie reseau en PROGMEM)
 #include "../utils/logger.h"
+#ifdef BOOT_LOG_ENABLED
+#include "boot_log.h"                          // [DEBOGAGE TEMPORAIRE] Journal de redemarrage — voir boot_log.h
+#include "../../include/web_interface_debug.h" // DEBUG_PAGE (journal de redemarrage en PROGMEM)
+#endif
 
 static const char* TAG = "WebSrv";
 
@@ -36,46 +40,57 @@ void WebServerModule::registerScanProvider(ScanProvider p) {
     _hasScan = true;
 }
 
+void WebServerModule::_on(const char* path, HTTPMethod method, std::function<void()> handler) {
+    String p(path);
+    _server.on(path, method, [handler, p]() {
+#ifdef BOOT_LOG_ENABLED
+        if (p.startsWith("/api/")) bootLog.noteApiCall();
+        else                       bootLog.notePageServed();
+#endif
+        handler();
+    });
+}
+
 void WebServerModule::begin(uint16_t port) {
     if (_started) return;  // Le socket TCP persiste après reconnexion WiFi
     _started = true;
     // Enregistrement de toutes les routes HTTP
     // HTTP_GET = le navigateur demande une ressource
     // HTTP_POST = le navigateur envoie des données (formulaire, upload...)
-    _server.on("/",           HTTP_GET,  [this]() { _handleRoot(); });
-    _server.on("/scan",       HTTP_GET,  [this]() {
+    _on("/",           HTTP_GET,  [this]() { _handleRoot(); });
+    _on("/scan",       HTTP_GET,  [this]() {
         if (_hasScan && _scan.acknowledgeNewDevices) _scan.acknowledgeNewDevices();
         _server.send_P(200, "text/html", SCAN_PAGE);
     });
-    _server.on("/history",    HTTP_GET,  [this]() { _server.send_P(200, "text/html", HISTORY_PAGE); });
-    _server.on("/topology",   HTTP_GET,  [this]() { _server.send_P(200, "text/html", TOPOLOGY_PAGE); });
-    _server.on("/api/status", HTTP_GET,  [this]() { _handleApiStatus(); });
-    _server.on("/api/devices",HTTP_GET,  [this]() { _handleApiDevices(); });
-    _server.on("/api/scan",   HTTP_POST, [this]() { _handleApiScanTrigger(); });
-    _server.on("/api/alias",  HTTP_POST, [this]() { _handleApiSetAlias(); });
-    _server.on("/api/devices/reset", HTTP_POST, [this]() { _handleApiDevicesReset(); });
-    _server.on("/api/devices/rescan", HTTP_POST, [this]() { _handleApiDeviceRescan(); });
-    _server.on("/api/devices/rescan/status", HTTP_GET, [this]() { _handleApiDeviceRescanStatus(); });
-    _server.on("/api/history",HTTP_GET,  [this]() { _handleApiHistory(); });
-    _server.on("/api/history",HTTP_DELETE, [this]() { _handleApiHistoryClear(); });
-    _server.on("/api/backup", HTTP_GET,  [this]() { _handleApiBackup(); });
-    _server.on("/api/restore",HTTP_POST, [this]() { _handleApiRestore(); });
-    _server.on("/api/devices/export.csv", HTTP_GET, [this]() { _handleApiDevicesExportCsv(); });
-    _server.on("/api/favorite", HTTP_POST,   [this]() { _handleApiSetFavorite(); });
-    _server.on("/api/notes",    HTTP_POST,   [this]() { _handleApiAddNote(); });
-    _server.on("/api/notes",    HTTP_DELETE, [this]() { _handleApiDeleteNote(); });
-    _server.on("/api/diagnostics", HTTP_GET, [this]() { _handleApiDiagnostics(); });
-    _server.on("/wifi",       HTTP_GET,  [this]() { _server.send_P(200, "text/html", WIFI_PAGE); });
-    _server.on("/api/wifi",   HTTP_GET,  [this]() { _handleApiWifiGet(); });
-    _server.on("/api/wifi",   HTTP_POST, [this]() { _handleApiWifiPost(); });
-    _server.on("/api/wifi",   HTTP_DELETE, [this]() { _handleApiWifiDelete(); });
-    _server.on("/api/system/backup",  HTTP_GET,  [this]() { _handleApiSystemBackup(); });
-    _server.on("/api/system/restore", HTTP_POST, [this]() { _handleApiSystemRestore(); });
-    _server.on("/api/mobility",       HTTP_POST, [this]() { _handleApiSetMobility(); });
-    _server.on("/api/network/health", HTTP_GET,  [this]() { _handleApiNetworkHealth(); });
-    _server.on("/api/monitor",        HTTP_GET,  [this]() { _handleApiMonitorGet(); });
-    _server.on("/api/monitor",        HTTP_POST, [this]() { _handleApiMonitorPost(); });
-    _server.on("/api/system/health",  HTTP_GET,  [this]() {
+    _on("/history",    HTTP_GET,  [this]() { _server.send_P(200, "text/html", HISTORY_PAGE); });
+    _on("/topology",   HTTP_GET,  [this]() { _server.send_P(200, "text/html", TOPOLOGY_PAGE); });
+    _on("/api/status", HTTP_GET,  [this]() { _handleApiStatus(); });
+    _on("/api/devices",HTTP_GET,  [this]() { _handleApiDevices(); });
+    _on("/api/scan",   HTTP_POST, [this]() { _handleApiScanTrigger(); });
+    _on("/api/alias",  HTTP_POST, [this]() { _handleApiSetAlias(); });
+    _on("/api/devices/reset", HTTP_POST, [this]() { _handleApiDevicesReset(); });
+    _on("/api/devices/rescan", HTTP_POST, [this]() { _handleApiDeviceRescan(); });
+    _on("/api/devices/rescan/status", HTTP_GET, [this]() { _handleApiDeviceRescanStatus(); });
+    _on("/api/history",HTTP_GET,  [this]() { _handleApiHistory(); });
+    _on("/api/history",HTTP_DELETE, [this]() { _handleApiHistoryClear(); });
+    _on("/api/backup", HTTP_GET,  [this]() { _handleApiBackup(); });
+    _on("/api/restore",HTTP_POST, [this]() { _handleApiRestore(); });
+    _on("/api/devices/export.csv", HTTP_GET, [this]() { _handleApiDevicesExportCsv(); });
+    _on("/api/favorite", HTTP_POST,   [this]() { _handleApiSetFavorite(); });
+    _on("/api/notes",    HTTP_POST,   [this]() { _handleApiAddNote(); });
+    _on("/api/notes",    HTTP_DELETE, [this]() { _handleApiDeleteNote(); });
+    _on("/api/diagnostics", HTTP_GET, [this]() { _handleApiDiagnostics(); });
+    _on("/wifi",       HTTP_GET,  [this]() { _server.send_P(200, "text/html", WIFI_PAGE); });
+    _on("/api/wifi",   HTTP_GET,  [this]() { _handleApiWifiGet(); });
+    _on("/api/wifi",   HTTP_POST, [this]() { _handleApiWifiPost(); });
+    _on("/api/wifi",   HTTP_DELETE, [this]() { _handleApiWifiDelete(); });
+    _on("/api/system/backup",  HTTP_GET,  [this]() { _handleApiSystemBackup(); });
+    _on("/api/system/restore", HTTP_POST, [this]() { _handleApiSystemRestore(); });
+    _on("/api/mobility",       HTTP_POST, [this]() { _handleApiSetMobility(); });
+    _on("/api/network/health", HTTP_GET,  [this]() { _handleApiNetworkHealth(); });
+    _on("/api/monitor",        HTTP_GET,  [this]() { _handleApiMonitorGet(); });
+    _on("/api/monitor",        HTTP_POST, [this]() { _handleApiMonitorPost(); });
+    _on("/api/system/health",  HTTP_GET,  [this]() {
         String j = "{\"degraded\":";
         j += systemHealth.isDegraded() ? "true" : "false";
         j += ",\"reason\":\"" + systemHealth.reason() + "\",\"freeHeap\":";
@@ -84,23 +99,43 @@ void WebServerModule::begin(uint16_t port) {
         _server.sendHeader("Cache-Control", "no-cache");
         _server.send(200, "application/json", j);
     });
-    _server.on("/api/system/restart", HTTP_POST, [this]() {
+    _on("/api/system/restart", HTTP_POST, [this]() {
         _server.send(200, "application/json", "{\"ok\":true}");
         systemHealth.restartNow();
     });
-    _server.on("/api/led/brightness", HTTP_GET,  [this]() {
+    _on("/api/led/brightness", HTTP_GET,  [this]() {
         String j = "{\"brightness\":";
         j += statusLed.getBrightness();
         j += "}";
         _server.send(200, "application/json", j);
     });
-    _server.on("/api/led/brightness", HTTP_POST, [this]() {
+    _on("/api/led/brightness", HTTP_POST, [this]() {
         if (!_server.hasArg("value")) { _server.send(400, "application/json", "{\"error\":\"value manquant\"}"); return; }
         int v = _server.arg("value").toInt();
         if (v < 0 || v > 100) { _server.send(400, "application/json", "{\"error\":\"valeur hors plage (0-100)\"}"); return; }
         statusLed.setBrightness((uint8_t)v);
         _server.send(200, "application/json", "{\"status\":\"ok\"}");
     });
+#ifdef BOOT_LOG_ENABLED
+    // [DEBOGAGE TEMPORAIRE] Page et API du journal de redemarrage — voir boot_log.h.
+    // A retirer (ce bloc + la page web_src/debug.html/.js + le lien menu.html)
+    // une fois le debogage termine.
+    _on("/debug",        HTTP_GET, [this]() {
+        // Evite qu'un navigateur garde en cache une ancienne version de la
+        // page pendant les tests successifs de ce module (Patch 8) — la
+        // page elle-meme change peu mais c'est gratuit a desactiver.
+        _server.sendHeader("Cache-Control", "no-cache");
+        _server.send_P(200, "text/html", DEBUG_PAGE);
+    });
+    _on("/api/bootlog",  HTTP_GET, [this]() {
+        _server.sendHeader("Cache-Control", "no-cache");
+        _server.send(200, "application/json", bootLog.getLogJson());
+    });
+    _on("/api/bootlog",  HTTP_DELETE, [this]() {
+        bootLog.clear();
+        _server.send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+#endif
     _server.onNotFound(       [this]()  { _handleNotFound(); });
 
     // Délégation des routes OTA à OtaManager (/update GET + POST)

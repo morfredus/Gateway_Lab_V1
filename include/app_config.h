@@ -32,4 +32,14 @@
 // #define ENABLE_MQTT
 // #define ENABLE_HUE
 
+// [DEBOGAGE TEMPORAIRE] Journal de redemarrage (src/modules/boot_log.h) —
+// capture les derniers logs + la raison du reset avant chaque reboot, sans
+// moniteur serie. A retirer (cette ligne + boot_log.h/.cpp + page /debug)
+// une fois le debogage termine.
+#define BOOT_LOG_ENABLED
+#define MAX_BOOT_LOG_ENTRIES   10     // Nombre de boots conserves dans /bootlog.json (FIFO)
+#define LOG_BUFFER_SIZE        20     // Lignes du buffer circulaire RTC (logs avant reboot)
+#define LOG_LINE_MAX_LEN       160    // Longueur max d'une ligne (JSON compact : t/lvl/tag/heap/blk/msg)
+#define BOOT_LOG_STATS_INTERVAL_MS  30000   // Cadence de l'instantane RuntimeStats/WiFi periodique
+
 #endif // APP_CONFIG_H
