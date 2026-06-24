@@ -100,6 +100,9 @@ struct NetworkDevice {
     String   mobilityOverride;          // "" = auto-detection, "fixed" ou "mobile" (force par l'utilisateur)
     bool     mobileAwayNotified  = false; // true si l'evenement "mobile_left" a deja ete journalise pour l'absence en cours
 
+    // Topologie reseau (v0.4.x) -----------------------------------------
+    String   topologyParent;            // MAC de l'equipement en amont (AP/repeteur/switch) declare par l'utilisateur - "" = inconnu/direct sur la passerelle
+
     uint32_t lastSeen;      // millis() du dernier scan — converti en elapsed côté client
     bool     online;        // true si détecté lors du dernier scan
 };
@@ -223,6 +226,12 @@ public:
     // Force/annule la classification mobile/fixe d'un equipement
     // ("", "fixed", "mobile") - retourne false si introuvable
     bool setMobility(const String& macOrIp, const String& mode);
+
+    // Declare manuellement le parent reseau (AP/repeteur/switch en amont)
+    // d'un equipement, identifie par sa MAC - "" pour effacer (inconnu/direct
+    // sur la passerelle). Retourne false si l'equipement ou le parent
+    // (quand non vide) est introuvable, ou si parentMac == macOrIp.
+    bool setTopologyParent(const String& macOrIp, const String& parentMac);
 
     // Donnees de sante reseau pour le tableau de bord (compteurs 24h,
     // equipements presents/connus, equipements les moins stables)

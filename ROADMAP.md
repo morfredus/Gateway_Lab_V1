@@ -9,9 +9,10 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * Authentification du portail de configuration WiFi et de l'API `/api/wifi`
 * Reconnexion automatique vers le portail si tous les réseaux enregistrés
   échouent durablement (actuellement uniquement au tout premier démarrage)
-* Détection des points d'accès / répéteurs WiFi et visualisation graphique
-  de la topologie réseau (la page `/topology` ajoutée en v0.7.0 n'en est que
-  la première étape : liste texte passerelle/équipements)
+* Identification des switches connus
+* Intégration optionnelle de l'API locale des mesh WiFi propriétaires
+  (ex. TP-Link Deco) pour déduire automatiquement le rattachement exact
+  d'un appareil à un répéteur, en complément du rattachement manuel
 
 ---
 
@@ -48,11 +49,16 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * ~~Page dédiée et détection automatique de la passerelle~~ (terrain préparé
   en v0.7.0 : page `/topology`, vue texte passerelle/équipements à partir des
   données déjà collectées)
-* Détection des points d'accès / répéteurs WiFi
+* ~~Détection des points d'accès / répéteurs mesh WiFi par hostname~~ (ex.
+  TP-Link Deco, Orbi, eero, Nest WiFi — terminé : `applyMeshDetection()`,
+  `device_enricher.h`)
+* ~~Cartographie logique du réseau~~ (arbre SVG sur la page `/topology`)
+* ~~Relations entre équipements (qui est connecté à quel répéteur/AP)~~
+  (déclaration manuelle via `/api/topology/parent` — un scan ARP/SSDP seul ne
+  peut pas déduire le rattachement WiFi exact à un répéteur mesh propriétaire)
 * Identification des switches connus
-* Cartographie logique du réseau
-* Relations entre équipements (qui est connecté à quel répéteur/AP)
-* Visualisation graphique du réseau (graphe interactif)
+* Visualisation graphique du réseau plus riche (zoom, drag, icônes par
+  catégorie)
 
 ### v0.5.x — Connectivité
 

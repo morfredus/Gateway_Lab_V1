@@ -79,6 +79,7 @@ struct ScanProvider {
 
     // Surveillance continue / score de stabilite (v1.0.0)
     std::function<bool(const String& macOrIp, const String& mode)> setMobility;   // "", "fixed" ou "mobile"
+    std::function<bool(const String& macOrIp, const String& parentMac)> setTopologyParent; // "" pour effacer
     std::function<String()> getNetworkHealthJson;     // Tableau de bord reseau en JSON
     std::function<int()>    getMonitorInterval;       // Frequence courante (minutes)
     std::function<void(int minutes)> setMonitorInterval; // Definit la frequence (1-60 min), persistee NVS
@@ -127,6 +128,7 @@ private:
     void _handleApiSystemBackup();  // Sauvegarde des parametres de fonctionnement (JSON)
     void _handleApiSystemRestore(); // Restaure les parametres de fonctionnement depuis JSON
     void _handleApiSetMobility();   // Force/efface la classification mobile/fixe d'un equipement
+    void _handleApiSetTopologyParent(); // Declare/efface le parent reseau (AP/repeteur) d'un equipement
     void _handleApiNetworkHealth(); // Tableau de bord reseau (presents/connus, 24h, moins stables)
     void _handleApiMonitorGet();    // Frequence courante de la surveillance continue
     void _handleApiMonitorPost();   // Definit la frequence de la surveillance continue

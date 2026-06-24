@@ -87,6 +87,7 @@ void WebServerModule::begin(uint16_t port) {
     _on("/api/system/backup",  HTTP_GET,  [this]() { _handleApiSystemBackup(); });
     _on("/api/system/restore", HTTP_POST, [this]() { _handleApiSystemRestore(); });
     _on("/api/mobility",       HTTP_POST, [this]() { _handleApiSetMobility(); });
+    _on("/api/topology/parent", HTTP_POST, [this]() { _handleApiSetTopologyParent(); });
     _on("/api/network/health", HTTP_GET,  [this]() { _handleApiNetworkHealth(); });
     _on("/api/monitor",        HTTP_GET,  [this]() { _handleApiMonitorGet(); });
     _on("/api/monitor",        HTTP_POST, [this]() { _handleApiMonitorPost(); });
@@ -601,6 +602,32 @@ void WebServerModule::_handleApiSetMobility() {
     bool ok = _scan.setMobility(key, mode);
     _server.send(ok ? 200 : 404, "application/json",
                  ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/topology/parent — declare le parent reseau (AP/repeteur/switch
+// en amont) d'un equipement, pour la cartographie de la page Topologie.
+// Parametres (form-urlencoded) : mac (ou ip) + parent (MAC du parent, vide
+// pour effacer la declaration).
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiSetTopologyParent() {
+    if (!_hasScan || !_scan.setTopologyParent) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String key = _server.arg("mac");
+    if (key.isEmpty()) key = _server.arg("ip");
+    String parentMac = _server.arg("parent");
+
+    if (key.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"mac ou ip requis\"}");
+        return;
+    }
+
+    bool ok = _scan.setTopologyParent(key, parentMac);
+    _server.send(ok ? 200 : 404, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement ou parent introuvable\"}");
 }
 
 // ---------------------------------------------------------------------------

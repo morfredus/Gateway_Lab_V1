@@ -1048,6 +1048,7 @@ void NetworkScanner::_enrichDevices() {
             }
         }
         applyDeviceEnrichment(d);
+        applyMeshDetection(d);
     }
     xSemaphoreGive(_mutex);
 }
@@ -1151,6 +1152,7 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous, 
         d.totalOfflineSeconds   = prev->totalOfflineSeconds;
         d.mobilityOverride      = prev->mobilityOverride;
         d.mobileAwayNotified    = prev->mobileAwayNotified;
+        d.topologyParent        = prev->topologyParent;
 
         int confBefore = 0;
         String confLabelTmp;
@@ -1443,6 +1445,7 @@ String NetworkScanner::resultsToJson() const {
         obj["absenceCount"]      = d.absenceCount;
         obj["reconnectionCount"] = d.reconnectionCount;
         obj["mobilityOverride"]  = d.mobilityOverride;
+        obj["topologyParent"]    = d.topologyParent;
         obj["isMobile"]          = _isMobileDevice(d);
         obj["stabilityScore"]    = _stabilityScoreFor(d);
         // services : tableau JSON ["HTTP","SSH","SMB"] depuis la chaîne pipe-séparée
@@ -2362,6 +2365,7 @@ void NetworkScanner::_monitorTick() {
             d.totalOfflineSeconds = prev->totalOfflineSeconds;
             d.mobileAwayNotified  = prev->mobileAwayNotified;
             if (d.mobilityOverride.isEmpty()) d.mobilityOverride = prev->mobilityOverride;
+            if (d.topologyParent.isEmpty()) d.topologyParent = prev->topologyParent;
         }
 
         if (isNewDevice) {
@@ -2558,6 +2562,50 @@ bool NetworkScanner::setMobility(const String& macOrIp, const String& mode) {
             d.mobilityOverride = mode;
             found = true;
             break;
+        }
+    }
+    xSemaphoreGive(_mutex);
+    if (found) _saveToStore();
+    return found;
+}
+
+// ---------------------------------------------------------------------------
+// Declaration manuelle de la topologie reseau (v0.4.x)
+//
+// Un scan ARP/SSDP ne peut pas determiner a quel point d'acces/repeteur WiFi
+// un equipement est rattache (information privee au firmware du mesh, ex.
+// TP-Link Deco). On permet donc a l'utilisateur de declarer lui-meme cette
+// relation pour construire un arbre de topologie coherent dans l'UI.
+// ---------------------------------------------------------------------------
+bool NetworkScanner::setTopologyParent(const String& macOrIp, const String& parentMac) {
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Modification de topologie refusee — mode degrade (%s)", systemHealth.reason().c_str());
+        return false;
+    }
+
+    bool found = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    String resolvedMac;
+    for (auto& d : _results) {
+        if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+            resolvedMac = d.mac;
+            break;
+        }
+    }
+    // Le parent (quand renseigne) doit exister et ne pas etre l'equipement lui-meme
+    bool parentOk = parentMac.isEmpty();
+    if (!parentOk) {
+        for (const auto& d : _results) {
+            if (d.mac == parentMac) { parentOk = (parentMac != resolvedMac); break; }
+        }
+    }
+    if (parentOk) {
+        for (auto& d : _results) {
+            if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+                d.topologyParent = parentMac;
+                found = true;
+                break;
+            }
         }
     }
     xSemaphoreGive(_mutex);

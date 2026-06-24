@@ -896,4 +896,29 @@ input[type=file] {
 #wifi-list .alias-edit:hover { color: #ef4444; }
 
 #wifi-form input { margin-bottom: 0.9rem; }
+
+/* ════════════════════════════════════════════════════
+   19. PAGE TOPOLOGIE — Arbre réseau (/topology)
+   ════════════════════════════════════════════════════ */
+
+.topo-wrap {
+  overflow-x: auto;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.topo-svg { display: block; }
+.topo-node rect { transition: filter 0.15s; }
+.topo-node:hover rect { filter: brightness(1.25); }
+.topo-parent-select {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+}
+.topo-save-msg { font-size: 0.85rem; color: #4ade80; }
 #wifi-msg { margin-top: 0.75rem; font-size: 0.85rem; color: #c3d0e0; min-height: 1.1rem; }

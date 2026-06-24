@@ -26,16 +26,28 @@
       <p class="card-title">Cartographie du réseau</p>
     </div>
     <p class="info-label" style="margin-bottom:0.9rem">
-      Cette page accueillera la cartographie du réseau local : passerelle, points
-      d'accès / répéteurs WiFi détectés et équipements rattachés. Fonctionnalité
-      en préparation (voir la roadmap) — en attendant, une vue simplifiée liste
-      la passerelle et les équipements identifiés comme points d'accès WiFi.
+      Arbre du réseau : passerelle, points d'accès / répéteurs WiFi détectés et
+      équipements rattachés. Un scan ARP ne peut pas déterminer automatiquement
+      à quel répéteur un appareil WiFi est relié — utilisez le menu
+      « Rattacher à » sur un équipement pour le préciser manuellement.
     </p>
-    <div id="topology-list"></div>
+    <div class="topo-wrap">
+      <svg id="topology-svg" class="topo-svg"></svg>
+    </div>
     <p class="empty-msg" id="topology-empty" style="display:none">
       Aucune information de topologie disponible pour le moment — lancez un scan
       depuis la page Équipements.
     </p>
+
+    <p class="card-meta" style="margin-top:1.25rem">Rattachement manuel</p>
+    <div class="table-wrap">
+      <table id="topo-assign-table">
+        <thead>
+          <tr><th>Équipement</th><th>Rattaché à</th><th></th></tr>
+        </thead>
+        <tbody id="topo-assign-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ── Footer ────────────────────────────────────────────── -->

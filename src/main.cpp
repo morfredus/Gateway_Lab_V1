@@ -177,6 +177,9 @@ void setup() {
             .setMobility     = [](const String& macOrIp, const String& mode) {
                 return netScanner.setMobility(macOrIp, mode);
             },
+            .setTopologyParent = [](const String& macOrIp, const String& parentMac) {
+                return netScanner.setTopologyParent(macOrIp, parentMac);
+            },
             .getNetworkHealthJson = [] { return netScanner.networkHealthToJson(); },
             .getMonitorInterval   = [] { return netScanner.getMonitorInterval(); },
             .setMonitorInterval   = [](int minutes) { netScanner.setMonitorInterval(minutes); },
