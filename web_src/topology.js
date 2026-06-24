@@ -190,7 +190,7 @@ function attachDragAndDrop(svg, layout, tree, onDrop) {
     if (!drag) return;
     evt.preventDefault();
     var pt = toSvgPoint(evt);
-    drag.el.setAttribute('transform', 'translate(' + (pt.x - drag.offsetX) + ',' + (pt.y - drag.offsetY) + ')');
+    drag.el.setAttribute('transform', 'translate(' + (pt.x - drag.offsetX - drag.originX) + ',' + (pt.y - drag.offsetY - drag.originY) + ')');
     clearHighlight();
     var target = hitTest(pt, drag.forbidden);
     if (target) {
@@ -226,7 +226,7 @@ function attachDragAndDrop(svg, layout, tree, onDrop) {
       evt.preventDefault();
       var pt = toSvgPoint(evt);
       var entry = layout.find(function(n) { return n.mac === mac; });
-      drag = { mac: mac, el: g, offsetX: pt.x - entry.x, offsetY: pt.y - entry.y, forbidden: forbidden };
+      drag = { mac: mac, el: g, originX: entry.x, originY: entry.y, offsetX: pt.x - entry.x, offsetY: pt.y - entry.y, forbidden: forbidden };
       g.classList.add('topo-dragging');
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);

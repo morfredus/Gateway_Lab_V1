@@ -1,4 +1,4 @@
-# Roadmap — Gateway Lab V1
+# Roadmap — Gateway Lab
 
 Fonctionnalités planifiées par ordre de priorité décroissante.
 
@@ -147,3 +147,4 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v1.0.7 (Patch 7) | Journal de redémarrage temporaire pour le débogage sans moniteur série : buffer circulaire des derniers logs en RAM `RTC_NOINIT_ATTR`, persisté avec la raison du reset (`esp_reset_reason`) au boot suivant (`/bootlog.json`, 10 derniers démarrages), page `/debug` et API `GET`/`DELETE /api/bootlog` ; conçu pour un retrait facile (voir `docs/DEVELOPMENT.md`) |
 | v1.0.8 (Patch 8) | Extension du journal de redémarrage : compteurs `boot_count`/`crash_count` persistés en NVS, température interne, dernier état connu avant reset (heap/bloc libre/uptime/WiFi/dernière tâche via `setLastTask()`), instantané périodique `RuntimeStats` (toutes les 30 s, incluant équipements connus/pages servies/appels API), lignes de log au format JSON enrichi (heap + bloc libre par ligne), page `/debug` mise à jour pour afficher toutes ces données |
 | v1.1.1 (Patch 9) | Correction de la page Historique : les absences courtes (<30 min) d'un équipement mobile ne journalisaient aucune déconnexion, faisant apparaître des chaînes de "Reconnecté" sans cause visible — nouvel évènement discret `offline_brief`, symétrique au `reconnected` qui suit ; côté UI, les reconnexions consécutives sans déconnexion explicite entre elles sont désormais regroupées en une seule entrée "Connexion instable détectée" plutôt que d'être empilées |
+| v1.2.0  | Renommage du projet « Gateway Lab V1 » → « Gateway Lab » (mDNS `gateway-lab.local`, `PROJECT_NAME`, titres et en-têtes web, `User-Agent` HTTP, documentation) ; cartographie graphique de la topologie réseau (arbre SVG fait maison) ; détection automatique des répéteurs mesh (TP-Link Deco, Orbi, eero, Velop…) ; rattachement manuel des équipements WiFi par glisser-déposer sur la carte ; racine de l'arbre configurable, par défaut la box opérateur plutôt que l'ESP32 lui-même |

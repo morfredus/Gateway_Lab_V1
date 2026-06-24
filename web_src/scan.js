@@ -77,7 +77,7 @@ function sourceBadge(source) {
   var cfg = {
     'mDNS':         { cls: 'source-mdns',     label: 'mDNS',      title: 'Nom résolu via mDNS — annonce .local de l\'appareil' },
     'PTR':          { cls: 'source-ptr',       label: 'DNS↩',     title: 'DNS inverse (PTR) — nom fourni par le routeur / box' },
-    'Self':         { cls: 'source-self',      label: 'ESP32',     title: 'Cet appareil — Gateway Lab V1' },
+    'Self':         { cls: 'source-self',      label: 'ESP32',     title: 'Cet appareil — Gateway Lab' },
     'SSDP':         { cls: 'source-ssdp',      label: 'UPnP',      title: 'Découverte UPnP/SSDP — descripteur XML du device' },
     'HueAPI':       { cls: 'source-hue',       label: 'Hue',       title: 'API Philips Hue Bridge (/api/config)' },
     'SynologyAPI':  { cls: 'source-synology',  label: 'DSM',       title: 'API Synology DSM (non authentifiée)' },

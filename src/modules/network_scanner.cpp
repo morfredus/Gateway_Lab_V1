@@ -324,8 +324,8 @@ void NetworkScanner::_addSelfEntry() {
     NetworkDevice self;
     self.ip       = ip;
     self.mac      = mac;
-    self.hostname = MDNS_HOSTNAME;       // ex: "gateway-lab-v1"
-    self.model    = PROJECT_NAME;        // ex: "GatewayLabV1"
+    self.hostname = MDNS_HOSTNAME;       // ex: "gateway-lab"
+    self.model    = PROJECT_NAME;        // ex: "GatewayLab"
     self.source   = "Self";
     self.category = "Gateway";
     self.lastSeen = millis();

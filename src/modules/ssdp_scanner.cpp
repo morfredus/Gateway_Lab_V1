@@ -135,7 +135,7 @@ String SsdpScanner::_httpGet(const String& ip, uint16_t port,
     client.print("GET " + path + " HTTP/1.0\r\n"
                  "Host: " + ip + "\r\n"
                  "Connection: close\r\n"
-                 "User-Agent: GatewayLabV1/0.0.8\r\n"
+                 "User-Agent: GatewayLab/0.0.8\r\n"
                  "\r\n");
 
     uint32_t deadline = millis() + timeout_ms;

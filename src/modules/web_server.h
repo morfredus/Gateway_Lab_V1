@@ -1,5 +1,5 @@
 /**
- * WebServerModule — Serveur HTTP et interface web de Gateway Lab V1
+ * WebServerModule — Serveur HTTP et interface web de Gateway Lab
  *
  * Routes exposées :
  *   GET  /             — Page d'accueil (HTML embarqué en PROGMEM)

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  Gateway Lab V1 — Gabarit de référence
+  Gateway Lab — Gabarit de référence
   ======================================
   Ce fichier documente la structure HTML commune aux trois pages de l'interface.
   Il n'est PAS traité par minify_web.py (non listé dans PAGES).
@@ -27,7 +27,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gateway Lab V1 — [Titre de page]</title>
+  <title>Gateway Lab — [Titre de page]</title>
 
   <!-- CSS commun (reset, body, .site-name/ver/tag, nav a, footer a) -->
   <link rel="stylesheet" href="styles.css">
@@ -67,7 +67,7 @@
   <!-- Identique sur les 3 pages ; seul site-tag change -->
   <header class="site-hdr">
     <div class="site-name">
-      Gateway Lab&nbsp;V1
+      Gateway Lab
       <span class="site-ver" id="site-ver">v—</span>
       <!-- Rempli par JS : fetch('/api/status').then(d => site-ver.textContent = 'v' + d.version) -->
     </div>

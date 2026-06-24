@@ -200,7 +200,7 @@ function refreshHealth() {
 }
 
 document.getElementById('restart-btn').addEventListener('click', function() {
-  if (!confirm('Redémarrer Gateway Lab V1 maintenant ?')) return;
+  if (!confirm('Redémarrer Gateway Lab maintenant ?')) return;
   fetch('/api/system/restart', { method: 'POST' }).catch(function() {});
   document.getElementById('health-msg').textContent = 'Redémarrage en cours…';
 });

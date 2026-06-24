@@ -1,4 +1,4 @@
-# Architecture — Gateway Lab V1
+# Architecture — Gateway Lab
 
 Ce document explique comment le projet est structuré, pourquoi ces choix ont été faits,
 et comment les différentes parties s'articulent entre elles.

@@ -1,6 +1,6 @@
-# Gateway Lab V1
+# Gateway Lab
 
-![Version](https://img.shields.io/badge/version-1.1.1-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -8,7 +8,7 @@
 
 ## Autonomous network inventory and discovery appliance powered by ESP32-S3.
 
-Gateway Lab V1 est une passerelle réseau autonome qui découvre, identifie et conserve l'historique des équipements présents sur un réseau local domestique.
+Gateway Lab est une passerelle réseau autonome qui découvre, identifie et conserve l'historique des équipements présents sur un réseau local domestique.
 
 Conçu autour d'un ESP32-S3, le projet privilégie la simplicité de déploiement, l'autonomie, la faible consommation et la conservation locale des données.
 
@@ -29,28 +29,28 @@ Aperçu de l'interface
 
 Informations réseau, état de connexion, diagnostics système et accès rapide aux principales fonctions.
 
-![Accueil](docs/pictures/Gateway_Lab_V1_Accueil.png)
+![Accueil](docs/pictures/Gateway_Lab_Accueil.png)
 
 
 ### Équipements
 
 Inventaire des appareils détectés avec filtres, favoris, notes, niveau de confiance et outils d'administration.
 
-![Équipements](docs/pictures/Gateway_Lab_V1_Equipements.png)
+![Équipements](docs/pictures/Gateway_Lab_Equipements.png)
 
 
 ### Historique
 
 Journal chronologique des nouveaux équipements, reconnexions, déconnexions et changements détectés.
 
-![Historique](docs/pictures/Gateway_Lab_V1_Historique.png)
+![Historique](docs/pictures/Gateway_Lab_Historique.png)
 
 
 ### Topologie
 
 Vue simplifiée de la passerelle, des points d'accès détectés et des équipements rattachés.
 
-![Topologie](docs/pictures/Gateway_Lab_V1_Topologie.png)
+![Topologie](docs/pictures/Gateway_Lab_Topologie.png)
 
 
 ### Système
@@ -61,13 +61,13 @@ la NeoPixel d'état, sauvegarde/restauration des paramètres de fonctionnement
 (Patch 1), mise à jour du firmware (OTA) et état système (mémoire, nombre
 d'équipements, historique).
 
-![Système](docs/pictures/Gateway_Lab_V1_Systeme.png)
+![Système](docs/pictures/Gateway_Lab_Systeme.png)
 
 ---
 
 ## Présentation
 
-Gateway Lab V1 est un projet personnel développé autour d'un ESP32-S3.
+Gateway Lab est un projet personnel développé autour d'un ESP32-S3.
 
 L'objectif est de construire progressivement une passerelle réseau autonome capable de :
 
@@ -93,7 +93,7 @@ Le projet privilégie :
 2. Flasher l'ESP32-S3
 3. Se connecter au réseau WiFi `GatewayLab-Setup`
 4. Configurer le WiFi depuis le navigateur
-5. Accéder à Gateway Lab via `http://gateway-lab-v1.local`
+5. Accéder à Gateway Lab via `http://gateway-lab.local`
 
 Guide détaillé : voir INSTALLATION.md
 Guide développeur : voir docs/DEVELOPMENT.md
@@ -117,7 +117,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | WiFi multi-réseaux       | Connexion automatique au réseau enregistré au meilleur signal     |
 | Portail de configuration | Point d'accès `GatewayLab-Setup` + page web si aucun réseau n'est connu |
 | Persistance NVS          | Réseaux WiFi enregistrés survivant aux redémarrages/coupures      |
-| mDNS                     | Accessible via `gateway-lab-v1.local`                             |
+| mDNS                     | Accessible via `gateway-lab.local`                             |
 | Interface web            | Pages Accueil / Équipements / Historique / Topologie / Système (réseau WiFi, OTA, état système) |
 | Scan réseau LAN          | Sweep ARP du sous-réseau local                                    |
 | Tâche FreeRTOS dédiée    | Scan asynchrone sur Core 0                                        |
@@ -177,7 +177,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 
 ### 1. Configurer le WiFi
 
-**Utilisateur final** (firmware déjà flashé, `gateway-lab-v1.bin`) : aucune
+**Utilisateur final** (firmware déjà flashé, `gateway-lab.bin`) : aucune
 étape requise — connectez-vous au point d'accès `GatewayLab-Setup` au premier
 démarrage et suivez le portail de configuration. Détail complet dans INSTALLATION.md
 Fonctionnement avancé : docs/WIFI_SETUP.md
@@ -228,7 +228,7 @@ pio run --target upload
 ### 4. Accéder à l'interface
 
 ```text
-http://gateway-lab-v1.local
+http://gateway-lab.local
 ```
 
 ou via l'adresse IP affichée sur la page d'accueil ou la page Système.

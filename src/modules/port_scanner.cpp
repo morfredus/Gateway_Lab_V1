@@ -155,7 +155,7 @@ void PortScanner::_httpBanner(const String& ip, uint16_t port, uint32_t timeout_
     client.setTimeout(1);
     if (!client.connect(ip.c_str(), port)) return;
 
-    client.printf("GET / HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLabV1\r\nConnection: close\r\n\r\n",
+    client.printf("GET / HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLab\r\nConnection: close\r\n\r\n",
                   ip.c_str());
 
     String body;
@@ -217,7 +217,7 @@ static String _httpGet(const String& ip, uint16_t port, const String& path,
     client.setTimeout(1);
     if (!client.connect(ip.c_str(), port)) return "";
 
-    client.printf("GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLabV1\r\nConnection: close\r\n\r\n",
+    client.printf("GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLab\r\nConnection: close\r\n\r\n",
                   path.c_str(), ip.c_str());
 
     String body;

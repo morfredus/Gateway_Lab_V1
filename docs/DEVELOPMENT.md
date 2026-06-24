@@ -1,13 +1,13 @@
-# Guide de démarrage — Gateway Lab V1
+# Guide de démarrage — Gateway Lab
 
-Ce guide explique comment installer, configurer et utiliser Gateway Lab V1
+Ce guide explique comment installer, configurer et utiliser Gateway Lab
 en partant de zéro. Aucune connaissance avancée n'est requise.
 
 ---
 
 ## Ce que fait ce projet
 
-Gateway Lab V1 est un programme qui tourne sur une petite carte électronique (ESP32-S3)
+Gateway Lab est un programme qui tourne sur une petite carte électronique (ESP32-S3)
 connectée à votre réseau WiFi domestique.
 
 Une fois démarré, il :
@@ -67,8 +67,8 @@ L'extension PlatformIO pour VS Code offre une interface graphique pour compiler 
 ### Étape 1 — Récupérer le code source
 
 ```bash
-git clone https://github.com/morfredus/Gateway_Lab_V1.git
-cd Gateway_Lab_V1
+git clone https://github.com/morfredus/Gateway_Lab.git
+cd Gateway_Lab
 ```
 
 ### Étape 2 — Configurer le WiFi (optionnel pour le développement)
@@ -165,7 +165,7 @@ pio device monitor
 Vous devriez voir dans le terminal :
 
 ```
-=== GatewayLabV1 v0.3.0 ===
+=== GatewayLab v0.3.0 ===
 [WiFi] Connexion en cours...
 [WiFi] Connecté : 192.168.1.42
 [Scanner] Module initialisé
@@ -176,7 +176,7 @@ Si aucun réseau n'est encore configuré (premier démarrage, sans `secrets.h`),
 vous verrez à la place :
 
 ```
-=== GatewayLabV1 v0.3.0 ===
+=== GatewayLab v0.3.0 ===
 [WiFi] Aucun réseau disponible — démarrage du portail de configuration
 [WiFi] Portail de configuration actif — SSID "GatewayLab-Setup" — http://192.168.4.1
 ```
@@ -189,7 +189,7 @@ depuis un téléphone ou un ordinateur, sans rien recompiler.
 Ouvrir un navigateur et aller sur :
 
 ```
-http://gateway-lab-v1.local
+http://gateway-lab.local
 ```
 
 ou en utilisant l'adresse IP affichée dans le terminal (ex: `http://192.168.1.42`).
@@ -425,7 +425,7 @@ facilement.
 Sur certains ESP32-S3, il faut appuyer deux fois rapidement sur le bouton **BOOT**
 pour entrer en mode flash, puis relancer `pio run --target upload`.
 
-### `gateway-lab-v1.local` ne répond pas
+### `gateway-lab.local` ne répond pas
 
 1. Vérifier que la carte est bien connectée (LED allumée, pas de reboot en boucle)
 2. Utiliser l'adresse IP directement (visible dans `pio device monitor`)

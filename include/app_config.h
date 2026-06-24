@@ -7,7 +7,7 @@
 
 // Network
 #define WEB_SERVER_PORT  80
-#define MDNS_HOSTNAME    "gateway-lab-v1"
+#define MDNS_HOSTNAME    "gateway-lab"
 
 // Mémoire — protections contre l'épuisement du heap
 #define MAX_TRACKED_DEVICES   300     // Borne haute du nombre d'équipements suivis/persistés

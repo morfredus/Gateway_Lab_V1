@@ -103,7 +103,7 @@ Gateway Lab redémarre automatiquement.
 Une fois connecté à votre réseau local :
 
 ```text
-http://gateway-lab-v1.local
+http://gateway-lab.local
 ```
 
 Si votre réseau ne prend pas en charge mDNS, utilisez l'adresse IP affichée par votre routeur ou votre box Internet.

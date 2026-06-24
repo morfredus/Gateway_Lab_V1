@@ -1,7 +1,7 @@
 # web_src — Sources de l'interface web
 
 Ce dossier contient les **sources lisibles et maintenables** de l'interface web embarquée
-dans le firmware Gateway Lab V1.
+dans le firmware Gateway Lab.
 
 ---
 
@@ -70,7 +70,7 @@ Toutes les pages partagent la même architecture HTML :
 </head>
 <body>
   <header class="site-hdr">
-    "Gateway Lab V1"  [vX.X.X]       ← version récupérée via /api/status
+    "Gateway Lab"  [vX.X.X]       ← version récupérée via /api/status
     <span class="site-tag">…</span>  ← titre contextuel
   </header>
   <!-- include:menu.html -->            ← inliné par minify_web.py (bloc <nav> partagé)

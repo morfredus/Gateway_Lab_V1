@@ -4,7 +4,7 @@
  * Bibliothèques utilisées :
  *   WebServer    — serveur HTTP intégré à l'Arduino ESP32
  *   ArduinoJson  — sérialisation JSON pour les réponses /api/*
- *   ESPmDNS      — résolution de noms (gateway-lab-v1.local)
+ *   ESPmDNS      — résolution de noms (gateway-lab.local)
  */
 
 #include "web_server.h"
@@ -166,7 +166,7 @@ void WebServerModule::_handleRoot() {
 // Handler : état du système en JSON
 // Exemple de réponse :
 //   {"ssid":"Livebox","ip":"192.168.1.42","rssi":-55,"uptime":12345,
-//    "version":"0.0.3","hostname":"gateway-lab-v1","scanning":false}
+//    "version":"0.0.3","hostname":"gateway-lab","scanning":false}
 // ---------------------------------------------------------------------------
 void WebServerModule::_handleApiStatus() {
     JsonDocument doc;

@@ -1,7 +1,50 @@
-# Changelog — Gateway Lab V1
+# Changelog — Gateway Lab
 
 Toutes les modifications notables sont documentées ici.
 Format : [Semantic Versioning](https://semver.org/)
+
+---
+
+## [1.2.0] - 2026-06-24
+
+### Modifie
+
+- **Renommage du projet : « Gateway Lab V1 » devient « Gateway Lab »** (le
+  suffixe de version n'avait pas sa place dans le nom). Mis à jour partout :
+  titres des pages web, en-tête de l'interface, `User-Agent` HTTP émis par
+  les scanners (`port_scanner.cpp`, `media_api_scanner.cpp`, `ssdp_scanner.cpp`),
+  nom mDNS (`MDNS_HOSTNAME`, désormais `gateway-lab` — accessible via
+  `http://gateway-lab.local`), `PROJECT_NAME` (`platformio.ini`), et
+  documentation (`README.md`, `ROADMAP.md`, `INSTALLATION.md`,
+  `CONTRIBUTING.md`, `docs/*.md`). Les entrées d'historique de ce fichier
+  antérieures à cette version ne sont pas réécrites : elles reflètent le nom
+  du projet tel qu'il était à l'époque.
+
+### Ajoute
+
+- **Cartographie graphique de la topologie réseau** (`/topology`) : rendu en
+  arbre SVG fait maison (racine, points d'accès/répéteurs WiFi détectés,
+  équipements rattachés), remplaçant l'ancien rendu textuel.
+- **Détection automatique des répéteurs mesh** (TP-Link Deco, Orbi, eero,
+  Nest WiFi, Velop…) par mot-clé sur le nom d'hôte (`device_enricher.h`),
+  classés « Point d'accès / Répéteur mesh ».
+- **Rattachement manuel des équipements WiFi** à leur point d'accès/répéteur
+  via glisser-déposer directement sur la carte SVG (un scan ARP/SSDP seul ne
+  peut pas déterminer à quel répéteur un appareil WiFi est relié) — persisté
+  par équipement (`topologyParent`, `NetworkScanner::setTopologyParent`).
+- **Racine de l'arbre configurable** : par défaut la box opérateur (catégorie
+  `Router`) est choisie automatiquement plutôt que l'ESP32 lui-même
+  (catégorie `Gateway`, qui n'est qu'un équipement du réseau comme un autre
+  du point de vue de la topologie) ; un sélecteur dédié permet de forcer une
+  racine différente, persistée en NVS (`setTopologyRoot`/`getTopologyRoot`,
+  `GET`/`POST /api/topology/root`).
+
+### Corrige
+
+- **La racine de la topologie était toujours l'ESP32**, jamais la box
+  opérateur, même quand celle-ci était correctement détectée (catégorie
+  `Router`) : la résolution automatique cherchait en priorité la catégorie
+  `Gateway` (l'ESP32 lui-même) avant `Router`. Inversé l'ordre de préférence.
 
 ---
 
