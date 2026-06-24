@@ -836,9 +836,11 @@ input[type=file] {
 .hist-new-val { color: #4ade80; }
 .hist-time { font-size: 0.72rem; color: #aeb9c9; margin-top: 0.2rem; }
 .hist-new     .hist-title { color: #7dd3fc; }
-.hist-online  .hist-title { color: #4ade80; }
-.hist-offline .hist-title { color: #f87171; }
-.hist-changed .hist-title { color: #facc15; }
+.hist-online        .hist-title { color: #4ade80; }
+.hist-offline       .hist-title { color: #f87171; }
+.hist-offline-brief .hist-title { color: #aeb9c9; }
+.hist-unstable      .hist-title { color: #fb923c; }
+.hist-changed       .hist-title { color: #facc15; }
 
 /* ════════════════════════════════════════════════════
    16. PAGE ÉQUIPEMENTS — Alias utilisateur

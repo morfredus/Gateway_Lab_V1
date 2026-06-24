@@ -289,8 +289,13 @@ le firmware (depuis le Patch 4 / v1.0.4) :
 |---|---|
 | Nouveaux équipements | `new` |
 | Reconnexions | `online`, `reconnected`, `mobile_returned` |
-| Déconnexions | `offline`, `disappeared`, `mobile_left` |
+| Déconnexions | `offline`, `disappeared`, `mobile_left`, `offline_brief` (Patch 9 / v1.1.1) |
 | Changements de champs | `changed`, `identification_improved` |
+
+`offline_brief` journalise une absence courte (<30 min) d'un équipement
+mobile — auparavant totalement silencieuse, ce qui faisait apparaître des
+chaînes de reconnexions sans aucune déconnexion visible. Voir aussi le
+regroupement « connexion instable » ci-dessous.
 
 Une case **favoris uniquement** filtre en plus les événements pour ne
 conserver que ceux concernant des équipements actuellement marqués comme
@@ -298,6 +303,16 @@ favoris (statut récupéré en direct depuis `/api/devices`, indépendamment de
 l'état de l'équipement au moment de l'événement historique).
 Le bouton **Vider l'historique** télécharge automatiquement une sauvegarde
 JSON du journal avant de le vider côté serveur.
+
+**Regroupement « connexion instable » (Patch 9 / v1.1.1)** : côté affichage
+uniquement (`web_src/history.js`, `buildDisplayData()`), des reconnexions
+consécutives d'un même équipement (`online`/`reconnected`/`mobile_returned`)
+séparées de moins de 20 minutes et **sans aucune déconnexion explicite**
+entre elles (ni `offline`, `disappeared`, `mobile_left`, ni `offline_brief`)
+sont fusionnées en une seule entrée « Connexion instable détectée », avec le
+nombre de reconnexions et la fenêtre de temps couverte. Le journal brut
+(`/history.json`, export JSON) n'est pas modifié — seul le rendu de la page
+regroupe ces événements.
 
 ### Page Topologie (`/topology`)
 

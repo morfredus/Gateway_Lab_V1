@@ -5,6 +5,40 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.1] - 2026-06-24
+
+### Corrige
+
+- **Page Historique : aucune déconnexion jamais visible pour les appareils
+  mobiles, malgré des reconnexions répétées.** Dans `NetworkScanner::_monitorTick()`
+  (`src/modules/network_scanner.cpp`), une absence courte (<30 min) d'un
+  équipement classé mobile ne journalisait strictement aucun événement côté
+  déconnexion (silence volontaire pour éviter le bruit), alors que la
+  réapparition journalisait systématiquement `"reconnected"`. Résultat :
+  l'historique affichait des chaînes de "Reconnecté" sans jamais la
+  déconnexion correspondante. Une absence courte de mobile journalise
+  désormais un événement discret `"offline_brief"`, symétrique au
+  `"reconnected"` qui suit.
+
+### Ajoute
+
+- **Regroupement des reconnexions en chaîne sur la page Historique**
+  (`web_src/history.js`) : lorsque plusieurs événements de reconnexion
+  consécutifs d'un même équipement se suivent à moins de 20 minutes
+  d'intervalle **sans aucune déconnexion explicite** entre eux (`offline`,
+  `disappeared`, `mobile_left`, ou désormais `offline_brief`), ils sont
+  fusionnés dans l'affichage en une seule entrée « ⚠️ Connexion instable
+  détectée », avec le nombre de reconnexions et la fenêtre de temps
+  concernée — au lieu d'empiler des "Reconnecté" sans cause visible. Si une
+  déconnexion (même discrète) existe entre deux reconnexions, aucune fusion
+  n'a lieu : chaque événement reste affiché individuellement, la cause étant
+  déjà visible.
+  - Nouveau type d'événement `offline_brief` (icône ⚪, catégorie de filtre
+    "Déconnexions") et nouveau style `.hist-offline-brief`/`.hist-unstable`
+    (`web_src/styles.css`).
+
+---
+
 ## [1.1.0] - 2026-06-23
 
 ### Ajoute

@@ -2440,14 +2440,20 @@ void NetworkScanner::_monitorTick() {
             d.lastDisconnectEpoch = epoch;
 
             if (mobile) {
-                // Absence courte (<30 min) : aucune penalite, aucun evenement bruyant
+                // Absence courte (<30 min) : aucune penalite, mais on logge un evenement
+                // discret (offline_brief) pour garder une trace symetrique au "reconnected"
+                // qui suivra — sans quoi l'historique n'affiche que des reconnexions en
+                // chaine sans jamais de deconnexion visible.
                 uint32_t awayMs = (prev->lastSeen > 0) ? (nowMs - prev->lastSeen) : 0;
                 if (awayMs >= MOBILE_AWAY_LONG_MS && !d.mobileAwayNotified) {
                     String who = !d.alias.isEmpty() ? d.alias : (!d.hostname.isEmpty() ? d.hostname : d.ip);
                     deviceHistory.addEvent(d.mac, d.ip, label, "mobile_left", "", "", who + " a quitte le reseau");
                     d.mobileAwayNotified = true;
+                } else {
+                    deviceHistory.addEvent(d.mac, d.ip, label, "offline_brief");
                 }
-                // awayMs entre 30min et 2h : silence total (ni penalite, ni evenement)
+                // awayMs entre 30min et 2h : silence total cote penalite (mais l'evenement
+                // offline_brief ci-dessus est tout de meme journalise)
             } else {
                 d.absenceCount++;
                 deviceHistory.addEvent(d.mac, d.ip, label, "disappeared");
