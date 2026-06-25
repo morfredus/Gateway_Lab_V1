@@ -5,6 +5,36 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.3.0] - 2026-06-25
+
+### Corrige
+
+- **Equipements bloqués indéfiniment en « Identification en cours »** : ce
+  libellé de catégorie n'était reconnu comme « générique » (donc remplaçable
+  par une catégorie plus précise) par aucun des points d'entrée du pipeline
+  d'identification (SSDP, DNS-SD, scan de ports, classification par signaux,
+  enrichissement par hostname). Résultat : même un rescan manuel ne pouvait
+  jamais faire sortir un équipement de cet état. Centralisé le test dans un
+  helper partagé (`isGenericCategory()`, `network_scanner.h`) qui reconnaît
+  désormais `""`, `"IoT"` et `"Identification en cours"` comme génériques, et
+  appliqué ce helper à tous les points d'entrée concernés
+  (`network_scanner.cpp`, `device_enricher.h`).
+
+### Ajoute
+
+- **Re-identification automatique périodique** des équipements restés sur une
+  catégorie générique (« IoT » ou « Identification en cours ») : toutes les
+  `RESCAN_SWEEP_INTERVAL_MINUTES` (60 min par défaut, `app_config.h`), un
+  sweep met en file un scan approfondi pour chacun d'eux, sans intervention
+  de l'utilisateur. S'appuie sur la file d'attente différée déjà existante
+  (`_queueDeepScanLocked`/`_drainPendingScans`), donc sans jamais entrer en
+  conflit avec un scan complet ou un rescan manuel en cours.
+- **Bouton « Rescan non identifiés »** (page Équipements) : relance en un
+  clic un scan approfondi sur tous les équipements actuellement classés en
+  catégorie générique, séquentiellement, avec suivi de progression.
+
+---
+
 ## [1.2.0] - 2026-06-24
 
 ### Modifie

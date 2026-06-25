@@ -358,7 +358,7 @@ void NetworkScanner::_applySsdpResult(NetworkDevice& d, const NetworkDevice& sde
         d.manufacturer = sdev.manufacturer;
     if (d.model.isEmpty() && !sdev.model.isEmpty())
         d.model = sdev.model;
-    if (d.category.isEmpty() || d.category == "IoT")
+    if (isGenericCategory(d.category))
         if (!sdev.category.isEmpty()) d.category = sdev.category;
     if (d.os.isEmpty() && !sdev.os.isEmpty())
         d.os = sdev.os;
@@ -436,7 +436,7 @@ void NetworkScanner::_applyDnsSdResult(NetworkDevice& d, const DnsSdInfo& info) 
         d.hostname = info.hostname;
 
     // Catégorie DNS-SD (plus fine que "IoT" par défaut)
-    if ((d.category.isEmpty() || d.category == "IoT") && !info.category.isEmpty())
+    if (isGenericCategory(d.category) && !info.category.isEmpty())
         d.category = info.category;
 }
 
@@ -899,7 +899,7 @@ void NetworkScanner::_applyPortScanResult(NetworkDevice& d, const PortScanResult
             String mfr = _bannerToMfr(pr.httpBanner);
             if (!mfr.isEmpty()) d.manufacturer = mfr;
         }
-        if (d.category.isEmpty() || d.category == "IoT") {
+        if (isGenericCategory(d.category)) {
             String cat = _bannerToCategory(pr.httpBanner);
             if (!cat.isEmpty()) d.category = cat;
         }
@@ -937,7 +937,7 @@ void NetworkScanner::_applyPortScanResult(NetworkDevice& d, const PortScanResult
     // API IoT identifiee precisement -> manufacturer/category/model/firmware
     if (!pr.iotType.isEmpty()) {
         if (d.manufacturer.isEmpty()) d.manufacturer = pr.iotType;
-        if (d.category.isEmpty() || d.category == "IoT") {
+        if (isGenericCategory(d.category)) {
             if (pr.iotType == "FritzBox") d.category = "Router";
             else if (pr.iotType == "Synology") d.category = "NAS";
             else if (pr.iotType == "Hue") d.category = "Home Automation";
@@ -1066,7 +1066,7 @@ void NetworkScanner::_enrichDevices() {
 void NetworkScanner::_classifyDevices() {
     xSemaphoreTake(_mutex, portMAX_DELAY);
     for (auto& d : _results) {
-        bool generic = d.category.isEmpty() || d.category == "IoT";
+        bool generic = isGenericCategory(d.category);
         if (!generic) continue;
 
         bool hasHttp  = d.openPorts.indexOf("HTTP") >= 0 || d.services.indexOf("HTTP") >= 0;
@@ -2299,6 +2299,21 @@ void NetworkScanner::_queueDeepScanLocked(const String& ip) {
     _pendingDeepScan.push_back(ip);
 }
 
+void NetworkScanner::_sweepUnidentified() {
+    uint32_t nowMs = millis();
+    uint32_t intervalMs = RESCAN_SWEEP_INTERVAL_MINUTES * 60UL * 1000UL;
+    if (_lastUnidentifiedSweepMs != 0 && (nowMs - _lastUnidentifiedSweepMs) < intervalMs) return;
+    _lastUnidentifiedSweepMs = nowMs;
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (const auto& d : _results) {
+        if (d.online && isGenericCategory(d.category) && !d.ip.isEmpty()) {
+            _queueDeepScanLocked(d.ip);
+        }
+    }
+    xSemaphoreGive(_mutex);
+}
+
 void NetworkScanner::_drainPendingScans() {
     if (_scanning) return;   // Mutuelle exclusion avec scan complet/rescan
 
@@ -2521,6 +2536,10 @@ void NetworkScanner::serviceMonitor() {
             _monitorTick();
         }
     }
+
+    // Sweep periodique des equipements non identifies — ne fait que mettre
+    // en file, sans jamais lancer de scan directement (drainage ci-dessous).
+    if (!_scanning) _sweepUnidentified();
 
     // Drainage de la file d'attente differee — une seule entree par appel
     _drainPendingScans();

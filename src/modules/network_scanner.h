@@ -107,6 +107,16 @@ struct NetworkDevice {
     bool     online;        // true si détecté lors du dernier scan
 };
 
+// Categorie "generique", c'est-a-dire pas encore suffisamment qualifiee pour
+// etre consideree comme definitive : peut toujours etre ecrasee par une
+// categorie plus specifique deduite par une source plus fiable (SSDP, API,
+// enricher, classification par signaux). Sans ce test partage, certains
+// equipements restaient bloques indefiniment en "Identification en cours"
+// car cette valeur n'etait reconnue generique par aucun appelant.
+inline bool isGenericCategory(const String& category) {
+    return category.isEmpty() || category == "IoT" || category == "Identification en cours";
+}
+
 class NetworkScanner {
 public:
     // Initialisation du mutex de protection (idempotente — guard sur _mutex)
@@ -370,6 +380,14 @@ private:
     void _queueQuickScanLocked(const String& ip);
     void _queueDeepScanLocked(const String& ip);
 
+    // Sweep periodique (RESCAN_SWEEP_INTERVAL_MINUTES) qui met en file un
+    // scan approfondi pour chaque equipement en ligne reste sur une categorie
+    // generique ("IoT" ou "Identification en cours") — sans cela, un
+    // equipement qui n'a jamais ete revisite par l'utilisateur peut rester
+    // bloque indefiniment, meme une fois le bug de categorie generique
+    // (isGenericCategory) corrige. Appele depuis serviceMonitor().
+    void _sweepUnidentified();
+
     // Draine une seule entree de la file d'attente differee (scan rapide en
     // priorite, puis approfondi) - ne fait rien si un scan est deja en cours.
     void _drainPendingScans();
@@ -395,6 +413,7 @@ private:
     uint32_t _monitorIntervalMinutes = MONITOR_INTERVAL_DEFAULT_MINUTES;  // Lu/ecrit via NVS, hors mutex (idem status_led)
     bool     _monitorEnabled         = true;  // Lu/ecrit via NVS, hors mutex (idem status_led)
     uint32_t _lastMonitorTickMs      = 0;     // millis() du dernier tick execute (0 = jamais)
+    uint32_t _lastUnidentifiedSweepMs = 0;    // millis() du dernier sweep "non identifies" execute (0 = jamais)
     std::vector<String>          _pendingQuickScan;   // File d'attente differee (IP), dedupliquee
     std::vector<String>          _pendingDeepScan;    // File d'attente differee (IP), dedupliquee
 

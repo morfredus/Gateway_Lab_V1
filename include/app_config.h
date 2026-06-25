@@ -25,6 +25,14 @@
 #define MOBILE_AWAY_SHORT_MS  (30UL * 60UL * 1000UL)   // 30 min : absence courte, pas de penalite de stabilite
 #define MOBILE_AWAY_LONG_MS   (2UL * 60UL * 60UL * 1000UL)  // 2h : absence longue, evenement "mobile_left"
 
+// Resweep periodique des equipements non identifies (categorie generique :
+// "IoT" ou "Identification en cours") — v1.3.0. Independant de l'intervalle
+// de surveillance continue (ARP) : ce sweep ne fait que mettre en file un
+// rescan approfondi par equipement concerne, draine ensuite comme tout autre
+// rescan differe (_drainPendingScans), donc sans jamais entrer en conflit
+// avec un scan complet/rescan deja en cours.
+#define RESCAN_SWEEP_INTERVAL_MINUTES 60   // Frequence du sweep (non configurable par l'utilisateur pour l'instant)
+
 // Features
 #define ENABLE_OTA
 #define ENABLE_WEB_SERVER
