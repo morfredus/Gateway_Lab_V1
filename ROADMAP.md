@@ -15,6 +15,14 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
   d'un appareil à un répéteur, en complément du rattachement manuel et de
   la découverte SNMP (v1.4.0) — utile pour les répéteurs mesh grand public
   qui n'exposent pas d'agent SNMP
+* Scan croisé multi-sous-réseaux (cas du double NAT, ex. plusieurs Deco
+  X50 chacun en mode routeur) : `gatewaylab` ne voit aujourd'hui que le
+  sous-réseau sur lequel il est connecté, jamais celui d'un Deco en aval
+  (masqué par son propre NAT). Implique une bascule WiFi temporaire vers
+  l'autre réseau pour y lancer un scan ARP/SNMP avant de revenir, donc la
+  gestion d'identifiants WiFi multiples, une file de scan différée, et une
+  tolérance à l'indisponibilité temporaire de l'interface web pendant la
+  bascule — chantier non trivial, à dater une fois priorisé
 
 ---
 
