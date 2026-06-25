@@ -5,6 +5,40 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.4.1] - 2026-06-25
+
+### Ajoute
+
+- **Taux de confiance pour la découverte automatique de topologie** : chaque
+  rattachement déduit par SNMP (`topologyParentAuto`) porte désormais un
+  `topologyParentConfidence` (0-100). Une MAC vue dans une seule table de
+  pontage (FDB) pendant le sweep reçoit une confiance élevée (85%) ; une MAC
+  vue simultanément dans plusieurs tables de pontage d'AP/répéteurs distincts
+  (mobilité WiFi en cours de sweep, ou entrée de pontage partiellement
+  obsolète) reçoit une confiance dégradée (40%) plutôt qu'un choix arbitraire
+  entre les AP candidats.
+- **Codes couleur dans la topologie** : la box WiFi et les répéteurs/points
+  d'accès restent en vert, la racine reste en bleu marine ; les équipements
+  rattachés automatiquement avec une confiance élevée (≥ 60%) apparaissent en
+  bleu, ceux avec une confiance faible/ambiguë en orange. Le pourcentage de
+  confiance est affiché sous le nom de l'équipement dans l'arbre.
+
+### Corrige
+
+- `topologyParentAuto` et `topologyParentConfidence` n'étaient pas reportés
+  d'un cycle de surveillance ARP au suivant (seul `topologyParent` l'était) :
+  un rattachement automatique pouvait perdre silencieusement son statut
+  "automatique" et sa confiance à chaque tick, sans pour autant être
+  recalculé avant le prochain sweep SNMP (30 min). Les deux champs sont
+  désormais reportés au même titre que `topologyParent`.
+- `topologyParentConfidence` n'était pas persisté dans le stockage LittleFS
+  (`device_store.cpp`) : la confiance affichée revenait à 0 après chaque
+  redémarrage de l'équipement, même si le rattachement automatique
+  lui-même survivait. Le champ est désormais chargé/sauvegardé comme les
+  autres champs de topologie.
+
+---
+
 ## [1.4.0] - 2026-06-25
 
 ### Ajoute

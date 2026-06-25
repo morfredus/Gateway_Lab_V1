@@ -14,6 +14,7 @@
 #include "network_scanner.h"
 #include <time.h>                // strftime() pour l'export CSV (dates lisibles)
 #include <algorithm>             // std::sort (éviction LRU des équipements)
+#include <map>                   // std::map (regroupement MAC -> AP candidats, decouverte topologie SNMP)
 #include "hostname_resolver.h"   // mDNS passif + PTR DNS batch
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include "ssdp_scanner.h"        // Découverte UPnP/SSDP
@@ -1154,7 +1155,9 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous, 
         d.totalOfflineSeconds   = prev->totalOfflineSeconds;
         d.mobilityOverride      = prev->mobilityOverride;
         d.mobileAwayNotified    = prev->mobileAwayNotified;
-        d.topologyParent        = prev->topologyParent;
+        d.topologyParent           = prev->topologyParent;
+        d.topologyParentAuto       = prev->topologyParentAuto;
+        d.topologyParentConfidence = prev->topologyParentConfidence;
 
         int confBefore = 0;
         String confLabelTmp;
@@ -1453,8 +1456,9 @@ String NetworkScanner::resultsToJson() const {
         obj["absenceCount"]      = d.absenceCount;
         obj["reconnectionCount"] = d.reconnectionCount;
         obj["mobilityOverride"]  = d.mobilityOverride;
-        obj["topologyParent"]    = d.topologyParent;
-        obj["topologyParentAuto"] = d.topologyParentAuto;
+        obj["topologyParent"]           = d.topologyParent;
+        obj["topologyParentAuto"]       = d.topologyParentAuto;
+        obj["topologyParentConfidence"] = d.topologyParentConfidence;
         obj["isMobile"]          = _isMobileDevice(d);
         obj["stabilityScore"]    = _stabilityScoreFor(d);
         // services : tableau JSON ["HTTP","SSH","SMB"] depuis la chaîne pipe-séparée
@@ -2350,26 +2354,41 @@ void NetworkScanner::_discoverTopologyViaSnmp() {
     xSemaphoreGive(_mutex);
     if (candidates.empty()) return;
 
-    bool changed = false;
+    // Phase 1 : interroger chaque candidat, sans toucher _results - regroupe
+    // par MAC vue, la liste des AP qui la revendiquent dans leur FDB. Une MAC
+    // vue dans plusieurs FDB a la fois (mobilite WiFi entre repeteurs pendant
+    // le sweep, ou table de pontage partiellement obsolete) est ambigue :
+    // on baisse la confiance plutot que de choisir arbitrairement un AP.
+    std::map<String, std::vector<String>> macToApMacs;
     for (const auto& ap : candidates) {
         std::vector<String> macs = snmpScanner.walkBridgeMacTable(ap.first, 300, 64);
-        if (macs.empty()) continue;   // Pas d'agent SNMP / MIB non supportee sur cet equipement
-
-        xSemaphoreTake(_mutex, portMAX_DELAY);
         for (const auto& mac : macs) {
             if (mac == ap.second) continue;   // L'AP se voit lui-meme dans sa propre table de pontage
-            for (auto& d : _results) {
-                if (d.mac != mac || d.mac == ap.second) continue;
-                if (d.topologyParent.isEmpty() || d.topologyParentAuto) {
-                    d.topologyParent     = ap.second;
-                    d.topologyParentAuto = true;
-                    changed = true;
-                }
-                break;
-            }
+            macToApMacs[mac].push_back(ap.second);
         }
-        xSemaphoreGive(_mutex);
     }
+    if (macToApMacs.empty()) return;   // Aucun agent SNMP n'a repondu - rien a faire
+
+    // Phase 2 : application sur _results, sous mutex.
+    bool changed = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if (d.mac.isEmpty()) continue;
+        auto it = macToApMacs.find(d.mac);
+        if (it == macToApMacs.end()) continue;
+        if (!(d.topologyParent.isEmpty() || d.topologyParentAuto)) continue;   // Rattachement manuel - intouchable
+
+        const auto& apMacs = it->second;
+        bool ambiguous = apMacs.size() > 1;
+        d.topologyParent           = apMacs.front();
+        d.topologyParentAuto       = true;
+        // Entree directe de la table de pontage (FDB) : source fiable. Vue
+        // dans plusieurs FDB a la fois pendant le meme sweep : ambigu, on le
+        // signale par une confiance degradee plutot que d'inventer un choix.
+        d.topologyParentConfidence = ambiguous ? 40 : 85;
+        changed = true;
+    }
+    xSemaphoreGive(_mutex);
 
     if (changed) _saveToStore();
 }
@@ -2448,7 +2467,11 @@ void NetworkScanner::_monitorTick() {
             d.totalOfflineSeconds = prev->totalOfflineSeconds;
             d.mobileAwayNotified  = prev->mobileAwayNotified;
             if (d.mobilityOverride.isEmpty()) d.mobilityOverride = prev->mobilityOverride;
-            if (d.topologyParent.isEmpty()) d.topologyParent = prev->topologyParent;
+            if (d.topologyParent.isEmpty()) {
+                d.topologyParent           = prev->topologyParent;
+                d.topologyParentAuto       = prev->topologyParentAuto;
+                d.topologyParentConfidence = prev->topologyParentConfidence;
+            }
         }
 
         if (isNewDevice) {
@@ -2693,8 +2716,9 @@ bool NetworkScanner::setTopologyParent(const String& macOrIp, const String& pare
     if (parentOk) {
         for (auto& d : _results) {
             if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
-                d.topologyParent     = parentMac;
-                d.topologyParentAuto = false;   // Choix manuel - ne sera plus jamais ecrase par la decouverte SNMP
+                d.topologyParent           = parentMac;
+                d.topologyParentAuto       = false;   // Choix manuel - ne sera plus jamais ecrase par la decouverte SNMP
+                d.topologyParentConfidence = 0;        // Non applicable a un rattachement manuel
                 found = true;
                 break;
             }

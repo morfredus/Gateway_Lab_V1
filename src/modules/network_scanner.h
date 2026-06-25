@@ -103,6 +103,7 @@ struct NetworkDevice {
     // Topologie reseau (v0.4.x) -----------------------------------------
     String   topologyParent;            // MAC de l'equipement en amont (AP/repeteur/switch) - declare par l'utilisateur OU deduit par decouverte SNMP - "" = inconnu/direct sur la passerelle
     bool     topologyParentAuto = false; // true si topologyParent vient de la decouverte SNMP (table de pontage) plutot que d'un glisser-depose manuel - permet de le rafraichir/corriger automatiquement sans jamais ecraser un choix manuel
+    uint8_t  topologyParentConfidence = 0; // 0 = non applicable (rattachement manuel ou inconnu) ; 1-100 = confiance dans le rattachement automatique (FDB Bridge MIB directe = elevee)
 
     uint32_t lastSeen;      // millis() du dernier scan — converti en elapsed côté client
     bool     online;        // true si détecté lors du dernier scan

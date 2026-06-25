@@ -88,6 +88,7 @@ std::vector<NetworkDevice> DeviceStore::load() {
         d.mobileAwayNotified  = obj["mobileAwayNotified"]  | false;
         d.topologyParent      = obj["topologyParent"]      | "";
         d.topologyParentAuto  = obj["topologyParentAuto"]  | false;
+        d.topologyParentConfidence = obj["topologyParentConfidence"] | 0;
         d.online       = false;
         d.lastSeen     = 0;   // Inconnu — sera affiché comme "hors ligne"
         if (!d.ip.isEmpty() || !d.mac.isEmpty())
@@ -146,6 +147,7 @@ void DeviceStore::save(const std::vector<NetworkDevice>& devices) {
         obj["mobileAwayNotified"]  = d.mobileAwayNotified;
         obj["topologyParent"]      = d.topologyParent;
         obj["topologyParentAuto"]  = d.topologyParentAuto;
+        obj["topologyParentConfidence"] = d.topologyParentConfidence;
     }
 
     serializeJson(doc, f);

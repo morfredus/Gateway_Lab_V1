@@ -82,6 +82,11 @@ function descendantMacs(node) {
 function nodeColor(d, isRoot) {
   if (isRoot)                   return { fill: '#0c4a6e', stroke: '#38bdf8', text: '#e0f2fe' };
   if (isAccessPointLike(d))     return { fill: '#1c2a1a', stroke: '#86efac', text: '#dcfce7' };
+  if (d.topologyParentAuto) {
+    var conf = d.topologyParentConfidence || 0;
+    if (conf >= 60) return { fill: '#1e2a4a', stroke: '#60a5fa', text: '#dbeafe' };   // place automatiquement, confiance elevee
+    return            { fill: '#3a2a14', stroke: '#f59e0b', text: '#fef3c7' };          // place automatiquement, confiance faible/ambigu
+  }
   return { fill: '#1e293b', stroke: '#334155', text: '#e2e8f0' };
 }
 
@@ -121,6 +126,7 @@ function renderSvg(tree) {
     var c = nodeColor(d, isRoot);
     var label = esc(deviceLabel(d));
     var sub = esc(d.type || d.category || d.manufacturer || '');
+    if (d.topologyParentAuto && !isRoot) sub += ' · auto ' + (d.topologyParentConfidence || 0) + '%';
 
     if (r.depth > 0) {
       var pIdx = null;
