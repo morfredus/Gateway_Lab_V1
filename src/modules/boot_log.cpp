@@ -9,6 +9,7 @@
 #include <WiFi.h>
 #include <esp_system.h>
 #include <esp_heap_caps.h>
+#include <time.h>
 #include "../../include/app_config.h"   // MAX_BOOT_LOG_ENTRIES, LOG_BUFFER_SIZE, LOG_LINE_MAX_LEN, BOOT_LOG_STATS_INTERVAL_MS
 #include "../utils/logger.h"
 
@@ -21,7 +22,7 @@ static const char* TAG = "BootLog";
 // app) : si le magic reste identique apres une mise a jour qui change le
 // layout, begin() relira les anciens octets bruts a travers le nouveau
 // layout et produira des donnees corrompues (cf. incident Patch 7 -> 8).
-static const uint32_t kMagic = 0xB007106Bu;  // v2 (Patch 8 : layout RuntimeStats/lastTask/wifiIp)
+static const uint32_t kMagic = 0xB007106Cu;  // v3 (ajout lastEpochSec : date/heure de l'evenement)
 
 // Taille du buffer circulaire de logs — configurable via app_config.h
 static const int kLines   = LOG_BUFFER_SIZE;
@@ -40,6 +41,7 @@ struct BootLogRtcData {
     char     lastTask[kTaskLen];    // Derniere tache signalee via setLastTask()
 
     uint32_t lastUptimeMs;          // Heartbeat le plus recent avant le prochain reboot
+    uint32_t lastEpochSec;          // Epoch NTP au heartbeat le plus recent (0 si jamais synchronise)
     RuntimeStats stats;              // Dernier instantane periodique (toutes les 30s)
 
     int8_t   wifiStatus;            // wl_status_t au dernier heartbeat
@@ -124,8 +126,19 @@ void BootLog::begin() {
         }
         JsonArray arr = doc.is<JsonArray>() ? doc.as<JsonArray>() : doc.to<JsonArray>();
 
+        // Horodatage de l'evenement : l'horloge interne (time(nullptr)) n'est
+        // remise a zero que par une coupure d'alimentation/reset franc — un
+        // redemarrage logiciel/crash/watchdog la laisse intacte. Si le boot
+        // precedent avait synchronise le NTP, l'heure courante est donc deja
+        // valide a cet instant, avant meme que ce nouveau boot ne reconnecte
+        // le WiFi. Sinon (ESP_RST_POWERON, coupure secteur), elle repart de
+        // ~0 et on retombe sur la derniere estimation connue (resetEpoch).
+        uint32_t bootEpoch = (uint32_t)time(nullptr);
+        if (bootEpoch < 1600000000UL) bootEpoch = 0;   // ~2020-09, cf. TimeSync::isSynced()
+
         JsonObject entry = arr.add<JsonObject>();
         entry["bootMs"]            = (uint32_t)millis();
+        entry["bootEpoch"]         = bootEpoch;
         entry["resetReason"]       = _reasonText(reason);
         entry["resetReasonCode"]   = (int)reason;
         entry["bootCount"]         = bootCount;
@@ -137,6 +150,7 @@ void BootLog::begin() {
             // plus recent du boot precedent) — le plus proche que l'on
             // puisse avoir de "l'etat au moment du crash"
             entry["uptimeAtResetMs"]   = _rtc.lastUptimeMs;
+            entry["resetEpoch"]        = _rtc.lastEpochSec;   // estimation a +/- BOOT_LOG_STATS_INTERVAL_MS
             entry["freeHeapAtReset"]   = _rtc.stats.freeHeap;
             entry["largestBlockAtReset"] = _rtc.stats.largestBlock;
             entry["lastTask"]          = _rtc.lastTask[0] ? String(_rtc.lastTask) : String("");
@@ -192,6 +206,9 @@ void BootLog::service() {
     if (_rtc.lastUptimeMs - _lastStatsSnapMs < BOOT_LOG_STATS_INTERVAL_MS && _lastStatsSnapMs != 0)
         return;
     _lastStatsSnapMs = _rtc.lastUptimeMs;
+
+    uint32_t epoch = (uint32_t)time(nullptr);
+    if (epoch >= 1600000000UL) _rtc.lastEpochSec = epoch;   // ~2020-09, cf. TimeSync::isSynced()
 
     _rtc.stats.uptime       = _rtc.lastUptimeMs;
     _rtc.stats.freeHeap     = ESP.getFreeHeap();

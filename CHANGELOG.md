@@ -5,6 +5,33 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.4.2] - 2026-06-26
+
+### Ajoute
+
+- **Date et heure des évènements dans le journal de redémarrage** (page
+  `/debug`) : chaque entrée affiche désormais la date/heure réelle du
+  redémarrage (et non plus seulement l'uptime relatif), nécessaire pour
+  évaluer la fréquence des reboots. Deux sources, choisies par ordre de
+  fiabilité : `resetEpoch`, capturé au dernier battement périodique (30 s)
+  avant la coupure (le plus proche possible de l'instant réel de
+  l'évènement) ; à défaut, `bootEpoch`, lu dès le démarrage suivant — cela
+  fonctionne dès l'instant T puisque l'horloge interne de l'ESP32
+  (`time(nullptr)`) n'est remise à zéro que par une coupure d'alimentation
+  ou un reset franc, pas par un redémarrage logiciel/crash/watchdog. Si
+  aucune des deux n'est disponible (jamais synchronisé NTP, ex. reseau sans
+  accès Internet), l'entrée l'indique explicitement plutôt que d'afficher
+  une date fausse.
+
+### Corrige
+
+- Incrément du magic number du buffer RTC du journal de redémarrage
+  (ajout du champ `lastEpochSec`) pour éviter une relecture de l'ancien
+  layout après mise à jour firmware (cf. avertissement déjà présent dans
+  `boot_log.cpp` suite à l'incident similaire du Patch 7→8).
+
+---
+
 ## [1.4.1] - 2026-06-25
 
 ### Ajoute
