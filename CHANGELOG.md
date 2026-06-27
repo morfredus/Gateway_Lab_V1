@@ -5,6 +5,28 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.4.4] - 2026-06-27
+
+### Corrige
+
+- **Page `/debug` : numéro de boot affiché dans le titre incohérent avec le
+  corps de l'entrée** (`debug.js`) : le titre calculait un rang relatif
+  (`total - index`, position dans la liste affichée) tandis que le corps
+  affichait `bootCount`, le compteur absolu persisté en NVS — les deux
+  pouvaient diverger (ex. "Boot #10" en titre, "Boot #16" dans le détail
+  de la même entrée). Le titre utilise désormais `bootCount` partout.
+- **Heap/uptime à 0 o affichés pour un redémarrage volontaire (OTA)**
+  (`boot_log.cpp`, `ota_manager.cpp`) : l'instantané périodique
+  `RuntimeStats` (heap libre, bloc max, etc.) n'est rafraîchi par
+  `service()` que toutes les `BOOT_LOG_STATS_INTERVAL_MS` (30 s) ; un
+  redémarrage déclenché par `ESP.restart()` juste après la fin d'un upload
+  OTA pouvait donc persister un instantané obsolète ou nul selon le hasard
+  du dernier tic. `service()` accepte désormais un paramètre `force`
+  (ignorant le délai), appelé juste avant `ESP.restart()` dans le handler
+  `/update` pour garantir un instantané à jour au moment du redémarrage.
+
+---
+
 ## [1.4.3] - 2026-06-27
 
 ### Corrige

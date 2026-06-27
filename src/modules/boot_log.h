@@ -71,8 +71,9 @@ public:
 
     // A appeler dans loop() — mise à jour peu coûteuse de l'uptime/heap a
     // chaque appel, et instantané complet (RuntimeStats + WiFi) toutes les
-    // BOOT_LOG_STATS_INTERVAL_MS millisecondes.
-    void service();
+    // BOOT_LOG_STATS_INTERVAL_MS millisecondes. force=true ignore le délai
+    // (à utiliser juste avant un redémarrage volontaire, ex. fin d'OTA).
+    void service(bool force = false);
 
     // Ajoute une ligne au buffer circulaire courant (appelé par Log::*) —
     // chaque ligne est un JSON compact incluant heap/bloc libre courants.

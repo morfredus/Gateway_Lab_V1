@@ -198,12 +198,12 @@ void BootLog::begin() {
            _reasonText(reason), (int)reason, (unsigned)bootCount, (unsigned)crashCount, temperatureC);
 }
 
-void BootLog::service() {
+void BootLog::service(bool force) {
     if (_rtc.magic != kMagic) return;   // begin() pas encore appele
 
     _rtc.lastUptimeMs = millis();
 
-    if (_rtc.lastUptimeMs - _lastStatsSnapMs < BOOT_LOG_STATS_INTERVAL_MS && _lastStatsSnapMs != 0)
+    if (!force && _rtc.lastUptimeMs - _lastStatsSnapMs < BOOT_LOG_STATS_INTERVAL_MS && _lastStatsSnapMs != 0)
         return;
     _lastStatsSnapMs = _rtc.lastUptimeMs;
 

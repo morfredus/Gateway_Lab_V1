@@ -11,6 +11,7 @@
 #include <Update.h>
 #include "app_config.h"         // ENABLE_OTA
 #include "../utils/logger.h"
+#include "boot_log.h"
 
 static const char* TAG = "OTA";
 
@@ -62,6 +63,9 @@ void OtaManager::registerRoutes(WebServer& server) {
         [&server]() {
             server.sendHeader("Connection", "close");
             server.send(200, "text/plain", Update.hasError() ? "FAIL" : "OK");
+#ifdef BOOT_LOG_ENABLED
+            bootLog.service(true);   // Instantané heap/uptime à jour avant ce redémarrage volontaire
+#endif
             delay(500);   // Délai pour que le navigateur reçoive la réponse
             ESP.restart();
         },

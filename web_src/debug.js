@@ -41,7 +41,7 @@ function renderEntry(e, index, total) {
   return '<div class="hist-entry ' + cls + '">' +
            '<span class="hist-icon">🔁</span>' +
            '<div class="hist-body">' +
-             '<div class="hist-title">Boot #' + (total - index) + ' — ' + esc(e.resetReason) + '</div>' +
+             '<div class="hist-title">Boot #' + esc(e.bootCount) + ' — ' + esc(e.resetReason) + '</div>' +
              '<div class="hist-detail">' + meta.join(' · ') + '</div>' +
              (statsLine ? '<div class="hist-detail">' + esc(statsLine) + '</div>' : '') +
              (lines ? '<div class="hist-detail">' + lines + '</div>' : '<div class="hist-detail">(aucun log capturé avant ce reset)</div>') +
