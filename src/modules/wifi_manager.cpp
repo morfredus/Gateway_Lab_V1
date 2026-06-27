@@ -3,7 +3,7 @@
  *
  * Bibliothèques utilisées :
  *   WiFiMulti    — gestion de plusieurs réseaux, connexion au meilleur signal
- *   ESPmDNS      — résolution de noms sur le réseau local (gateway-lab-v1.local)
+ *   ESPmDNS      — résolution de noms sur le réseau local (gateway-lab.local)
  *   Preferences  — persistance NVS des réseaux enregistrés
  *   DNSServer +
  *   WebServer    — portail captif de configuration (mode point d'accès)
@@ -131,7 +131,7 @@ bool WiFiManager::removeNetwork(const String& ssid) {
 static const char PORTAL_PAGE[] PROGMEM = R"HTML(
 <!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gateway Lab V1 - Configuration WiFi</title>
+<title>Gateway Lab - Configuration WiFi</title>
 <style>
 body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;
   flex-direction:column;align-items:center;padding:2rem 1rem;margin:0}
@@ -147,7 +147,7 @@ button:hover{background:#2563eb}
 #msg{margin-top:1rem;font-size:0.85rem;text-align:center;min-height:1.1rem}
 </style></head><body>
 <div class="card">
-  <h1>Configuration WiFi - Gateway Lab V1</h1>
+  <h1>Configuration WiFi - Gateway Lab</h1>
   <p class="hint">Choisissez votre réseau WiFi domestique. L'ESP32 redémarrera et s'y connectera automatiquement.</p>
   <form id="f">
     <label>Réseau WiFi détecté</label>

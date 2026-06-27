@@ -8,11 +8,22 @@ function esc(s) {
 // esp_reset_reason_t : codes "anormaux" mis en evidence (voir _isCrashReason() dans boot_log.cpp)
 var CRASH_REASON_CODES = [4, 5, 6, 7, 9]; // PANIC, INT_WDT, TASK_WDT, WDT, BROWNOUT
 
+// Date/heure de l'evenement : resetEpoch (heartbeat le plus recent avant le
+// reboot, +/- 30 s) est plus proche de l'instant du crash que bootEpoch
+// (capture a la reprise) — prefere donc resetEpoch quand disponible.
+function formatEventDate(e) {
+  var epoch = e.resetEpoch || e.bootEpoch || 0;
+  if (!epoch) return 'Heure inconnue (NTP non synchronisé à cet instant)';
+  var d = new Date(epoch * 1000);
+  return d.toLocaleString('fr-FR') + (e.resetEpoch ? '' : ' (approx. à la reprise)');
+}
+
 function renderEntry(e, index, total) {
   var cls = CRASH_REASON_CODES.indexOf(e.resetReasonCode) !== -1 ? 'hist-offline' : 'hist-online';
   var lines = (e.lines || []).map(function(l) { return esc(l); }).join('<br>');
 
   var meta = [];
+  meta.push(esc(formatEventDate(e)));
   meta.push('Boot #' + esc(e.bootCount) + ' / crash #' + esc(e.crashCount));
   if (typeof e.temperature === 'number') meta.push(e.temperature.toFixed(1) + ' °C');
   if (e.lastTask) meta.push('Dernière tâche : ' + esc(e.lastTask));

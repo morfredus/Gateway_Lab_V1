@@ -1,17 +1,17 @@
-# Configuration WiFi — Gateway Lab V1
+# Configuration WiFi — Gateway Lab
 
-Ce guide explique comment connecter Gateway Lab V1 à votre réseau WiFi
+Ce guide explique comment connecter Gateway Lab à votre réseau WiFi
 **sans installer aucun logiciel de développement**, simplement avec un
 téléphone ou un ordinateur et un navigateur web.
 
 Il s'adresse à toute personne qui a reçu un ESP32 déjà flashé avec
-`gateway-lab-v1.bin` et qui veut le mettre en service chez elle.
+`gateway-lab.bin` et qui veut le mettre en service chez elle.
 
 ---
 
 ## Pourquoi ce guide existe
 
-Avant la version 0.3.0, le WiFi de Gateway Lab V1 était codé en dur dans le
+Avant la version 0.3.0, le WiFi de Gateway Lab était codé en dur dans le
 firmware (`include/secrets.h`). Pour changer de réseau, il fallait :
 
 1. installer PlatformIO ;
@@ -93,13 +93,13 @@ Une fois reconnecté à votre propre réseau WiFi, ouvrez un navigateur et allez
 à :
 
 ```
-http://gateway-lab-v1.local
+http://gateway-lab.local
 ```
 
 Si cette adresse ne fonctionne pas (certains réseaux ou certains systèmes
 Windows ne supportent pas mDNS), consultez l'écran de votre routeur/box
 internet pour trouver l'adresse IP attribuée à l'appareil
-`gateway-lab-v1`, ou utilisez la page **Système → Réseau WiFi** une fois
+`gateway-lab`, ou utilisez la page **Système → Réseau WiFi** une fois
 connecté une première fois.
 
 ---

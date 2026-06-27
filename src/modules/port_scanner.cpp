@@ -153,9 +153,9 @@ void PortScanner::_httpBanner(const String& ip, uint16_t port, uint32_t timeout_
                                String& serverOut, String& titleOut) {
     WiFiClient client;
     client.setTimeout(1);
-    if (!client.connect(ip.c_str(), port)) return;
+    if (!client.connect(ip.c_str(), port)) { client.stop(); return; }
 
-    client.printf("GET / HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLabV1\r\nConnection: close\r\n\r\n",
+    client.printf("GET / HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLab\r\nConnection: close\r\n\r\n",
                   ip.c_str());
 
     String body;
@@ -194,7 +194,7 @@ void PortScanner::_httpBanner(const String& ip, uint16_t port, uint32_t timeout_
 String PortScanner::_tcpBanner(const String& ip, uint16_t port, uint32_t timeout_ms) {
     WiFiClient client;
     client.setTimeout(1);
-    if (!client.connect(ip.c_str(), port)) return "";
+    if (!client.connect(ip.c_str(), port)) { client.stop(); return ""; }
 
     String banner;
     unsigned long start = millis();
@@ -215,9 +215,9 @@ static String _httpGet(const String& ip, uint16_t port, const String& path,
                         uint32_t timeout_ms) {
     WiFiClient client;
     client.setTimeout(1);
-    if (!client.connect(ip.c_str(), port)) return "";
+    if (!client.connect(ip.c_str(), port)) { client.stop(); return ""; }
 
-    client.printf("GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLabV1\r\nConnection: close\r\n\r\n",
+    client.printf("GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: GatewayLab\r\nConnection: close\r\n\r\n",
                   path.c_str(), ip.c_str());
 
     String body;

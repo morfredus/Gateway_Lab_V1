@@ -1,5 +1,5 @@
 /**
- * Gateway Lab V1 — Point d'entrée principal
+ * Gateway Lab — Point d'entrée principal
  *
  * Rôle de ce fichier : orchestration uniquement.
  * Toute la logique métier est dans src/modules/.
@@ -177,6 +177,11 @@ void setup() {
             .setMobility     = [](const String& macOrIp, const String& mode) {
                 return netScanner.setMobility(macOrIp, mode);
             },
+            .setTopologyParent = [](const String& macOrIp, const String& parentMac) {
+                return netScanner.setTopologyParent(macOrIp, parentMac);
+            },
+            .setTopologyRoot = [](const String& mac) { netScanner.setTopologyRoot(mac); },
+            .getTopologyRoot = [] { return netScanner.getTopologyRoot(); },
             .getNetworkHealthJson = [] { return netScanner.networkHealthToJson(); },
             .getMonitorInterval   = [] { return netScanner.getMonitorInterval(); },
             .setMonitorInterval   = [](int minutes) { netScanner.setMonitorInterval(minutes); },

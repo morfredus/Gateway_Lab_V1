@@ -77,7 +77,7 @@ function sourceBadge(source) {
   var cfg = {
     'mDNS':         { cls: 'source-mdns',     label: 'mDNS',      title: 'Nom résolu via mDNS — annonce .local de l\'appareil' },
     'PTR':          { cls: 'source-ptr',       label: 'DNS↩',     title: 'DNS inverse (PTR) — nom fourni par le routeur / box' },
-    'Self':         { cls: 'source-self',      label: 'ESP32',     title: 'Cet appareil — Gateway Lab V1' },
+    'Self':         { cls: 'source-self',      label: 'ESP32',     title: 'Cet appareil — Gateway Lab' },
     'SSDP':         { cls: 'source-ssdp',      label: 'UPnP',      title: 'Découverte UPnP/SSDP — descripteur XML du device' },
     'HueAPI':       { cls: 'source-hue',       label: 'Hue',       title: 'API Philips Hue Bridge (/api/config)' },
     'SynologyAPI':  { cls: 'source-synology',  label: 'DSM',       title: 'API Synology DSM (non authentifiée)' },
@@ -462,6 +462,53 @@ function rescanDevice(btn) {
       btn.textContent = prevHtml;
       hideRescanRow();
     });
+}
+
+var GENERIC_CATEGORIES = ['IoT', 'Identification en cours'];
+
+function pollRescanStatusSimple() {
+  return fetch('/api/devices/rescan/status').then(function(r) { return r.json(); }).then(function(s) {
+    if (!s.running) return s;
+    return new Promise(function(resolve) {
+      setTimeout(function() { resolve(pollRescanStatusSimple()); }, 500);
+    });
+  });
+}
+
+function rescanUnidentified() {
+  var btn = document.getElementById('rescan-unidentified-btn');
+  var ips = lastDevices
+    .filter(function(d) { return d.ip && GENERIC_CATEGORIES.indexOf(d.category) >= 0; })
+    .map(function(d) { return d.ip; });
+
+  if (!ips.length) {
+    alert('Aucun équipement non identifié à rescanner.');
+    return;
+  }
+
+  btn.disabled = true;
+  var total = ips.length;
+  var done = 0;
+
+  function next() {
+    if (!ips.length) {
+      btn.disabled = false;
+      btn.textContent = 'Rescan non identifiés';
+      fetchDevices();
+      return;
+    }
+    var ip = ips.shift();
+    done++;
+    btn.textContent = 'Rescan (' + done + '/' + total + ')…';
+    fetch('/api/devices/rescan', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'ip=' + encodeURIComponent(ip) + '&mode=deep' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) return next();   // equipement deja en cours de scan, etc. : passer au suivant
+        return pollRescanStatusSimple().then(next);
+      })
+      .catch(next);
+  }
+  next();
 }
 
 function triggerScan() {

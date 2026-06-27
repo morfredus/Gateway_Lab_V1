@@ -1,4 +1,4 @@
-# Architecture — Gateway Lab V1
+# Architecture — Gateway Lab
 
 Ce document explique comment le projet est structuré, pourquoi ces choix ont été faits,
 et comment les différentes parties s'articulent entre elles.
@@ -262,7 +262,11 @@ est supprimé depuis v0.8.2, devenu inutile.
 protocoles plus coûteux, non utilisés lors du scan complet, et qui peuvent
 être adressés directement à l'IP visée (requête unicast).
 
-- `SnmpScanner` : GetRequest SNMP v1 (ASN.1 BER manuel) sur `sysDescr` (UDP 161)
+- `SnmpScanner` : GetRequest SNMP v1 (ASN.1 BER manuel) sur `sysDescr` (UDP 161,
+  passe précise) + marche `GetNextRequest` sur la table de pontage
+  `dot1dTpFdbTable` (`walkBridgeMacTable`, découverte automatique de
+  topologie périodique sur les routeurs/AP/répéteurs, v1.4.0 — voir
+  `NetworkScanner::_discoverTopologyViaSnmp()`)
 - `MediaApiScanner` : sondes HTTP séquentielles Cast (`:8008`), Sonos (`:1400`),
   Roku (`:8060`), Samsung Smart TV (`:8001`)
 - `MqttScanner` : connexion TCP unicast à un broker MQTT (`:1883`), CONNECT

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gateway Lab V1 - Topologie</title>
+  <title>Gateway Lab - Topologie</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="page-scan">
@@ -11,7 +11,7 @@
   <!-- ── Header ─────────────────────────────────────────────── -->
   <header class="site-hdr">
     <div class="site-name">
-      Gateway Lab&nbsp;V1
+      Gateway Lab
       <span class="site-ver" id="site-ver">v—</span>
     </div>
     <span class="site-tag">Topologie du réseau</span>
@@ -26,16 +26,35 @@
       <p class="card-title">Cartographie du réseau</p>
     </div>
     <p class="info-label" style="margin-bottom:0.9rem">
-      Cette page accueillera la cartographie du réseau local : passerelle, points
-      d'accès / répéteurs WiFi détectés et équipements rattachés. Fonctionnalité
-      en préparation (voir la roadmap) — en attendant, une vue simplifiée liste
-      la passerelle et les équipements identifiés comme points d'accès WiFi.
+      Arbre du réseau : racine (box opérateur par défaut), points d'accès /
+      répéteurs WiFi détectés et équipements rattachés. Un scan ARP/SSDP ne
+      peut pas déterminer automatiquement à quel répéteur un appareil WiFi est
+      relié — faites glisser un équipement sur la carte et déposez-le sur un
+      autre pour déclarer ce rattachement. Trait plein = rattachement déclaré
+      manuellement ou racine ; trait pointillé = déduit automatiquement par
+      interrogation SNMP (table de pontage) de l'équipement en amont, quand
+      celui-ci expose un agent SNMP en lecture publique. Couleurs : bleu marine
+      = racine, vert = box WiFi / répéteur / point d'accès, bleu = rattachement
+      automatique fiable (≥ 60% de confiance), orange = rattachement automatique
+      incertain (MAC vue dans plusieurs tables de pontage pendant le même
+      sweep), gris = rattachement par défaut (non déterminé). Le pourcentage de
+      confiance s'affiche sous le nom de l'équipement quand il est connu.
     </p>
-    <div id="topology-list"></div>
+
+    <div class="topo-root-row">
+      <label for="topo-root-select">Racine de l'arbre (base du réseau)</label>
+      <select id="topo-root-select"></select>
+      <span class="card-meta" id="topo-root-current"></span>
+    </div>
+
+    <div class="topo-wrap">
+      <svg id="topology-svg" class="topo-svg"></svg>
+    </div>
     <p class="empty-msg" id="topology-empty" style="display:none">
       Aucune information de topologie disponible pour le moment — lancez un scan
       depuis la page Équipements.
     </p>
+    <p class="topo-drag-msg" id="topo-drag-msg"></p>
   </div>
 
   <!-- ── Footer ────────────────────────────────────────────── -->

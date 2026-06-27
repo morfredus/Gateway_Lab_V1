@@ -4,7 +4,7 @@
  * Bibliothèques utilisées :
  *   WebServer    — serveur HTTP intégré à l'Arduino ESP32
  *   ArduinoJson  — sérialisation JSON pour les réponses /api/*
- *   ESPmDNS      — résolution de noms (gateway-lab-v1.local)
+ *   ESPmDNS      — résolution de noms (gateway-lab.local)
  */
 
 #include "web_server.h"
@@ -87,6 +87,9 @@ void WebServerModule::begin(uint16_t port) {
     _on("/api/system/backup",  HTTP_GET,  [this]() { _handleApiSystemBackup(); });
     _on("/api/system/restore", HTTP_POST, [this]() { _handleApiSystemRestore(); });
     _on("/api/mobility",       HTTP_POST, [this]() { _handleApiSetMobility(); });
+    _on("/api/topology/parent", HTTP_POST, [this]() { _handleApiSetTopologyParent(); });
+    _on("/api/topology/root",   HTTP_GET,  [this]() { _handleApiTopologyRootGet(); });
+    _on("/api/topology/root",   HTTP_POST, [this]() { _handleApiTopologyRootPost(); });
     _on("/api/network/health", HTTP_GET,  [this]() { _handleApiNetworkHealth(); });
     _on("/api/monitor",        HTTP_GET,  [this]() { _handleApiMonitorGet(); });
     _on("/api/monitor",        HTTP_POST, [this]() { _handleApiMonitorPost(); });
@@ -163,7 +166,7 @@ void WebServerModule::_handleRoot() {
 // Handler : état du système en JSON
 // Exemple de réponse :
 //   {"ssid":"Livebox","ip":"192.168.1.42","rssi":-55,"uptime":12345,
-//    "version":"0.0.3","hostname":"gateway-lab-v1","scanning":false}
+//    "version":"0.0.3","hostname":"gateway-lab","scanning":false}
 // ---------------------------------------------------------------------------
 void WebServerModule::_handleApiStatus() {
     JsonDocument doc;
@@ -198,7 +201,9 @@ void WebServerModule::_handleApiDevices() {
     }
     json += ",\"devices\":";
     json += (_hasScan && _scan.getJson) ? _scan.getJson() : "[]";
-    json += "}";
+    json += ",\"topologyRoot\":\"";
+    json += (_hasScan && _scan.getTopologyRoot) ? _scan.getTopologyRoot() : "";
+    json += "\"}";
 
     _server.sendHeader("Cache-Control", "no-cache");
     _server.send(200, "application/json", json);
@@ -601,6 +606,55 @@ void WebServerModule::_handleApiSetMobility() {
     bool ok = _scan.setMobility(key, mode);
     _server.send(ok ? 200 : 404, "application/json",
                  ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/topology/parent — declare le parent reseau (AP/repeteur/switch
+// en amont) d'un equipement, pour la cartographie de la page Topologie.
+// Parametres (form-urlencoded) : mac (ou ip) + parent (MAC du parent, vide
+// pour effacer la declaration).
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiSetTopologyParent() {
+    if (!_hasScan || !_scan.setTopologyParent) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+
+    String key = _server.arg("mac");
+    if (key.isEmpty()) key = _server.arg("ip");
+    String parentMac = _server.arg("parent");
+
+    if (key.isEmpty()) {
+        _server.send(400, "application/json", "{\"error\":\"mac ou ip requis\"}");
+        return;
+    }
+
+    bool ok = _scan.setTopologyParent(key, parentMac);
+    _server.send(ok ? 200 : 404, "application/json",
+                 ok ? "{\"status\":\"ok\"}" : "{\"error\":\"equipement ou parent introuvable\"}");
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/topology/root — MAC de la racine forcee de l'arbre de topologie
+// ("" si automatique : box operateur).
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiTopologyRootGet() {
+    String mac = (_hasScan && _scan.getTopologyRoot) ? _scan.getTopologyRoot() : "";
+    _server.send(200, "application/json", "{\"root\":\"" + mac + "\"}");
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/topology/root — force la racine de l'arbre de topologie a un
+// equipement identifie par sa MAC, ou l'efface (parametre "mac" vide) pour
+// revenir a l'automatique (box operateur, categorie "Router").
+// ---------------------------------------------------------------------------
+void WebServerModule::_handleApiTopologyRootPost() {
+    if (!_hasScan || !_scan.setTopologyRoot) {
+        _server.send(503, "application/json", "{\"error\":\"non disponible\"}");
+        return;
+    }
+    _scan.setTopologyRoot(_server.arg("mac"));
+    _server.send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
 // ---------------------------------------------------------------------------

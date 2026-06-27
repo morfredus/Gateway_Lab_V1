@@ -1,4 +1,4 @@
-# Protocoles réseau utilisés — Gateway Lab V1
+# Protocoles réseau utilisés — Gateway Lab
 
 Ce document explique les protocoles réseau mis en œuvre dans le projet,
 en partant des bases. Aucune connaissance préalable n'est requise.
@@ -127,7 +127,7 @@ DNS classique = un serveur central qui traduit `google.com` → `142.250.74.46`.
 mDNS = DNS sans serveur central, pour les réseaux locaux.
 Chaque équipement s'annonce lui-même sur le réseau avec un nom en `.local`.
 
-Exemples : `raspberrypi.local`, `freebox-server.local`, `gateway-lab-v1.local`.
+Exemples : `raspberrypi.local`, `freebox-server.local`, `gateway-lab.local`.
 
 ### Comment ça marche ?
 
@@ -505,6 +505,75 @@ Equipement  → Gateway Lab :
 Le texte est analysé par des heuristiques de mots-clés pour en déduire le
 fabricant (HP, Cisco, Synology, Ubiquiti…) quand l'OUI MAC est ambigu.
 
+Depuis la v1.4.0, SNMP est également utilisé pour la **découverte automatique
+de la topologie réseau** : les équipements détectés comme routeur/point
+d'accès/répéteur sont interrogés à intervalle régulier (30 min par défaut)
+via une marche (`GetNextRequest` successifs) de la Bridge MIB standard,
+table de pontage `dot1dTpFdbTable` (OID `1.3.6.1.2.1.17.4.3.1.1`) :
+
+```
+Gateway Lab → AP/routeur:161 :
+  GetNextRequest community="public" OID=1.3.6.1.2.1.17.4.3.1.1
+AP/routeur  → Gateway Lab :
+  OID=1.3.6.1.2.1.17.4.3.1.1.<6 octets MAC> = <MAC pontée, 6 octets>
+  (repeter avec l'OID retourne jusqu'a sortir de la table ou timeout)
+```
+
+Chaque MAC ainsi retournée est rattachée automatiquement à l'équipement
+interrogé (`topologyParent`), sans jamais écraser un rattachement déclaré
+manuellement par l'utilisateur. Entièrement best-effort : la plupart des
+répéteurs mesh grand public (TP-Link Deco, Orbi, eero…) n'exposent pas
+d'agent SNMP et ne sont simplement jamais source de cette découverte — le
+rattachement manuel par glisser-déposer reste alors la seule option.
+
+---
+
+## MQTT — broker (passe précise approfondie)
+
+### C'est quoi ?
+
+MQTT est un protocole de messagerie publish/subscribe très utilisé en
+domotique (Home Assistant, Zigbee2MQTT, Tasmota, ESPHome…). Un **broker**
+centralise les messages : les appareils publient sur des topics, d'autres
+s'y abonnent. Le broker écoute en général sur le port TCP 1883.
+
+Le scan de ports (Phase complète et passe précise) détecte déjà le port
+1883 ouvert (libellé `MQTT`). La passe précise approfondie va plus loin en
+s'y connectant brièvement comme client.
+
+### Comment ça marche ?
+
+```
+Gateway Lab → IP cible:1883 :
+  CONNECT (anonyme, client id "GatewayLab-<millis>")
+Broker     → Gateway Lab :
+  CONNACK (code 0 = accepté sans authentification, sinon refusé)
+
+Si accepté :
+Gateway Lab → Broker :
+  SUBSCRIBE "$SYS/broker/version", "$SYS/broker/clients/connected"
+Broker     → Gateway Lab :
+  PUBLISH "$SYS/broker/version"           → "mosquitto version 2.0.18"
+  PUBLISH "$SYS/broker/clients/connected" → "4"
+```
+
+`$SYS/#` est l'espace de topics standard que la plupart des brokers
+(Mosquitto en tête) publient sur eux-mêmes. Gateway Lab se limite
+volontairement à ces deux topics : il n'interroge jamais les topics
+applicatifs des appareils (`#`), qui relèveraient de l'inventaire des
+données du foyer plutôt que de l'identification du broker.
+
+### Comment Gateway Lab l'utilise ?
+
+`MqttScanner` (`src/modules/mqtt_scanner.*`) est appelé uniquement depuis
+`_runRescan(ip, deep)`, lors de la passe précise approfondie, et seulement
+si le profil déduit est `SmartHome` ou `Unknown` **et** que le port 1883 a
+été trouvé ouvert par le scan de ports ciblé. Jamais de diffusion
+multicast, jamais de scan systématique — une seule connexion TCP unicast
+vers l'IP visée. Le résultat (version du broker, nombre de clients
+connectés) enrichit le modèle et la catégorie (`Smart Hub`) de
+l'équipement, avec la source `MQTT`.
+
 ---
 
 ## MQTT — broker (passe précise approfondie)
@@ -634,7 +703,7 @@ juste deux entrées de plus dans la table des services interrogés.
 | SSDP | 1900 | UDP multicast 239.255.255.250 | Découverte UPnP |
 | WS-Discovery | 3702 | UDP multicast 239.255.255.250 | Découverte ONVIF — non invoqué actuellement (cf. ci-dessus) |
 | NetBIOS | 137 | UDP | Node Status — nom de machine Windows/Samba |
-| SNMP | 161 | UDP | `sysDescr` (fabricant/modèle) — passe précise approfondie, unicast |
+| SNMP | 161 | UDP | `sysDescr` (fabricant/modèle, passe précise approfondie) + table de pontage (`dot1dTpFdbTable`, découverte automatique de topologie) — unicast |
 | TCP ports (scan) | 21/22/23/80/443/445/554/1883/3389/5000/8080/8123/8443/9100 | TCP | Bannières + API IoT (Shelly, Tasmota, FritzBox, Synology, Hue) |
 | TCP ports (passe précise) | 22/53/80/135/139/443/445/515/554/631/8080/8443/9100/5000 | TCP | `kRescanTargetPorts` — scan ciblé d'une seule IP, passe précise approfondie |
 | API Cast | 8008 | TCP | `/setup/eureka_info` — passe précise approfondie, unicast |
@@ -645,7 +714,7 @@ juste deux entrées de plus dans la table des services interrogés.
 | HTTP | 80/443/49000/… | TCP | Descripteurs XML + APIs spécifiques |
 | ArduinoOTA | 3232 | UDP | Mise à jour firmware réseau |
 | HTTP (OTA web) | 80 | TCP | Mise à jour firmware navigateur |
-| mDNS (service) | 5353 | UDP | Annonce `gateway-lab-v1.local` |
+| mDNS (service) | 5353 | UDP | Annonce `gateway-lab.local` |
 
 ---
 

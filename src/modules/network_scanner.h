@@ -100,9 +100,24 @@ struct NetworkDevice {
     String   mobilityOverride;          // "" = auto-detection, "fixed" ou "mobile" (force par l'utilisateur)
     bool     mobileAwayNotified  = false; // true si l'evenement "mobile_left" a deja ete journalise pour l'absence en cours
 
+    // Topologie reseau (v0.4.x) -----------------------------------------
+    String   topologyParent;            // MAC de l'equipement en amont (AP/repeteur/switch) - declare par l'utilisateur OU deduit par decouverte SNMP - "" = inconnu/direct sur la passerelle
+    bool     topologyParentAuto = false; // true si topologyParent vient de la decouverte SNMP (table de pontage) plutot que d'un glisser-depose manuel - permet de le rafraichir/corriger automatiquement sans jamais ecraser un choix manuel
+    uint8_t  topologyParentConfidence = 0; // 0 = non applicable (rattachement manuel ou inconnu) ; 1-100 = confiance dans le rattachement automatique (FDB Bridge MIB directe = elevee)
+
     uint32_t lastSeen;      // millis() du dernier scan — converti en elapsed côté client
     bool     online;        // true si détecté lors du dernier scan
 };
+
+// Categorie "generique", c'est-a-dire pas encore suffisamment qualifiee pour
+// etre consideree comme definitive : peut toujours etre ecrasee par une
+// categorie plus specifique deduite par une source plus fiable (SSDP, API,
+// enricher, classification par signaux). Sans ce test partage, certains
+// equipements restaient bloques indefiniment en "Identification en cours"
+// car cette valeur n'etait reconnue generique par aucun appelant.
+inline bool isGenericCategory(const String& category) {
+    return category.isEmpty() || category == "IoT" || category == "Identification en cours";
+}
 
 class NetworkScanner {
 public:
@@ -223,6 +238,19 @@ public:
     // Force/annule la classification mobile/fixe d'un equipement
     // ("", "fixed", "mobile") - retourne false si introuvable
     bool setMobility(const String& macOrIp, const String& mode);
+
+    // Declare manuellement le parent reseau (AP/repeteur/switch en amont)
+    // d'un equipement, identifie par sa MAC - "" pour effacer (inconnu/direct
+    // sur la passerelle). Retourne false si l'equipement ou le parent
+    // (quand non vide) est introuvable, ou si parentMac == macOrIp.
+    bool setTopologyParent(const String& macOrIp, const String& parentMac);
+
+    // Definit la racine de l'arbre de topologie (MAC d'un equipement connu) -
+    // persiste en NVS. "" = automatique : la box operateur (categorie
+    // "Router") plutot que l'ESP32 lui-meme (categorie "Gateway", qui n'est
+    // qu'un equipement parmi d'autres sur le reseau de l'utilisateur).
+    void setTopologyRoot(const String& mac);
+    String getTopologyRoot() const;
 
     // Donnees de sante reseau pour le tableau de bord (compteurs 24h,
     // equipements presents/connus, equipements les moins stables)
@@ -354,6 +382,25 @@ private:
     void _queueQuickScanLocked(const String& ip);
     void _queueDeepScanLocked(const String& ip);
 
+    // Sweep periodique (RESCAN_SWEEP_INTERVAL_MINUTES) qui met en file un
+    // scan approfondi pour chaque equipement en ligne reste sur une categorie
+    // generique ("IoT" ou "Identification en cours") — sans cela, un
+    // equipement qui n'a jamais ete revisite par l'utilisateur peut rester
+    // bloque indefiniment, meme une fois le bug de categorie generique
+    // (isGenericCategory) corrige. Appele depuis serviceMonitor().
+    void _sweepUnidentified();
+
+    // Decouverte automatique de la topologie par SNMP (table de pontage,
+    // dot1dTpFdbTable) — v1.4.0. Interroge chaque equipement de type
+    // routeur/point d'acces/repeteur qui expose un agent SNMP en lecture
+    // publique, recupere la liste des MAC qu'il pontage (donc rattachees a
+    // lui), et complete topologyParent pour ces equipements quand il n'a pas
+    // ete fixe manuellement (topologyParentAuto). Best-effort : ne fait rien
+    // si l'equipement ne repond pas (agent SNMP absent ou desactive — le cas
+    // de la plupart des repeteurs mesh grand public type Deco/Orbi/eero).
+    // Appele depuis serviceMonitor(), independamment de _sweepUnidentified().
+    void _discoverTopologyViaSnmp();
+
     // Draine une seule entree de la file d'attente differee (scan rapide en
     // priorite, puis approfondi) - ne fait rien si un scan est deja en cours.
     void _drainPendingScans();
@@ -379,8 +426,13 @@ private:
     uint32_t _monitorIntervalMinutes = MONITOR_INTERVAL_DEFAULT_MINUTES;  // Lu/ecrit via NVS, hors mutex (idem status_led)
     bool     _monitorEnabled         = true;  // Lu/ecrit via NVS, hors mutex (idem status_led)
     uint32_t _lastMonitorTickMs      = 0;     // millis() du dernier tick execute (0 = jamais)
+    uint32_t _lastUnidentifiedSweepMs = 0;    // millis() du dernier sweep "non identifies" execute (0 = jamais)
+    uint32_t _lastTopologySnmpSweepMs = 0;    // millis() de la derniere decouverte de topologie par SNMP (0 = jamais)
     std::vector<String>          _pendingQuickScan;   // File d'attente differee (IP), dedupliquee
     std::vector<String>          _pendingDeepScan;    // File d'attente differee (IP), dedupliquee
+
+    // Topologie reseau (v0.4.x) - lu/ecrit via NVS, hors mutex (idem _monitorEnabled)
+    String _topologyRootMac;   // "" = automatique (box operateur)
 };
 
 // Instance globale

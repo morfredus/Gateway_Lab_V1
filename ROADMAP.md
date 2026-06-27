@@ -1,4 +1,4 @@
-# Roadmap — Gateway Lab V1
+# Roadmap — Gateway Lab
 
 Fonctionnalités planifiées par ordre de priorité décroissante.
 
@@ -9,9 +9,20 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * Authentification du portail de configuration WiFi et de l'API `/api/wifi`
 * Reconnexion automatique vers le portail si tous les réseaux enregistrés
   échouent durablement (actuellement uniquement au tout premier démarrage)
-* Détection des points d'accès / répéteurs WiFi et visualisation graphique
-  de la topologie réseau (la page `/topology` ajoutée en v0.7.0 n'en est que
-  la première étape : liste texte passerelle/équipements)
+* Identification des switches connus
+* Intégration optionnelle de l'API locale des mesh WiFi propriétaires
+  (ex. TP-Link Deco) pour déduire automatiquement le rattachement exact
+  d'un appareil à un répéteur, en complément du rattachement manuel et de
+  la découverte SNMP (v1.4.0) — utile pour les répéteurs mesh grand public
+  qui n'exposent pas d'agent SNMP
+* Scan croisé multi-sous-réseaux (cas du double NAT, ex. plusieurs Deco
+  X50 chacun en mode routeur) : `gatewaylab` ne voit aujourd'hui que le
+  sous-réseau sur lequel il est connecté, jamais celui d'un Deco en aval
+  (masqué par son propre NAT). Implique une bascule WiFi temporaire vers
+  l'autre réseau pour y lancer un scan ARP/SNMP avant de revenir, donc la
+  gestion d'identifiants WiFi multiples, une file de scan différée, et une
+  tolérance à l'indisponibilité temporaire de l'interface web pendant la
+  bascule — chantier non trivial, à dater une fois priorisé
 
 ---
 
@@ -48,11 +59,16 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 * ~~Page dédiée et détection automatique de la passerelle~~ (terrain préparé
   en v0.7.0 : page `/topology`, vue texte passerelle/équipements à partir des
   données déjà collectées)
-* Détection des points d'accès / répéteurs WiFi
+* ~~Détection des points d'accès / répéteurs mesh WiFi par hostname~~ (ex.
+  TP-Link Deco, Orbi, eero, Nest WiFi — terminé : `applyMeshDetection()`,
+  `device_enricher.h`)
+* ~~Cartographie logique du réseau~~ (arbre SVG sur la page `/topology`)
+* ~~Relations entre équipements (qui est connecté à quel répéteur/AP)~~
+  (déclaration manuelle via `/api/topology/parent` — un scan ARP/SSDP seul ne
+  peut pas déduire le rattachement WiFi exact à un répéteur mesh propriétaire)
 * Identification des switches connus
-* Cartographie logique du réseau
-* Relations entre équipements (qui est connecté à quel répéteur/AP)
-* Visualisation graphique du réseau (graphe interactif)
+* Visualisation graphique du réseau plus riche (zoom, drag, icônes par
+  catégorie)
 
 ### v0.5.x — Connectivité
 
@@ -141,3 +157,9 @@ Fonctionnalités planifiées par ordre de priorité décroissante.
 | v1.0.7 (Patch 7) | Journal de redémarrage temporaire pour le débogage sans moniteur série : buffer circulaire des derniers logs en RAM `RTC_NOINIT_ATTR`, persisté avec la raison du reset (`esp_reset_reason`) au boot suivant (`/bootlog.json`, 10 derniers démarrages), page `/debug` et API `GET`/`DELETE /api/bootlog` ; conçu pour un retrait facile (voir `docs/DEVELOPMENT.md`) |
 | v1.0.8 (Patch 8) | Extension du journal de redémarrage : compteurs `boot_count`/`crash_count` persistés en NVS, température interne, dernier état connu avant reset (heap/bloc libre/uptime/WiFi/dernière tâche via `setLastTask()`), instantané périodique `RuntimeStats` (toutes les 30 s, incluant équipements connus/pages servies/appels API), lignes de log au format JSON enrichi (heap + bloc libre par ligne), page `/debug` mise à jour pour afficher toutes ces données |
 | v1.1.1 (Patch 9) | Correction de la page Historique : les absences courtes (<30 min) d'un équipement mobile ne journalisaient aucune déconnexion, faisant apparaître des chaînes de "Reconnecté" sans cause visible — nouvel évènement discret `offline_brief`, symétrique au `reconnected` qui suit ; côté UI, les reconnexions consécutives sans déconnexion explicite entre elles sont désormais regroupées en une seule entrée "Connexion instable détectée" plutôt que d'être empilées |
+| v1.2.0  | Renommage du projet « Gateway Lab V1 » → « Gateway Lab » (mDNS `gateway-lab.local`, `PROJECT_NAME`, titres et en-têtes web, `User-Agent` HTTP, documentation) ; cartographie graphique de la topologie réseau (arbre SVG fait maison) ; détection automatique des répéteurs mesh (TP-Link Deco, Orbi, eero, Velop…) ; rattachement manuel des équipements WiFi par glisser-déposer sur la carte ; racine de l'arbre configurable, par défaut la box opérateur plutôt que l'ESP32 lui-même |
+| v1.3.0  | Correction des équipements bloqués indéfiniment en « Identification en cours » (catégorie non reconnue comme générique par le pipeline d'identification, même un rescan manuel ne pouvait pas en sortir — centralisé dans `isGenericCategory()`) ; re-identification automatique périodique des équipements restés génériques (« IoT »/« Identification en cours »), toutes les heures par défaut ; bouton « Rescan non identifiés » sur la page Équipements pour forcer ce rescan en un clic |
+| v1.4.0  | Découverte automatique de la topologie réseau par SNMP : interrogation de la table de pontage (Bridge MIB, `dot1dTpFdbTable`) des routeurs/points d'accès/répéteurs qui exposent un agent SNMP en lecture publique, pour rattacher automatiquement les équipements qu'ils relaient (`topologyParent`/`topologyParentAuto`), sans jamais écraser un rattachement manuel ; affichage distinct (trait pointillé) des rattachements déduits par SNMP sur la carte de topologie |
+| v1.4.1  | Taux de confiance (`topologyParentConfidence`, 0-100) pour les rattachements automatiques SNMP : confiance élevée pour une entrée FDB non ambiguë, dégradée quand une même MAC est revendiquée par plusieurs AP pendant le même sweep ; code couleur dans la topologie (vert = box/répéteur conservé, bleu = rattachement automatique fiable, orange = incertain) avec pourcentage affiché ; correction de deux fuites de champs (`topologyParentAuto`/`topologyParentConfidence` non reportés entre cycles de surveillance, `topologyParentConfidence` non persisté dans le stockage LittleFS) |
+| v1.4.2  | Date et heure réelles des évènements dans le journal de redémarrage (page `/debug`), absentes jusqu'ici (seul l'uptime relatif était affiché) — nécessaires pour évaluer la fréquence des reboots ; capture d'un epoch NTP au dernier battement périodique avant la coupure (`resetEpoch`), complété par l'horloge interne déjà valide au démarrage suivant si elle a survécu au reset (`bootEpoch`) |
+| v1.4.3  | Correction d'un socket potentiellement non libéré dans le scan de ports (`PortScanner::_httpBanner()`/`_tcpBanner()`/`_httpGet()`) sur échec de `WiFiClient::connect()` — `client.stop()` appelé explicitement plutôt que de compter sur le destructeur RAII, suspecté contributeur d'un crash heap=0 après ~1h d'uptime (voir `docs/WARNINGS.md`) |

@@ -145,12 +145,35 @@ inline void applyDeviceEnrichment(NetworkDevice& d) {
 
         if (d.manufacturer.isEmpty() && p.manufacturer[0] != '\0')
             d.manufacturer = p.manufacturer;
-        if (d.category.isEmpty() && p.category[0] != '\0')
+        if (isGenericCategory(d.category) && p.category[0] != '\0')
             d.category = p.category;
         if (d.os.isEmpty() && p.os[0] != '\0')
             d.os = p.os;
 
         if (!d.manufacturer.isEmpty() && !d.category.isEmpty() && !d.os.isEmpty())
             break;
+    }
+}
+
+/**
+ * Detection des points d'acces / repeteurs mesh WiFi (ex: TP-Link Deco,
+ * Google Nest WiFi, Orbi...) a partir du hostname. Contrairement a
+ * applyDeviceEnrichment(), renseigne `type` (absent de EnrichPattern) sans
+ * jamais ecraser une categorie deja deduite par l'OUI/SSDP — seul `type` est
+ * complete pour distinguer ces equipements des autres "Network Equipment".
+ */
+inline void applyMeshDetection(NetworkDevice& d) {
+    if (d.hostname.isEmpty() || !d.type.isEmpty()) return;
+
+    String h = d.hostname;
+    h.toLowerCase();
+
+    static const char* MESH_KEYWORDS[] = { "deco", "orbi", "eero", "nest-wifi", "velop", "tplink-mesh", nullptr };
+    for (int i = 0; MESH_KEYWORDS[i] != nullptr; i++) {
+        if (h.indexOf(MESH_KEYWORDS[i]) >= 0) {
+            d.type = "Point d'accès / Répéteur mesh";
+            if (isGenericCategory(d.category)) d.category = "Network";
+            break;
+        }
     }
 }

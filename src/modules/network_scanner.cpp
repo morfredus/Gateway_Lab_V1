@@ -14,6 +14,7 @@
 #include "network_scanner.h"
 #include <time.h>                // strftime() pour l'export CSV (dates lisibles)
 #include <algorithm>             // std::sort (éviction LRU des équipements)
+#include <map>                   // std::map (regroupement MAC -> AP candidats, decouverte topologie SNMP)
 #include "hostname_resolver.h"   // mDNS passif + PTR DNS batch
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include "ssdp_scanner.h"        // Découverte UPnP/SSDP
@@ -22,7 +23,7 @@
 #include "icmp_scanner.h"        // Sonde ICMP pour IPs non trouvées par ARP
 #include "port_scanner.h"        // Scan TCP ports communs + banner HTTP/SSH/FTP + API IoT
 #include "netbios_scanner.h"     // Node Status NetBIOS (UDP 137) - hostnames Windows/Samba
-#include "snmp_scanner.h"        // SNMP sysDescr (UDP 161) - fabricant/modele en texte clair
+#include "snmp_scanner.h"        // SNMP sysDescr (UDP 161) + table de pontage (decouverte topologie)
 #include "media_api_scanner.h"   // API HTTP proprietaires : Cast, Sonos, Roku, Samsung TV
 #include "mqtt_scanner.h"        // Broker MQTT (TCP 1883) - version/clients via $SYS
 #include "dhcp_sniffer.h"        // Fingerprinting passif DHCP (UDP 67) - hostname/OS
@@ -45,6 +46,8 @@ static const char* TAG = "Scanner";
 static const char* MONITOR_NVS_NAMESPACE = "monitor";
 static const char* MONITOR_NVS_KEY       = "intervalMin";
 static const char* MONITOR_NVS_ENABLED_KEY = "enabled";
+static const char* TOPOLOGY_NVS_NAMESPACE = "topology";
+static const char* TOPOLOGY_NVS_ROOT_KEY  = "rootMac";
 
 // Instance globale exportée
 NetworkScanner netScanner;
@@ -322,8 +325,8 @@ void NetworkScanner::_addSelfEntry() {
     NetworkDevice self;
     self.ip       = ip;
     self.mac      = mac;
-    self.hostname = MDNS_HOSTNAME;       // ex: "gateway-lab-v1"
-    self.model    = PROJECT_NAME;        // ex: "GatewayLabV1"
+    self.hostname = MDNS_HOSTNAME;       // ex: "gateway-lab"
+    self.model    = PROJECT_NAME;        // ex: "GatewayLab"
     self.source   = "Self";
     self.category = "Gateway";
     self.lastSeen = millis();
@@ -356,7 +359,7 @@ void NetworkScanner::_applySsdpResult(NetworkDevice& d, const NetworkDevice& sde
         d.manufacturer = sdev.manufacturer;
     if (d.model.isEmpty() && !sdev.model.isEmpty())
         d.model = sdev.model;
-    if (d.category.isEmpty() || d.category == "IoT")
+    if (isGenericCategory(d.category))
         if (!sdev.category.isEmpty()) d.category = sdev.category;
     if (d.os.isEmpty() && !sdev.os.isEmpty())
         d.os = sdev.os;
@@ -434,7 +437,7 @@ void NetworkScanner::_applyDnsSdResult(NetworkDevice& d, const DnsSdInfo& info) 
         d.hostname = info.hostname;
 
     // Catégorie DNS-SD (plus fine que "IoT" par défaut)
-    if ((d.category.isEmpty() || d.category == "IoT") && !info.category.isEmpty())
+    if (isGenericCategory(d.category) && !info.category.isEmpty())
         d.category = info.category;
 }
 
@@ -897,7 +900,7 @@ void NetworkScanner::_applyPortScanResult(NetworkDevice& d, const PortScanResult
             String mfr = _bannerToMfr(pr.httpBanner);
             if (!mfr.isEmpty()) d.manufacturer = mfr;
         }
-        if (d.category.isEmpty() || d.category == "IoT") {
+        if (isGenericCategory(d.category)) {
             String cat = _bannerToCategory(pr.httpBanner);
             if (!cat.isEmpty()) d.category = cat;
         }
@@ -935,7 +938,7 @@ void NetworkScanner::_applyPortScanResult(NetworkDevice& d, const PortScanResult
     // API IoT identifiee precisement -> manufacturer/category/model/firmware
     if (!pr.iotType.isEmpty()) {
         if (d.manufacturer.isEmpty()) d.manufacturer = pr.iotType;
-        if (d.category.isEmpty() || d.category == "IoT") {
+        if (isGenericCategory(d.category)) {
             if (pr.iotType == "FritzBox") d.category = "Router";
             else if (pr.iotType == "Synology") d.category = "NAS";
             else if (pr.iotType == "Hue") d.category = "Home Automation";
@@ -1048,6 +1051,7 @@ void NetworkScanner::_enrichDevices() {
             }
         }
         applyDeviceEnrichment(d);
+        applyMeshDetection(d);
     }
     xSemaphoreGive(_mutex);
 }
@@ -1063,7 +1067,7 @@ void NetworkScanner::_enrichDevices() {
 void NetworkScanner::_classifyDevices() {
     xSemaphoreTake(_mutex, portMAX_DELAY);
     for (auto& d : _results) {
-        bool generic = d.category.isEmpty() || d.category == "IoT";
+        bool generic = isGenericCategory(d.category);
         if (!generic) continue;
 
         bool hasHttp  = d.openPorts.indexOf("HTTP") >= 0 || d.services.indexOf("HTTP") >= 0;
@@ -1151,6 +1155,9 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous, 
         d.totalOfflineSeconds   = prev->totalOfflineSeconds;
         d.mobilityOverride      = prev->mobilityOverride;
         d.mobileAwayNotified    = prev->mobileAwayNotified;
+        d.topologyParent           = prev->topologyParent;
+        d.topologyParentAuto       = prev->topologyParentAuto;
+        d.topologyParentConfidence = prev->topologyParentConfidence;
 
         int confBefore = 0;
         String confLabelTmp;
@@ -1336,6 +1343,12 @@ void NetworkScanner::begin() {
     _monitorIntervalMinutes = storedMinutes;
     _monitorEnabled         = storedEnabled;
 
+    // Restauration de la racine de topologie (NVS, namespace "topology")
+    Preferences topoPrefs;
+    topoPrefs.begin(TOPOLOGY_NVS_NAMESPACE, true);
+    _topologyRootMac = topoPrefs.getString(TOPOLOGY_NVS_ROOT_KEY, "");
+    topoPrefs.end();
+
     Log::i(TAG, "Module initialisé — surveillance continue : %s, %u min",
            _monitorEnabled ? "activee" : "desactivee", (unsigned)_monitorIntervalMinutes);
 }
@@ -1443,6 +1456,9 @@ String NetworkScanner::resultsToJson() const {
         obj["absenceCount"]      = d.absenceCount;
         obj["reconnectionCount"] = d.reconnectionCount;
         obj["mobilityOverride"]  = d.mobilityOverride;
+        obj["topologyParent"]           = d.topologyParent;
+        obj["topologyParentAuto"]       = d.topologyParentAuto;
+        obj["topologyParentConfidence"] = d.topologyParentConfidence;
         obj["isMobile"]          = _isMobileDevice(d);
         obj["stabilityScore"]    = _stabilityScoreFor(d);
         // services : tableau JSON ["HTTP","SSH","SMB"] depuis la chaîne pipe-séparée
@@ -2288,6 +2304,95 @@ void NetworkScanner::_queueDeepScanLocked(const String& ip) {
     _pendingDeepScan.push_back(ip);
 }
 
+void NetworkScanner::_sweepUnidentified() {
+    uint32_t nowMs = millis();
+    uint32_t intervalMs = RESCAN_SWEEP_INTERVAL_MINUTES * 60UL * 1000UL;
+    if (_lastUnidentifiedSweepMs != 0 && (nowMs - _lastUnidentifiedSweepMs) < intervalMs) return;
+    _lastUnidentifiedSweepMs = nowMs;
+
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (const auto& d : _results) {
+        if (d.online && isGenericCategory(d.category) && !d.ip.isEmpty()) {
+            _queueDeepScanLocked(d.ip);
+        }
+    }
+    xSemaphoreGive(_mutex);
+}
+
+// ---------------------------------------------------------------------------
+// Decouverte automatique de la topologie par SNMP (v1.4.0)
+//
+// Le scan ARP/SSDP seul ne peut pas determiner a quel point d'acces/repeteur
+// WiFi un equipement est rattache : la decision se prend en mode 2 (routeur)
+// ou en mode point d'acces transparent, information privee au firmware du
+// mesh. De nombreux routeurs/points d'acces/repeteurs "entreprise" ou semi-pro
+// exposent neanmoins un agent SNMP en lecture publique avec la Bridge MIB
+// standard (dot1dTpFdbTable) : sa table de pontage liste justement les MAC
+// qu'il relaie, donc rattachees a lui. On exploite cette source quand elle
+// est disponible pour completer automatiquement topologyParent, sans jamais
+// ecraser un rattachement choisi manuellement par l'utilisateur (glisser-
+// depose sur la carte) - seules les entrees encore vides ou deja deduites
+// automatiquement (topologyParentAuto) sont mises a jour. Best-effort total :
+// silencieux et sans effet si aucun equipement ne repond (cas frequent des
+// repeteurs mesh grand public type Deco/Orbi/eero, qui n'exposent pas SNMP).
+// ---------------------------------------------------------------------------
+void NetworkScanner::_discoverTopologyViaSnmp() {
+    uint32_t nowMs = millis();
+    uint32_t intervalMs = TOPOLOGY_SNMP_SWEEP_INTERVAL_MINUTES * 60UL * 1000UL;
+    if (_lastTopologySnmpSweepMs != 0 && (nowMs - _lastTopologySnmpSweepMs) < intervalMs) return;
+    _lastTopologySnmpSweepMs = nowMs;
+
+    std::vector<std::pair<String, String>> candidates;   // {ip, mac} des routeurs/AP/repeteurs
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (const auto& d : _results) {
+        if (d.ip.isEmpty() || d.mac.isEmpty() || !d.online) continue;
+        bool apLike = d.category == "Router" ||
+                      d.type.indexOf("épéteur") >= 0 ||      // "Répéteur"/"répéteur" - insensible a la casse de l'initiale
+                      d.type.indexOf("oint d'accès") >= 0;    // "Point d'accès"/"point d'accès"
+        if (apLike) candidates.push_back({ d.ip, d.mac });
+    }
+    xSemaphoreGive(_mutex);
+    if (candidates.empty()) return;
+
+    // Phase 1 : interroger chaque candidat, sans toucher _results - regroupe
+    // par MAC vue, la liste des AP qui la revendiquent dans leur FDB. Une MAC
+    // vue dans plusieurs FDB a la fois (mobilite WiFi entre repeteurs pendant
+    // le sweep, ou table de pontage partiellement obsolete) est ambigue :
+    // on baisse la confiance plutot que de choisir arbitrairement un AP.
+    std::map<String, std::vector<String>> macToApMacs;
+    for (const auto& ap : candidates) {
+        std::vector<String> macs = snmpScanner.walkBridgeMacTable(ap.first, 300, 64);
+        for (const auto& mac : macs) {
+            if (mac == ap.second) continue;   // L'AP se voit lui-meme dans sa propre table de pontage
+            macToApMacs[mac].push_back(ap.second);
+        }
+    }
+    if (macToApMacs.empty()) return;   // Aucun agent SNMP n'a repondu - rien a faire
+
+    // Phase 2 : application sur _results, sous mutex.
+    bool changed = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if (d.mac.isEmpty()) continue;
+        auto it = macToApMacs.find(d.mac);
+        if (it == macToApMacs.end()) continue;
+        if (!(d.topologyParent.isEmpty() || d.topologyParentAuto)) continue;   // Rattachement manuel - intouchable
+
+        const auto& apMacs = it->second;
+        bool ambiguous = apMacs.size() > 1;
+        d.topologyParent           = apMacs.front();
+        d.topologyParentAuto       = true;
+        // Entree directe de la table de pontage (FDB) : source fiable. Vue
+        // dans plusieurs FDB a la fois pendant le meme sweep : ambigu, on le
+        // signale par une confiance degradee plutot que d'inventer un choix.
+        d.topologyParentConfidence = ambiguous ? 40 : 85;
+        changed = true;
+    }
+    xSemaphoreGive(_mutex);
+
+    if (changed) _saveToStore();
+}
+
 void NetworkScanner::_drainPendingScans() {
     if (_scanning) return;   // Mutuelle exclusion avec scan complet/rescan
 
@@ -2362,6 +2467,11 @@ void NetworkScanner::_monitorTick() {
             d.totalOfflineSeconds = prev->totalOfflineSeconds;
             d.mobileAwayNotified  = prev->mobileAwayNotified;
             if (d.mobilityOverride.isEmpty()) d.mobilityOverride = prev->mobilityOverride;
+            if (d.topologyParent.isEmpty()) {
+                d.topologyParent           = prev->topologyParent;
+                d.topologyParentAuto       = prev->topologyParentAuto;
+                d.topologyParentConfidence = prev->topologyParentConfidence;
+            }
         }
 
         if (isNewDevice) {
@@ -2510,6 +2620,14 @@ void NetworkScanner::serviceMonitor() {
         }
     }
 
+    // Sweep periodique des equipements non identifies — ne fait que mettre
+    // en file, sans jamais lancer de scan directement (drainage ci-dessous).
+    if (!_scanning) _sweepUnidentified();
+
+    // Decouverte automatique de la topologie par SNMP — requetes UDP/161
+    // unicast directes, independantes du sweep ARP et de la file differee.
+    if (!_scanning) _discoverTopologyViaSnmp();
+
     // Drainage de la file d'attente differee — une seule entree par appel
     _drainPendingScans();
 }
@@ -2563,6 +2681,76 @@ bool NetworkScanner::setMobility(const String& macOrIp, const String& mode) {
     xSemaphoreGive(_mutex);
     if (found) _saveToStore();
     return found;
+}
+
+// ---------------------------------------------------------------------------
+// Declaration manuelle de la topologie reseau (v0.4.x)
+//
+// Un scan ARP/SSDP ne peut pas determiner a quel point d'acces/repeteur WiFi
+// un equipement est rattache (information privee au firmware du mesh, ex.
+// TP-Link Deco). On permet donc a l'utilisateur de declarer lui-meme cette
+// relation pour construire un arbre de topologie coherent dans l'UI.
+// ---------------------------------------------------------------------------
+bool NetworkScanner::setTopologyParent(const String& macOrIp, const String& parentMac) {
+    if (systemHealth.isDegraded()) {
+        Log::w(TAG, "Modification de topologie refusee — mode degrade (%s)", systemHealth.reason().c_str());
+        return false;
+    }
+
+    bool found = false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    String resolvedMac;
+    for (auto& d : _results) {
+        if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+            resolvedMac = d.mac;
+            break;
+        }
+    }
+    // Le parent (quand renseigne) doit exister et ne pas etre l'equipement lui-meme
+    bool parentOk = parentMac.isEmpty();
+    if (!parentOk) {
+        for (const auto& d : _results) {
+            if (d.mac == parentMac) { parentOk = (parentMac != resolvedMac); break; }
+        }
+    }
+    if (parentOk) {
+        for (auto& d : _results) {
+            if ((!d.mac.isEmpty() && d.mac == macOrIp) || d.ip == macOrIp) {
+                d.topologyParent           = parentMac;
+                d.topologyParentAuto       = false;   // Choix manuel - ne sera plus jamais ecrase par la decouverte SNMP
+                d.topologyParentConfidence = 0;        // Non applicable a un rattachement manuel
+                found = true;
+                break;
+            }
+        }
+    }
+    xSemaphoreGive(_mutex);
+    if (found) _saveToStore();
+    return found;
+}
+
+// ---------------------------------------------------------------------------
+// Racine de l'arbre de topologie (v0.4.x)
+//
+// Par defaut (mac=""), la racine affichee est la box operateur (categorie
+// "Router", deduite par IspDetector/SSDP/OUI) et non l'ESP32 lui-meme
+// (categorie "Gateway" — c'est un equipement du reseau comme un autre du
+// point de vue de la topologie, pas la racine). L'utilisateur peut forcer
+// n'importe quel autre equipement comme racine (ex. son propre routeur si
+// la box est en mode bridge derriere un routeur tiers).
+// ---------------------------------------------------------------------------
+void NetworkScanner::setTopologyRoot(const String& mac) {
+    _topologyRootMac = mac;
+
+    Preferences prefs;
+    prefs.begin(TOPOLOGY_NVS_NAMESPACE, false);
+    prefs.putString(TOPOLOGY_NVS_ROOT_KEY, mac);
+    prefs.end();
+    Log::i(TAG, "Racine de topologie : %s", mac.isEmpty() ? "automatique (box operateur)" : mac.c_str());
+}
+
+String NetworkScanner::getTopologyRoot() const {
+    return _topologyRootMac;
 }
 
 // ---------------------------------------------------------------------------

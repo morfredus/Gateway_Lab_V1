@@ -1,5 +1,5 @@
 /**
- * WebServerModule — Serveur HTTP et interface web de Gateway Lab V1
+ * WebServerModule — Serveur HTTP et interface web de Gateway Lab
  *
  * Routes exposées :
  *   GET  /             — Page d'accueil (HTML embarqué en PROGMEM)
@@ -79,6 +79,9 @@ struct ScanProvider {
 
     // Surveillance continue / score de stabilite (v1.0.0)
     std::function<bool(const String& macOrIp, const String& mode)> setMobility;   // "", "fixed" ou "mobile"
+    std::function<bool(const String& macOrIp, const String& parentMac)> setTopologyParent; // "" pour effacer
+    std::function<void(const String& mac)> setTopologyRoot;   // "" = automatique (box operateur)
+    std::function<String()> getTopologyRoot;                  // MAC de la racine forcee, "" si automatique
     std::function<String()> getNetworkHealthJson;     // Tableau de bord reseau en JSON
     std::function<int()>    getMonitorInterval;       // Frequence courante (minutes)
     std::function<void(int minutes)> setMonitorInterval; // Definit la frequence (1-60 min), persistee NVS
@@ -127,6 +130,9 @@ private:
     void _handleApiSystemBackup();  // Sauvegarde des parametres de fonctionnement (JSON)
     void _handleApiSystemRestore(); // Restaure les parametres de fonctionnement depuis JSON
     void _handleApiSetMobility();   // Force/efface la classification mobile/fixe d'un equipement
+    void _handleApiSetTopologyParent(); // Declare/efface le parent reseau (AP/repeteur) d'un equipement
+    void _handleApiTopologyRootGet();   // Racine actuelle de l'arbre de topologie
+    void _handleApiTopologyRootPost();  // Force/efface la racine de l'arbre de topologie
     void _handleApiNetworkHealth(); // Tableau de bord reseau (presents/connus, 24h, moins stables)
     void _handleApiMonitorGet();    // Frequence courante de la surveillance continue
     void _handleApiMonitorPost();   // Definit la frequence de la surveillance continue

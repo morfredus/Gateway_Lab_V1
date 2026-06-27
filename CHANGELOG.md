@@ -1,7 +1,186 @@
-# Changelog — Gateway Lab V1
+# Changelog — Gateway Lab
 
 Toutes les modifications notables sont documentées ici.
 Format : [Semantic Versioning](https://semver.org/)
+
+---
+
+## [1.4.3] - 2026-06-27
+
+### Corrige
+
+- **Fuite de socket potentielle dans le scan de ports** (`port_scanner.cpp` :
+  `_httpBanner()`, `_tcpBanner()`, `_httpGet()`) : en cas d'échec de
+  `WiFiClient::connect()`, la fonction retournait immédiatement sans appeler
+  `client.stop()`, comptant sur le destructeur RAII pour libérer le socket
+  lwIP. Sous Arduino-ESP32, cette libération peut être retardée, ce qui
+  ajoute de la pression sur le pool de sockets lwIP (`CONFIG_LWIP_MAX_SOCKETS
+  = 16`, déjà partagé avec le serveur web) et sur le tas lors de scans
+  prolongés (28 équipements × jusqu'à 5 sondes HTTP IoT par équipement dans
+  `_probeIoTApis()`, répété à chaque cycle de rescan). Suspecté comme
+  contributeur à un crash observé après ~1h d'uptime (heap libre = 0 o juste
+  après le démarrage d'un scan de ports, boot #7/crash #1). `client.stop()`
+  est maintenant appelé explicitement avant chaque retour anticipé.
+
+---
+
+## [1.4.2] - 2026-06-26
+
+### Ajoute
+
+- **Date et heure des évènements dans le journal de redémarrage** (page
+  `/debug`) : chaque entrée affiche désormais la date/heure réelle du
+  redémarrage (et non plus seulement l'uptime relatif), nécessaire pour
+  évaluer la fréquence des reboots. Deux sources, choisies par ordre de
+  fiabilité : `resetEpoch`, capturé au dernier battement périodique (30 s)
+  avant la coupure (le plus proche possible de l'instant réel de
+  l'évènement) ; à défaut, `bootEpoch`, lu dès le démarrage suivant — cela
+  fonctionne dès l'instant T puisque l'horloge interne de l'ESP32
+  (`time(nullptr)`) n'est remise à zéro que par une coupure d'alimentation
+  ou un reset franc, pas par un redémarrage logiciel/crash/watchdog. Si
+  aucune des deux n'est disponible (jamais synchronisé NTP, ex. reseau sans
+  accès Internet), l'entrée l'indique explicitement plutôt que d'afficher
+  une date fausse.
+
+### Corrige
+
+- Incrément du magic number du buffer RTC du journal de redémarrage
+  (ajout du champ `lastEpochSec`) pour éviter une relecture de l'ancien
+  layout après mise à jour firmware (cf. avertissement déjà présent dans
+  `boot_log.cpp` suite à l'incident similaire du Patch 7→8).
+
+---
+
+## [1.4.1] - 2026-06-25
+
+### Ajoute
+
+- **Taux de confiance pour la découverte automatique de topologie** : chaque
+  rattachement déduit par SNMP (`topologyParentAuto`) porte désormais un
+  `topologyParentConfidence` (0-100). Une MAC vue dans une seule table de
+  pontage (FDB) pendant le sweep reçoit une confiance élevée (85%) ; une MAC
+  vue simultanément dans plusieurs tables de pontage d'AP/répéteurs distincts
+  (mobilité WiFi en cours de sweep, ou entrée de pontage partiellement
+  obsolète) reçoit une confiance dégradée (40%) plutôt qu'un choix arbitraire
+  entre les AP candidats.
+- **Codes couleur dans la topologie** : la box WiFi et les répéteurs/points
+  d'accès restent en vert, la racine reste en bleu marine ; les équipements
+  rattachés automatiquement avec une confiance élevée (≥ 60%) apparaissent en
+  bleu, ceux avec une confiance faible/ambiguë en orange. Le pourcentage de
+  confiance est affiché sous le nom de l'équipement dans l'arbre.
+
+### Corrige
+
+- `topologyParentAuto` et `topologyParentConfidence` n'étaient pas reportés
+  d'un cycle de surveillance ARP au suivant (seul `topologyParent` l'était) :
+  un rattachement automatique pouvait perdre silencieusement son statut
+  "automatique" et sa confiance à chaque tick, sans pour autant être
+  recalculé avant le prochain sweep SNMP (30 min). Les deux champs sont
+  désormais reportés au même titre que `topologyParent`.
+- `topologyParentConfidence` n'était pas persisté dans le stockage LittleFS
+  (`device_store.cpp`) : la confiance affichée revenait à 0 après chaque
+  redémarrage de l'équipement, même si le rattachement automatique
+  lui-même survivait. Le champ est désormais chargé/sauvegardé comme les
+  autres champs de topologie.
+
+---
+
+## [1.4.0] - 2026-06-25
+
+### Ajoute
+
+- **Découverte automatique de la topologie réseau par SNMP** : les
+  équipements détectés comme routeur/point d'accès/répéteur sont interrogés
+  via la Bridge MIB standard (`dot1dTpFdbTable`, table de pontage, OID
+  `1.3.6.1.2.1.17.4.3.1.1`) par une marche SNMP (`GetNextRequest` successifs,
+  `SnmpScanner::walkBridgeMacTable`). Quand un équipement en amont expose un
+  agent SNMP en lecture publique, chaque MAC trouvée dans sa table de
+  pontage lui est automatiquement rattachée (`topologyParent`), affranchissant
+  l'utilisateur du glisser-déposer manuel pour ces équipements — qu'ils
+  soient en mode routeur ou en mode point d'accès transparent. Un nouveau
+  drapeau `topologyParentAuto` distingue un rattachement déduit
+  automatiquement d'un rattachement déclaré manuellement : ce dernier n'est
+  jamais écrasé par la découverte SNMP, qui ne complète/rafraîchit que les
+  entrées encore vides ou elles-même automatiques. Sweep périodique (30 min
+  par défaut, `TOPOLOGY_SNMP_SWEEP_INTERVAL_MINUTES`), entièrement best-effort
+  et silencieux si aucun équipement ne répond — c'est le cas de la plupart
+  des répéteurs mesh grand public (TP-Link Deco, Orbi, eero…) qui n'exposent
+  pas d'agent SNMP. Sur la carte de topologie, un rattachement déduit par
+  SNMP est désormais affiché avec un trait pointillé (trait plein = manuel ou
+  racine).
+
+---
+
+## [1.3.0] - 2026-06-25
+
+### Corrige
+
+- **Equipements bloqués indéfiniment en « Identification en cours »** : ce
+  libellé de catégorie n'était reconnu comme « générique » (donc remplaçable
+  par une catégorie plus précise) par aucun des points d'entrée du pipeline
+  d'identification (SSDP, DNS-SD, scan de ports, classification par signaux,
+  enrichissement par hostname). Résultat : même un rescan manuel ne pouvait
+  jamais faire sortir un équipement de cet état. Centralisé le test dans un
+  helper partagé (`isGenericCategory()`, `network_scanner.h`) qui reconnaît
+  désormais `""`, `"IoT"` et `"Identification en cours"` comme génériques, et
+  appliqué ce helper à tous les points d'entrée concernés
+  (`network_scanner.cpp`, `device_enricher.h`).
+
+### Ajoute
+
+- **Re-identification automatique périodique** des équipements restés sur une
+  catégorie générique (« IoT » ou « Identification en cours ») : toutes les
+  `RESCAN_SWEEP_INTERVAL_MINUTES` (60 min par défaut, `app_config.h`), un
+  sweep met en file un scan approfondi pour chacun d'eux, sans intervention
+  de l'utilisateur. S'appuie sur la file d'attente différée déjà existante
+  (`_queueDeepScanLocked`/`_drainPendingScans`), donc sans jamais entrer en
+  conflit avec un scan complet ou un rescan manuel en cours.
+- **Bouton « Rescan non identifiés »** (page Équipements) : relance en un
+  clic un scan approfondi sur tous les équipements actuellement classés en
+  catégorie générique, séquentiellement, avec suivi de progression.
+
+---
+
+## [1.2.0] - 2026-06-24
+
+### Modifie
+
+- **Renommage du projet : « Gateway Lab V1 » devient « Gateway Lab »** (le
+  suffixe de version n'avait pas sa place dans le nom). Mis à jour partout :
+  titres des pages web, en-tête de l'interface, `User-Agent` HTTP émis par
+  les scanners (`port_scanner.cpp`, `media_api_scanner.cpp`, `ssdp_scanner.cpp`),
+  nom mDNS (`MDNS_HOSTNAME`, désormais `gateway-lab` — accessible via
+  `http://gateway-lab.local`), `PROJECT_NAME` (`platformio.ini`), et
+  documentation (`README.md`, `ROADMAP.md`, `INSTALLATION.md`,
+  `CONTRIBUTING.md`, `docs/*.md`). Les entrées d'historique de ce fichier
+  antérieures à cette version ne sont pas réécrites : elles reflètent le nom
+  du projet tel qu'il était à l'époque.
+
+### Ajoute
+
+- **Cartographie graphique de la topologie réseau** (`/topology`) : rendu en
+  arbre SVG fait maison (racine, points d'accès/répéteurs WiFi détectés,
+  équipements rattachés), remplaçant l'ancien rendu textuel.
+- **Détection automatique des répéteurs mesh** (TP-Link Deco, Orbi, eero,
+  Nest WiFi, Velop…) par mot-clé sur le nom d'hôte (`device_enricher.h`),
+  classés « Point d'accès / Répéteur mesh ».
+- **Rattachement manuel des équipements WiFi** à leur point d'accès/répéteur
+  via glisser-déposer directement sur la carte SVG (un scan ARP/SSDP seul ne
+  peut pas déterminer à quel répéteur un appareil WiFi est relié) — persisté
+  par équipement (`topologyParent`, `NetworkScanner::setTopologyParent`).
+- **Racine de l'arbre configurable** : par défaut la box opérateur (catégorie
+  `Router`) est choisie automatiquement plutôt que l'ESP32 lui-même
+  (catégorie `Gateway`, qui n'est qu'un équipement du réseau comme un autre
+  du point de vue de la topologie) ; un sélecteur dédié permet de forcer une
+  racine différente, persistée en NVS (`setTopologyRoot`/`getTopologyRoot`,
+  `GET`/`POST /api/topology/root`).
+
+### Corrige
+
+- **La racine de la topologie était toujours l'ESP32**, jamais la box
+  opérateur, même quand celle-ci était correctement détectée (catégorie
+  `Router`) : la résolution automatique cherchait en priorité la catégorie
+  `Gateway` (l'ESP32 lui-même) avant `Router`. Inversé l'ordre de préférence.
 
 ---
 

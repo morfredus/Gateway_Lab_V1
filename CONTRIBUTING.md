@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for your interest in Gateway Lab V1.
+Thank you for your interest in Gateway Lab.
 
 This project is developed primarily as a learning and experimentation platform around:
 
