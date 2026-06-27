@@ -488,6 +488,33 @@ diagnostic.
 
 ---
 
+## ⚠️ Socket non libéré sur échec de connexion HTTP (résolu en v1.4.3)
+
+### Symptôme
+
+Crash (`PANIC`/exception non gérée) après une longue durée de fonctionnement
+(~1 h, plusieurs cycles de rescan), heap libre à 0 octet juste après le
+démarrage d'un scan de ports (`Ports`/`Scanner`, tag dans les logs).
+
+### Cause
+
+`PortScanner::_httpBanner()`, `_tcpBanner()` et `_httpGet()`
+(`port_scanner.cpp`) retournaient immédiatement en cas d'échec de
+`WiFiClient::connect()`, sans appeler `client.stop()` — comptant sur le
+destructeur RAII de `WiFiClient` pour libérer le socket lwIP. Sous
+Arduino-ESP32, cette libération peut être retardée, ajoutant de la pression
+sur le pool de sockets lwIP (`CONFIG_LWIP_MAX_SOCKETS = 16`, partagé avec le
+serveur web) et sur le tas lors de scans prolongés : jusqu'à 5 sondes HTTP
+IoT par équipement (`_probeIoTApis()`), répétées pour chaque équipement à
+chaque cycle de rescan.
+
+### Résolution (v1.4.3)
+
+`client.stop()` est désormais appelé explicitement avant chaque retour
+anticipé sur échec de `connect()`, dans les trois fonctions concernées.
+
+---
+
 ## ⚠️ Changement d'adresse IP
 
 Après une reconnexion Wi-Fi avec attribution d'une nouvelle IP :

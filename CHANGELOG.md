@@ -5,6 +5,25 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.4.3] - 2026-06-27
+
+### Corrige
+
+- **Fuite de socket potentielle dans le scan de ports** (`port_scanner.cpp` :
+  `_httpBanner()`, `_tcpBanner()`, `_httpGet()`) : en cas d'échec de
+  `WiFiClient::connect()`, la fonction retournait immédiatement sans appeler
+  `client.stop()`, comptant sur le destructeur RAII pour libérer le socket
+  lwIP. Sous Arduino-ESP32, cette libération peut être retardée, ce qui
+  ajoute de la pression sur le pool de sockets lwIP (`CONFIG_LWIP_MAX_SOCKETS
+  = 16`, déjà partagé avec le serveur web) et sur le tas lors de scans
+  prolongés (28 équipements × jusqu'à 5 sondes HTTP IoT par équipement dans
+  `_probeIoTApis()`, répété à chaque cycle de rescan). Suspecté comme
+  contributeur à un crash observé après ~1h d'uptime (heap libre = 0 o juste
+  après le démarrage d'un scan de ports, boot #7/crash #1). `client.stop()`
+  est maintenant appelé explicitement avant chaque retour anticipé.
+
+---
+
 ## [1.4.2] - 2026-06-26
 
 ### Ajoute
