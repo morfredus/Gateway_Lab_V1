@@ -1177,6 +1177,12 @@ void NetworkScanner::_updateHistory(const std::vector<NetworkDevice>& previous, 
         bool mobile = _isMobileDevice(d);
 
         if (d.online) {
+            // seenCount compte le nombre de scans complets (_run(), declenches
+            // par l'utilisateur) ou l'equipement a ete detecte - incremente ici
+            // uniquement, jamais dans _monitorTick() (surveillance continue en
+            // arriere-plan) : sinon il grimpe au rythme des sweeps automatiques
+            // plutot qu'au rythme des scans reellement declenches, et le
+            // compteur affiche perd tout son sens ("vu 25x" apres 5 scans).
             if (!prev->online) {
                 // Reapparition - "reconnected" si l'equipement etait deja
                 // connu (au moins une presence anterieure), sinon "online"
@@ -2543,9 +2549,10 @@ void NetworkScanner::_monitorTick() {
         }
 
         if (d.online && !wasOnline) {
-            // Reapparition — point 3 : equipement connu qui revient
+            // Reapparition — point 3 : equipement connu qui revient. seenCount
+            // n'est pas touche ici : il compte les scans complets (_run()),
+            // pas les ticks de surveillance continue (cf. _updateHistory()).
             d.presenceCount++;
-            d.seenCount = prev->seenCount + 1;
             if (epoch > 0) d.lastSeenEpoch = epoch;
             if (d.firstSeenEpoch == 0 && epoch > 0) d.firstSeenEpoch = epoch;
 
@@ -2577,8 +2584,10 @@ void NetworkScanner::_monitorTick() {
             // ne declenche plus de scan automatique (presence ARP seule).
 
         } else if (d.online && wasOnline) {
-            // Toujours en ligne — cumul du temps en ligne depuis le dernier tick
-            d.seenCount = prev->seenCount + 1;
+            // Toujours en ligne — cumul du temps en ligne depuis le dernier
+            // tick. seenCount n'est pas touche ici : il compte les scans
+            // complets (_run()), pas les ticks de surveillance continue
+            // (cf. _updateHistory()).
             if (epoch > 0) d.lastSeenEpoch = epoch;
             if (!mobile && epoch > 0 && prev->lastSeenEpoch > 0 && epoch > prev->lastSeenEpoch) {
                 d.totalOnlineSeconds += (epoch - prev->lastSeenEpoch);

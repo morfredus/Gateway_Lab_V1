@@ -5,6 +5,28 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.4.8] - 2026-06-29
+
+### Corrige
+
+- **Compteur « vu Nx » (`seenCount`) toujours incohérent après le correctif
+  1.4.5 — incrémenté par la surveillance continue en plus des scans**
+  (`network_scanner.cpp`, `_updateHistory()`, `_monitorTick()`) : le
+  correctif 1.4.5 a bien réinitialisé `online` entre deux sweeps, mais
+  `seenCount` était en réalité incrémenté à *deux* endroits distincts —
+  une fois par scan complet déclenché par l'utilisateur (`_run()` via
+  `_updateHistory()`), et une seconde fois à chaque tick de la
+  surveillance continue en arrière-plan (`_monitorTick()`, toutes les
+  quelques minutes, indépendamment de tout scan manuel). Résultat : après
+  5 scans manuels espacés dans le temps, plusieurs ticks de surveillance
+  s'étaient glissés entre chaque scan et le compteur affichait « vu 25x »
+  au lieu de « vu 5x ». Correction : `seenCount` n'est désormais incrémenté
+  que dans `_updateHistory()` (scans complets), plus jamais dans
+  `_monitorTick()` — la surveillance continue met toujours à jour
+  `presenceCount`, `lastSeenEpoch`, les compteurs de reconnexion/stabilité
+  et `totalOnlineSeconds`/`totalOfflineSeconds`, mais ne touche plus à
+  `seenCount`.
+
 ## [1.4.7] - 2026-06-29
 
 ### Corrige
