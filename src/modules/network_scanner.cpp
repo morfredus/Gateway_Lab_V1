@@ -15,6 +15,7 @@
 #include <time.h>                // strftime() pour l'export CSV (dates lisibles)
 #include <algorithm>             // std::sort (éviction LRU des équipements)
 #include <map>                   // std::map (regroupement MAC -> AP candidats, decouverte topologie SNMP)
+#include <set>                   // std::set (equipements confirmes AP/repeteur par reponse SNMP, decouverte topologie)
 #include "hostname_resolver.h"   // mDNS passif + PTR DNS batch
 #include "isp_detector.h"        // Détection Free / Orange / SFR / Bouygues
 #include "ssdp_scanner.h"        // Découverte UPnP/SSDP
@@ -2360,14 +2361,24 @@ void NetworkScanner::_discoverTopologyViaSnmp() {
     if (_lastTopologySnmpSweepMs != 0 && (nowMs - _lastTopologySnmpSweepMs) < intervalMs) return;
     _lastTopologySnmpSweepMs = nowMs;
 
-    std::vector<std::pair<String, String>> candidates;   // {ip, mac} des routeurs/AP/repeteurs
+    // v1.4.7 : on n'interroge plus seulement les equipements deja devines
+    // "Router"/repeteur/point d'acces par hostname ou SSDP - cette heuristique
+    // manque la plupart des repeteurs mesh grand public dont le hostname DHCP
+    // ne contient aucun mot-cle reconnu, et le rattachement de leurs clients
+    // retombait alors par defaut sur la racine (box operateur), meme quand le
+    // repeteur exposait bel et bien un agent SNMP. On interroge desormais tout
+    // equipement en ligne (hors la passerelle ESP32 elle-meme) : repondre avec
+    // une table de pontage non vide EST la preuve qu'il relaie du trafic pour
+    // d'autres MAC, donc qu'il joue un role d'AP/repeteur/switch - inutile de
+    // le deviner a priori. Cout : un sweep periodique (toutes les
+    // TOPOLOGY_SNMP_SWEEP_INTERVAL_MINUTES) avec un timeout court par
+    // equipement (la plupart ne repondent pas et echouent vite).
+    std::vector<std::pair<String, String>> candidates;   // {ip, mac} de tous les equipements en ligne
     xSemaphoreTake(_mutex, portMAX_DELAY);
     for (const auto& d : _results) {
         if (d.ip.isEmpty() || d.mac.isEmpty() || !d.online) continue;
-        bool apLike = d.category == "Router" ||
-                      d.type.indexOf("épéteur") >= 0 ||      // "Répéteur"/"répéteur" - insensible a la casse de l'initiale
-                      d.type.indexOf("oint d'accès") >= 0;    // "Point d'accès"/"point d'accès"
-        if (apLike) candidates.push_back({ d.ip, d.mac });
+        if (d.category == "Gateway") continue;   // l'ESP32 lui-meme - jamais un repeteur
+        candidates.push_back({ d.ip, d.mac });
     }
     xSemaphoreGive(_mutex);
     if (candidates.empty()) return;
@@ -2378,14 +2389,29 @@ void NetworkScanner::_discoverTopologyViaSnmp() {
     // le sweep, ou table de pontage partiellement obsolete) est ambigue :
     // on baisse la confiance plutot que de choisir arbitrairement un AP.
     std::map<String, std::vector<String>> macToApMacs;
+    std::set<String> respondingApMacs;   // equipements ayant revele une table de pontage non vide - role AP/repeteur/switch confirme
     for (const auto& ap : candidates) {
-        std::vector<String> macs = snmpScanner.walkBridgeMacTable(ap.first, 300, 64);
+        std::vector<String> macs = snmpScanner.walkBridgeMacTable(ap.first, 200, 64);
+        if (macs.empty()) continue;
+        respondingApMacs.insert(ap.second);
         for (const auto& mac : macs) {
             if (mac == ap.second) continue;   // L'AP se voit lui-meme dans sa propre table de pontage
             macToApMacs[mac].push_back(ap.second);
         }
     }
     if (macToApMacs.empty()) return;   // Aucun agent SNMP n'a repondu - rien a faire
+
+    // Phase 1bis : un equipement confirme comme AP/repeteur par sa table de
+    // pontage mais encore classe generiquement (type vide) est etiquete en
+    // consequence - utile pour la couleur/legende de la page Topologie et
+    // pour qu'il soit lui-meme repris comme racine potentielle plus tard.
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    for (auto& d : _results) {
+        if (d.type.isEmpty() && respondingApMacs.count(d.mac)) {
+            d.type = "Point d'accès / Répéteur (détecté via SNMP)";
+        }
+    }
+    xSemaphoreGive(_mutex);
 
     // Phase 2 : application sur _results, sous mutex.
     bool changed = false;

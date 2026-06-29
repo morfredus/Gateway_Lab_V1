@@ -5,6 +5,30 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.4.7] - 2026-06-29
+
+### Corrige
+
+- **Équipements rattachés à un répéteur affichés par défaut sous la box
+  opérateur sur la page Topologie** (`network_scanner.cpp`,
+  `_discoverTopologyViaSnmp()`) : la découverte automatique du rattachement
+  (table de pontage SNMP, `dot1dTpFdbTable`) n'interrogeait que les
+  équipements déjà devinés « Router »/répéteur/point d'accès via leur
+  hostname DHCP ou leur réponse SSDP. La plupart des répéteurs mesh grand
+  public (Deco, Orbi, eero, etc.) ne sont pas reconnus par cette heuristique
+  — hostname générique ou absent — et n'étaient donc jamais interrogés en
+  SNMP : leurs clients restaient rattachés par défaut à la racine. La
+  découverte interroge désormais tout équipement en ligne (hors la
+  passerelle ESP32 elle-même) ; répondre avec une table de pontage non vide
+  est en soi la preuve qu'un équipement relaie du trafic pour d'autres MAC,
+  donc qu'il joue un rôle d'AP/répéteur/switch, sans qu'il soit nécessaire
+  de le deviner au préalable. Un équipement ainsi confirmé mais encore
+  classé génériquement se voit également étiqueté `Point d'accès /
+  Répéteur (détecté via SNMP)` pour rester cohérent avec l'affichage de la
+  page Topologie (v1.4.6). Reste sans effet pour les répéteurs qui
+  n'exposent aucun agent SNMP en lecture publique — le rattachement manuel
+  par glisser-déposer demeure alors la seule solution.
+
 ## [1.4.6] - 2026-06-29
 
 ### Ajoute
