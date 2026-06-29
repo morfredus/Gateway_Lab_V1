@@ -495,6 +495,16 @@ void NetworkScanner::_run() {
         xSemaphoreGive(_mutex);
     }
 
+    // Réinitialiser l'état "en ligne" avant le sweep : sans ce reset, un
+    // équipement détecté une seule fois reste online=true indéfiniment
+    // (rien d'autre ne le remet à false), faussant le filtre "En ligne" et
+    // gonflant seenCount à chaque scan même si l'équipement a disparu.
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (auto& d : _results) d.online = false;
+        xSemaphoreGive(_mutex);
+    }
+
     // Démarrer l'écoute mDNS passive avant le sweep (capture les annonces
     // émises par les équipements qui deviennent actifs sur le réseau)
     hostnameResolver.clearCaches();
@@ -1413,8 +1423,13 @@ static String _enrichedHostname(const NetworkDevice& d) {
     return result;
 }
 
+// Fenêtre pendant laquelle un équipement est considéré "Nouveau" dans l'UI
+// après sa première détection (firstSeenEpoch).
+static constexpr uint32_t NEW_DEVICE_WINDOW_SEC = 24UL * 3600UL;
+
 String NetworkScanner::resultsToJson() const {
-    uint32_t now = millis();
+    uint32_t now      = millis();
+    uint32_t nowEpoch = timeSync.nowEpoch();
     // Copie locale sous mutex (durée < 1 ms) pour libérer rapidement
     std::vector<NetworkDevice> copy;
     xSemaphoreTake(_mutex, portMAX_DELAY);
@@ -1442,6 +1457,9 @@ String NetworkScanner::resultsToJson() const {
         obj["lastSeenAt"]   = d.lastSeenEpoch;
         obj["seenCount"]    = d.seenCount;
         obj["favorite"]     = d.favorite;
+        obj["isNew"]        = (d.firstSeenEpoch > 0 && nowEpoch > 0 &&
+                                nowEpoch >= d.firstSeenEpoch &&
+                                (nowEpoch - d.firstSeenEpoch) < NEW_DEVICE_WINDOW_SEC);
         JsonArray notesArr = obj["notes"].to<JsonArray>();
         for (const auto& n : d.notes) {
             JsonObject no = notesArr.add<JsonObject>();
@@ -2428,6 +2446,14 @@ void NetworkScanner::_monitorTick() {
     {
         xSemaphoreTake(_mutex, portMAX_DELAY);
         previousState = _results;
+        xSemaphoreGive(_mutex);
+    }
+
+    // Réinitialiser l'état "en ligne" avant le sweep — cf. _run() : sans ce
+    // reset, online ne redescend jamais à false entre deux ticks.
+    {
+        xSemaphoreTake(_mutex, portMAX_DELAY);
+        for (auto& d : _results) d.online = false;
         xSemaphoreGive(_mutex);
     }
 

@@ -5,6 +5,52 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.4.6] - 2026-06-29
+
+### Ajoute
+
+- **Couleur dédiée pour les équipements rattachés directement à la box
+  opérateur ou à un point d'accès / répéteur** (`topology.js`,
+  `topology.html`) : sur la page Topologie, `nodeColor()` distinguait déjà la
+  racine, les points d'accès/répéteurs et les rattachements automatiques
+  (SNMP, fiable/incertain), mais un équipement rattaché manuellement ou par
+  défaut à la racine ou à un point d'accès recevait la même couleur grise
+  que tout équipement rattaché plus profondément dans l'arbre (rattachement
+  « non déterminé »). `buildTree()` mémorise désormais le nœud parent de
+  chaque équipement, et `nodeColor()` applique une couleur sarcelle
+  (`#2dd4bf` sur fond `#0f3d3a`, contraste suffisant pour rester lisible)
+  lorsque le parent direct est la racine ou un point d'accès/répéteur. La
+  légende de la page a été mise à jour en conséquence. Le glisser-déposer
+  des équipements (`attachDragAndDrop()`) n'a pas été modifié.
+
+## [1.4.5] - 2026-06-29
+
+### Corrige
+
+- **Compteur « vu X fois » (`seenCount`) incohérent et filtre « En ligne »
+  toujours actif** (`network_scanner.cpp`) : l'état `online` d'un équipement
+  n'était jamais remis à `false` entre deux scans — `_readArpTable()` ne fait
+  que positionner `online = true` quand l'appareil répond, mais rien ne
+  réinitialisait cet état avant le sweep suivant. Un équipement détecté une
+  seule fois restait donc considéré « en ligne » indéfiniment, faussant le
+  filtre « En Ligne » et gonflant `seenCount` à chaque scan même après sa
+  disparition réelle du réseau. Correction : réinitialisation de `online` à
+  `false` pour tous les équipements connus juste avant chaque sweep, à la
+  fois dans le scan complet (`_run()`) et dans la surveillance périodique
+  légère (`_monitorTick()`).
+
+### Ajoute
+
+- **Filtre « Nouveau » sur la page Équipements** (`scan.html`, `scan.js`,
+  `network_scanner.cpp`) : un nouveau champ `isNew` est calculé côté firmware
+  (`resultsToJson()`) à partir de `firstSeenEpoch` — un équipement est
+  considéré « Nouveau » pendant les 24h suivant sa première détection. Une
+  case à cocher dédiée permet de filtrer sur ce statut, et un badge
+  « Nouveau » est affiché à côté du nom de l'équipement concerné.
+- Les cases à cocher « Favoris uniquement » et « En ligne uniquement » ont
+  été renommées respectivement « Favoris » et « En Ligne » (page
+  Équipements).
+
 ## [1.4.4] - 2026-06-27
 
 ### Corrige

@@ -44,7 +44,7 @@ function buildTree(devices, root) {
   devices.forEach(function(d) { if (d.mac) byMac[d.mac] = d; });
 
   var nodes = {};
-  devices.forEach(function(d) { nodes[d.mac || d.ip] = { device: d, children: [] }; });
+  devices.forEach(function(d) { nodes[d.mac || d.ip] = { device: d, children: [], parent: null }; });
 
   var rootKey = root.mac || root.ip;
   var roots = [nodes[rootKey]];
@@ -56,6 +56,7 @@ function buildTree(devices, root) {
     var parentKey = (d.topologyParent && byMac[d.topologyParent]) ? d.topologyParent : rootKey;
     if (nodes[parentKey] && parentKey !== key) {
       nodes[parentKey].children.push(nodes[key]);
+      nodes[key].parent = nodes[parentKey];
     } else {
       roots.push(nodes[key]);
     }
@@ -79,13 +80,19 @@ function descendantMacs(node) {
   return out;
 }
 
-function nodeColor(d, isRoot) {
+function nodeColor(d, isRoot, parentDevice, isParentRoot) {
   if (isRoot)                   return { fill: '#0c4a6e', stroke: '#38bdf8', text: '#e0f2fe' };
   if (isAccessPointLike(d))     return { fill: '#1c2a1a', stroke: '#86efac', text: '#dcfce7' };
   if (d.topologyParentAuto) {
     var conf = d.topologyParentConfidence || 0;
     if (conf >= 60) return { fill: '#1e2a4a', stroke: '#60a5fa', text: '#dbeafe' };   // place automatiquement, confiance elevee
     return            { fill: '#3a2a14', stroke: '#f59e0b', text: '#fef3c7' };          // place automatiquement, confiance faible/ambigu
+  }
+  // Rattaché directement à la racine (box opérateur) ou à un point d'accès /
+  // répéteur : distinct du gris "rattachement par défaut" pour signaler
+  // visuellement un rattachement effectif au réseau WiFi/filaire principal.
+  if (isParentRoot || (parentDevice && isAccessPointLike(parentDevice))) {
+    return { fill: '#0f3d3a', stroke: '#2dd4bf', text: '#ccfbf1' };
   }
   return { fill: '#1e293b', stroke: '#334155', text: '#e2e8f0' };
 }
@@ -123,7 +130,9 @@ function renderSvg(tree) {
     var d = r.node.device;
     var key = d.mac || d.ip;
     var isRoot = key === tree.rootKey;
-    var c = nodeColor(d, isRoot);
+    var parentDevice = r.node.parent ? r.node.parent.device : null;
+    var isParentRoot = !!parentDevice && (parentDevice.mac || parentDevice.ip) === tree.rootKey;
+    var c = nodeColor(d, isRoot, parentDevice, isParentRoot);
     var label = esc(deviceLabel(d));
     var sub = esc(d.type || d.category || d.manufacturer || '');
     if (d.topologyParentAuto && !isRoot) sub += ' · auto ' + (d.topologyParentConfidence || 0) + '%';

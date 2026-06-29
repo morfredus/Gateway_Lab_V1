@@ -515,6 +515,52 @@ anticipé sur échec de `connect()`, dans les trois fonctions concernées.
 
 ---
 
+## ⚠️ PANIC pendant le scan de ports sans cause heap confirmée (en cours d'investigation, depuis v1.4.4)
+
+### Symptôme
+
+`PANIC / exception non gérée` survenant pendant le scan principal
+(`NetworkScanner::_task`), juste après une bannière HTTP récupérée avec
+succès (`_httpBanner()` suivi de `_probeIoTApis()`, `port_scanner.cpp`).
+Contrairement aux crashs précédents (v1.4.2 et antérieurs), le heap réel
+juste avant l'incident (lu dans les lignes de log brutes) est sain
+(~230-235 000 o) — la cause n'est donc **pas** un épuisement du tas.
+
+### État de l'investigation
+
+Le correctif v1.4.3 (`client.stop()` explicite) n'a pas empêché la
+récidive. Hypothèse actuelle non confirmée : dépassement de pile
+(stack overflow) de la tâche FreeRTOS `net_scan` pendant l'enchaînement
+ARP → SSDP → DNS-SD → scan de ports → bannières/API IoT, qui s'exécute
+entièrement dans un seul appel de tâche sans mesure de marge
+intermédiaire (`uxTaskGetStackHighWaterMark()` n'était journalisé qu'en
+fin de tâche, jamais atteinte lors d'un crash en cours de scan).
+
+### Mitigations appliquées en attendant une confirmation
+
+* Marge de pile journalisée immédiatement après `_scanPorts()`
+  (`network_scanner.cpp`, tag `NetScan`) pour obtenir une donnée concrète
+  au prochain incident, même s'il survient plus loin dans `_run()`.
+* Pile de la tâche `net_scan` relevée de 24 Ko à 32 Ko par précaution
+  (`network_scanner.cpp::startScan()`).
+
+**Si le PANIC se reproduit malgré ces mitigations**, un moniteur série
+branché au moment des faits reste nécessaire pour obtenir la trace réelle
+du PANIC — `BootLog` ne capture pas de backtrace (limitation documentée
+dans `boot_log.h`).
+
+### Anomalie de rapport associée (non liée à la cause du crash)
+
+Le champ `freeHeapAtReset`/`lastStats` de l'entrée `/debug` affiche
+systématiquement 0 même quand `uptimeAtResetMs` est correctement renseigné
+— `BootLog::service()` ne semble jamais atteindre la mise à jour complète
+de `RuntimeStats` avant un PANIC, y compris sur le tout premier appel après
+le boot (qui devrait s'exécuter sans le délai de 30 s). Cause non
+identifiée à ce stade ; n'affecte que l'affichage de diagnostic, pas le
+comportement du firmware.
+
+---
+
 ## ⚠️ Changement d'adresse IP
 
 Après une reconnexion Wi-Fi avec attribution d'une nouvelle IP :

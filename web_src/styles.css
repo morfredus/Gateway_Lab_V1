@@ -861,6 +861,12 @@ input[type=file] {
   color: #facc15;
   font-style: italic;
 }
+.new-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #34d399;
+  margin-left: 0.3rem;
+}
 .seen-count {
   font-size: 0.68rem;
   color: #9aacc2;

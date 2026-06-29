@@ -132,11 +132,13 @@ function applyFilters(devices) {
   var mfr = document.getElementById('filter-manufacturer').value;
   var favOnly    = document.getElementById('filter-favorite').checked;
   var onlineOnly = document.getElementById('filter-online').checked;
+  var newOnly    = document.getElementById('filter-new').checked;
   return devices.filter(function(d) {
     if (cat && d.category !== cat) return false;
     if (mfr && d.manufacturer !== mfr) return false;
     if (favOnly && !d.favorite) return false;
     if (onlineOnly && !d.online) return false;
+    if (newOnly && !d.isNew) return false;
     return true;
   });
 }
@@ -185,6 +187,7 @@ function renderDevices(allDevices) {
       ? '<div class="name-cell" title="' + esc(displayName) + '">' + humanHtml +
           '<div class="name-raw">' + esc(displayName) +
             (d.alias ? '<span class="alias-tag" title="Alias personnalisé"> ★</span>' : sourceBadge(d.source)) +
+            (d.isNew ? '<span class="new-tag" title="Détecté pour la première fois il y a moins de 24h"> Nouveau</span>' : '') +
           '</div>' +
           editBtn +
         '</div>'
@@ -537,7 +540,7 @@ document.addEventListener('click', function(e) {
   }
 });
 
-['filter-category', 'filter-manufacturer', 'filter-favorite', 'filter-online'].forEach(function(id) {
+['filter-category', 'filter-manufacturer', 'filter-favorite', 'filter-online', 'filter-new'].forEach(function(id) {
   document.getElementById(id).addEventListener('change', function() { renderDevices(lastDevices); });
 });
 

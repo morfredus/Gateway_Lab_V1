@@ -1,6 +1,6 @@
 # Gateway Lab
 
-![Version](https://img.shields.io/badge/version-1.4.4-blue)
+![Version](https://img.shields.io/badge/version-1.4.6-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)
 ![Framework](https://img.shields.io/badge/framework-Arduino%20%2F%20PlatformIO-00979D)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -158,7 +158,7 @@ Guide développeur : voir docs/DEVELOPMENT.md
 | Cartouche diagnostics    | Heap libre, PSRAM libre, espace LittleFS, temps moyen d'un scan / d'une passe précise — affichée sur la page Accueil |
 | NeoPixel d'état          | Bleu pulsé (démarrage), bleu fixe (prêt), vert clignotant (scan), jaune clignotant (nouvel équipement), violet (portail WiFi), cyan (sauvegarde) — luminosité réglable depuis la page Système, persistée |
 | Bouton BOOT               | Appui court = lance un scan, maintien 3 s = sauvegarde immédiate |
-| Filtres équipements      | Filtre par type, fabricant, favoris uniquement, en ligne uniquement (page Équipements, côté client) |
+| Filtres équipements      | Filtre par type, fabricant, Favoris, En Ligne, Nouveau (détecté depuis moins de 24h) (page Équipements, côté client) |
 | Menu Données              | Sur la page Équipements : Export CSV / Export JSON (inventaire) uniquement — la Sauvegarde / Restauration des paramètres de fonctionnement a été déplacée sur la page Système (Patch 1) |
 | Sauvegarde des paramètres | Réseaux WiFi enregistrés, luminosité NeoPixel, état et fréquence de la surveillance automatique (`/api/system/backup`, `/api/system/restore`) — distincte de la sauvegarde de l'inventaire, accessible depuis la page Système (Patch 1) |
 | Page Topologie           | Vue simplifiée (passerelle/routeurs vs reste des équipements), première étape avant la cartographie graphique (roadmap v0.4.x) |
