@@ -940,6 +940,12 @@
     "type": "IP Camera"
   },
   {
+    "oui": "94:F8:27",
+    "manufacturer": "Xiaomi",
+    "category": "Camera",
+    "type": "IP Camera"
+  },
+  {
     "oui": "00:1B:A9",
     "manufacturer": "Brother",
     "category": "Printer",

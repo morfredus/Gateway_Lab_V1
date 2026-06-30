@@ -5,6 +5,20 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.4.11] - 2026-06-30
+
+### Ajouté
+
+- **OUI Xiaomi (caméra) ajouté à la table de reconnaissance**
+  (`data/oui.json` → `include/oui_table.h`) : le préfixe MAC `94:F8:27`
+  (caméra IP Xiaomi) n'était pas dans la table OUI embarquée et laissait
+  l'équipement en « Identification en cours ». Ajouté en catégorie `Camera`
+  / type `IP Camera`, distinct des préfixes Xiaomi déjà connus qui
+  correspondent à des téléphones (catégorie `Mobile`) — un même fabricant
+  peut avoir des préfixes OUI différents selon la gamme de produits, ce
+  n'est pas une erreur de doublon. Un nouveau scan (complet ou passe
+  précise) reclasse l'équipement déjà connu portant ce préfixe.
+
 ## [1.4.10] - 2026-06-30
 
 ### Ajouté
