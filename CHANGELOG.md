@@ -5,6 +5,26 @@ Format : [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.5.1] - 2026-06-30
+
+### Corrigé
+
+- **Corruption du flux TCP du moniteur série (`telnet_log`)** : sous YAT,
+  les lignes n'affichaient que l'horodatage et le texte apparaissait
+  brièvement avant de s'effacer ou de rester blanc. Cause : `Log::*` est
+  appelé à la fois depuis la boucle principale (core 1) et depuis les
+  tâches de scan réseau (core 0, `xTaskCreatePinnedToCore` dans
+  `network_scanner.cpp`), qui écrivaient toutes deux sur le même socket
+  `WiFiClient` sans synchronisation — les écritures concurrentes se
+  corrompaient mutuellement, et `loop()` pouvait réassigner `_client`
+  pendant qu'une écriture était en cours. Ajout d'un mutex FreeRTOS
+  (`SemaphoreHandle_t`) dans `TelnetLog` (`src/modules/telnet_log.h/.cpp`)
+  protégeant `write()` et `loop()` (accept/déconnexion) — verrou court
+  (timeout 20 ms côté écriture) pour ne jamais bloquer le scan en cas de
+  client lent.
+
+---
+
 ## [1.5.0] - 2026-06-30
 
 ### Ajouté

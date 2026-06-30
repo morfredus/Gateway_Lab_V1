@@ -10,6 +10,8 @@
 #include <Arduino.h>
 #include <WiFiServer.h>
 #include <WiFiClient.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 class TelnetLog {
 public:
@@ -17,6 +19,9 @@ public:
 
     // Diffuse une ligne au client connecté (no-op si personne n'est connecté).
     // Non bloquant : un client lent ne doit jamais ralentir le scan ni le log série.
+    // Thread-safe : Log::* est appelé depuis la boucle principale (core 1) ET
+    // depuis les tâches de scan (core 0) — sans le mutex, des écritures
+    // concurrentes sur le même socket corrompent le flux vu par YAT.
     void write(const char* data, size_t len);
 
     // Accepte une nouvelle connexion entrante si aucun client n'est déjà connecté
@@ -27,6 +32,7 @@ private:
     WiFiServer _server{0};
     WiFiClient _client;
     bool       _started = false;
+    SemaphoreHandle_t _mutex = nullptr;
 };
 
 extern TelnetLog telnetLog;
